@@ -75,7 +75,7 @@ function Thumb({ photo, isSelected, onToggle }: { photo: ProgressPhoto; isSelect
       className={`relative aspect-square overflow-hidden rounded-lg border-2 ${isSelected ? 'border-accent' : 'border-transparent'}`}
     >
       {url && <img src={url} alt={photo.date} className="h-full w-full object-cover" />}
-      <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[10px] text-zinc-100">{photo.date}</span>
+      <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[10px] text-fg">{photo.date}</span>
     </button>
   )
 }

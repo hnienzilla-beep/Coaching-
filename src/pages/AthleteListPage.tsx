@@ -6,10 +6,12 @@ import { createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
+import { useTheme } from '../lib/theme'
 
 export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const [showForm, setShowForm] = useState(false)
+  const [theme, setTheme] = useTheme()
 
   useEffect(() => {
     ensureFoodSeed()
@@ -21,10 +23,16 @@ export default function AthleteListPage() {
     <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 p-4 pb-10">
       <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
         <div>
-          <h1 className="text-xl font-bold text-zinc-100">Bodybuilding Coach</h1>
+          <h1 className="text-xl font-bold text-fg">Bodybuilding Coach</h1>
           <p className="text-sm text-muted">Athleten verwalten</p>
         </div>
         <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="text-sm text-muted underline underline-offset-2"
+          >
+            {theme === 'dark' ? '☀️ Hell' : '🌙 Dunkel'}
+          </button>
           <Link to="/lebensmittel" className="text-sm text-accent underline underline-offset-2">
             Lebensmittel-DB
           </Link>
@@ -46,7 +54,7 @@ export default function AthleteListPage() {
             <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
               <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
               <div>
-                <div className="font-semibold text-zinc-100">{a.name}</div>
+                <div className="font-semibold text-fg">{a.name}</div>
                 <div className="text-xs text-muted">
                   {a.weightKg} kg · {a.goal}
                 </div>

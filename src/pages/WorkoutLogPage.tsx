@@ -6,6 +6,8 @@ import { getOrCreateWorkoutLog, isoDate } from '../db/queries'
 import type { Athlete } from '../models/types'
 import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
+import RestTimer from '../components/RestTimer'
+import StrengthChart from '../components/StrengthChart'
 
 type Ctx = { athlete: Athlete }
 
@@ -57,6 +59,10 @@ export default function WorkoutLogPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <StrengthChart athleteId={athlete.id} />
+
+      <RestTimer />
+
       <Card className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trainingseinheit {selectedDate}</h2>
@@ -73,7 +79,7 @@ export default function WorkoutLogPage() {
             value={selectedDate}
             max={isoDate(new Date())}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </Field>
 
@@ -110,13 +116,13 @@ export default function WorkoutLogPage() {
                   value={row.sets}
                   onChange={(e) => db.workoutLogExercises.update(row.id, { sets: Number(e.target.value) })}
                   placeholder="Sätze"
-                  className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+                  className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                 />
                 <input
                   value={row.reps}
                   onChange={(e) => db.workoutLogExercises.update(row.id, { reps: e.target.value })}
                   placeholder="Wdh."
-                  className="w-20 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+                  className="w-20 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                 />
                 <div className="flex-1">
                   <DecimalInput
@@ -142,7 +148,7 @@ export default function WorkoutLogPage() {
             value={currentLog?.notes ?? ''}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </Field>
       </Card>
@@ -160,7 +166,7 @@ export default function WorkoutLogPage() {
               }`}
             >
               <span className="text-muted">{log.date}</span>
-              <span className="text-zinc-100">{log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}</span>
+              <span className="text-fg">{log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}</span>
             </button>
           ))}
         </div>

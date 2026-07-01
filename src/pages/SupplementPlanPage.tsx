@@ -96,7 +96,7 @@ export default function SupplementPlanPage() {
             <input
               value={activePlan.phaseName}
               onChange={(e) => renamePhase(activePlan.id, e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-zinc-100 outline-none focus:border-accent"
+              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg outline-none focus:border-accent"
             />
             {plans && plans.length > 1 && (
               <Button variant="danger" onClick={() => deletePhase(activePlan.id)}>
@@ -135,7 +135,7 @@ export default function SupplementPlanPage() {
                       value={item.dose}
                       onChange={(e) => db.supplementPlanItems.update(item.id, { dose: e.target.value })}
                       placeholder="Dosis, z.B. 5 g"
-                      className="w-28 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+                      className="w-28 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                     />
                     <Select
                       value={item.timing}
@@ -204,7 +204,7 @@ function SupplementOverview({
                 const supplement = supplementMap.get(item.supplementId)
                 return (
                   <div key={item.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                    <span className="text-zinc-100">{supplement?.name ?? '–'}</span>
+                    <span className="text-fg">{supplement?.name ?? '–'}</span>
                     <span className="text-muted">{item.dose}</span>
                   </div>
                 )

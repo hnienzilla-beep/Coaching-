@@ -24,7 +24,7 @@ export default function SupplementDatabasePage() {
           ←
         </Link>
         <div>
-          <h1 className="text-lg font-bold text-zinc-100">Supplement-Datenbank</h1>
+          <h1 className="text-lg font-bold text-fg">Supplement-Datenbank</h1>
           <p className="text-xs text-muted">{supplements?.length ?? 0} Einträge</p>
         </div>
       </header>
@@ -56,7 +56,7 @@ function SupplementRow({ supplement }: { supplement: Supplement }) {
     return (
       <Card className="flex items-center justify-between py-2">
         <div>
-          <div className="text-sm font-medium text-zinc-100">{supplement.name}</div>
+          <div className="text-sm font-medium text-fg">{supplement.name}</div>
           <div className="text-xs text-muted">
             {supplement.defaultDose} · {supplement.defaultTiming}
           </div>

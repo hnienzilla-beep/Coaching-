@@ -22,7 +22,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       inputMode={inputMode}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${props.className ?? ''}`}
+      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     />
   )
 }
@@ -64,7 +64,7 @@ export function DecimalInput({
         const normalized = raw.replace(',', '.')
         onChange(normalized === '' || normalized === '-' ? undefined : Number(normalized))
       }}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${className}`}
+      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${className}`}
     />
   )
 }
@@ -73,7 +73,7 @@ export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       {...props}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${props.className ?? ''}`}
+      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     >
       {children}
     </select>
@@ -94,15 +94,15 @@ export function Button({
   const base = 'rounded-lg px-3 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40 disabled:active:scale-100'
   const variants: Record<ButtonVariant, string> = {
     primary: 'bg-accent text-black hover:brightness-110',
-    secondary: 'bg-surface-2 text-zinc-100 border border-border hover:border-accent',
-    ghost: 'text-muted hover:text-zinc-100',
+    secondary: 'bg-surface-2 text-fg border border-border hover:border-accent',
+    ghost: 'text-muted hover:text-fg',
     danger: 'bg-danger/10 text-danger border border-danger/40 hover:bg-danger/20',
   }
   return <button {...props} className={`${base} ${variants[variant]} ${className}`} />
 }
 
 export function StatBadge({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'ok' | 'danger' }) {
-  const toneClass = tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-zinc-100'
+  const toneClass = tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-fg'
   return (
     <div className="flex flex-col items-center gap-0.5 rounded-xl bg-surface-2 px-3 py-2">
       <span className={`text-lg font-semibold ${toneClass}`}>{value}</span>

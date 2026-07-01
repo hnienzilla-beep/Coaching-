@@ -4,7 +4,7 @@ import { db } from '../db/db'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
-import { isoDate } from '../db/queries'
+import { addDays, isoDate } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 
@@ -17,6 +17,13 @@ function update(athleteId: string, patch: Partial<Athlete>) {
 export default function DashboardPage() {
   const { athlete } = useOutletContext<Ctx>()
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
+  const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
+
+  const weekStart = addDays(isoDate(new Date()), -6)
+  const weekEntries = (entries ?? []).filter((e) => e.date >= weekStart && e.calories !== undefined)
+  const avgCalories =
+    weekEntries.length > 0 ? Math.round(weekEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0) / weekEntries.length) : undefined
+  const workoutsThisWeek = (workoutLogs ?? []).filter((w) => w.date >= weekStart).length
 
   const result = calculate({
     gender: athlete.gender,
@@ -33,6 +40,14 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-4">
       <ReminderBanner athleteId={athlete.id} entries={entries ?? []} />
+
+      <Card className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Wochenüberblick (letzte 7 Tage)</h2>
+        <div className="grid grid-cols-2 gap-2">
+          <StatBadge label="Ø Kalorien" value={avgCalories !== undefined ? `${avgCalories}` : '–'} />
+          <StatBadge label="Trainingseinheiten" value={`${workoutsThisWeek}`} />
+        </div>
+      </Card>
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Stammdaten</h2>

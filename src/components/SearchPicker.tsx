@@ -52,7 +52,7 @@ export default function SearchPicker({
                 onChange(i.id)
                 setOpen(false)
               }}
-              className="block w-full px-3 py-2 text-left text-sm text-zinc-100 hover:bg-accent/10"
+              className="block w-full px-3 py-2 text-left text-sm text-fg hover:bg-accent/10"
             >
               {i.label} {i.sublabel && <span className="text-xs text-muted">({i.sublabel})</span>}
             </button>

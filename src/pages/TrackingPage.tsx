@@ -20,6 +20,10 @@ export default function TrackingPage() {
     weight: entry.weightKg,
     bodyFat: entry.bodyFatPct,
     weightAvg7: rollingAverage7(series, i),
+    waist: entry.waist,
+    arm: entry.arm,
+    chest: entry.chest,
+    leg: entry.leg,
   }))
 
   const today = isoDate(new Date())
@@ -39,10 +43,10 @@ export default function TrackingPage() {
         <div className="h-40">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2c2d33" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#9ca3af' }} width={36} />
-              <Tooltip contentStyle={{ background: '#17181c', border: '1px solid #2c2d33', fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="weight" stroke="#60a5fa" dot={false} name="Gewicht (kg)" connectNulls />
               <Line type="monotone" dataKey="weightAvg7" stroke="#a3e635" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
             </LineChart>
@@ -51,11 +55,29 @@ export default function TrackingPage() {
         <div className="h-32">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2c2d33" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#9ca3af' }} width={36} />
-              <Tooltip contentStyle={{ background: '#17181c', border: '1px solid #2c2d33', fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="bodyFat" stroke="#f472b6" dot={false} name="KFA (%)" connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körpermaße</h2>
+        <div className="h-40">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+              <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
+              <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
+              <Line type="monotone" dataKey="chest" stroke="#a3e635" dot={false} name="Brust (cm)" connectNulls />
+              <Line type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -83,7 +105,7 @@ export default function TrackingPage() {
               }`}
             >
               <span className="text-muted">{e.date}</span>
-              <span className="flex items-center gap-2 text-zinc-100">
+              <span className="flex items-center gap-2 text-fg">
                 {photosByDate.get(e.date) ? '📷' : ''}
                 {e.weightKg !== undefined ? `${e.weightKg} kg` : '–'}
                 {e.bodyFatPct !== undefined ? ` · ${e.bodyFatPct}%` : ''}
@@ -188,7 +210,7 @@ function DayEditor({
         <textarea
           {...field('notes')}
           rows={2}
-          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
         />
       </Field>
       <div className="flex items-center gap-2">

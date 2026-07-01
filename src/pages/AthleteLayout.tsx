@@ -34,7 +34,7 @@ export default function AthleteLayout() {
           ←
         </Link>
         <span className="h-3 w-3 rounded-full" style={{ background: athlete.accentColor }} />
-        <h1 className="flex-1 truncate text-lg font-bold text-zinc-100">{athlete.name}</h1>
+        <h1 className="flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
       </header>
 
       <nav className="flex overflow-x-auto border-b border-border">

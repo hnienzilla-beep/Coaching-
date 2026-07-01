@@ -109,7 +109,7 @@ export default function NutritionPage() {
             <input
               value={activePlan.phaseName}
               onChange={(e) => renamePhase(activePlan.id, e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-zinc-100 outline-none focus:border-accent"
+              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg outline-none focus:border-accent"
             />
             {plans && plans.length > 1 && (
               <Button variant="danger" onClick={() => deletePhase(activePlan.id)}>
@@ -145,7 +145,7 @@ export default function NutritionPage() {
                     type="number"
                     value={meal.grams}
                     onChange={(e) => db.planMeals.update(meal.id, { grams: Number(e.target.value) })}
-                    className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+                    className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                   />
                   <Button variant="ghost" onClick={() => db.planMeals.delete(meal.id)}>
                     ✕

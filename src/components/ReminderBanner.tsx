@@ -25,7 +25,7 @@ export default function ReminderBanner({ entries }: { athleteId: string; entries
   if (loggedToday) return null
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-zinc-100">
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-fg">
       <span>Heute noch nicht eingetragen.</span>
       {permission === 'default' && (
         <Button variant="ghost" className="shrink-0 text-xs" onClick={() => Notification.requestPermission().then(setPermission)}>

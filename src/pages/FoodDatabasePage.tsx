@@ -23,7 +23,7 @@ export default function FoodDatabasePage() {
           ←
         </Link>
         <div>
-          <h1 className="text-lg font-bold text-zinc-100">Lebensmittel-Datenbank</h1>
+          <h1 className="text-lg font-bold text-fg">Lebensmittel-Datenbank</h1>
           <p className="text-xs text-muted">{foods?.length ?? 0} Einträge · Werte je 100 g</p>
         </div>
       </header>
@@ -55,7 +55,7 @@ function FoodRow({ food }: { food: FoodItem }) {
     return (
       <Card className="flex items-center justify-between py-2">
         <div>
-          <div className="text-sm font-medium text-zinc-100">{food.name}</div>
+          <div className="text-sm font-medium text-fg">{food.name}</div>
           <div className="text-xs text-muted">
             {food.kcal} kcal · P {food.protein}g · C {food.carbs}g · F {food.fat}g
           </div>
