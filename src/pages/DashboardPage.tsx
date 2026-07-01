@@ -7,6 +7,7 @@ import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
 import { addDays, isoDate } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
+import CalendarOverview from '../components/CalendarOverview'
 
 type Ctx = { athlete: Athlete }
 
@@ -48,6 +49,8 @@ export default function DashboardPage() {
           <StatBadge label="Trainingseinheiten" value={`${workoutsThisWeek}`} />
         </div>
       </Card>
+
+      <CalendarOverview entries={entries ?? []} workoutLogs={workoutLogs ?? []} />
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Stammdaten</h2>

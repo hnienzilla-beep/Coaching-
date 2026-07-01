@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { db } from '../db/db'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
@@ -20,9 +23,25 @@ export default function TrainingPlanPage() {
   const activePlan = plans?.find((p) => p.id === currentPlanId)
 
   const rows = useLiveQuery(
-    () => (currentPlanId ? db.trainingPlanExercises.where('planId').equals(currentPlanId).toArray() : []),
+    () => (currentPlanId ? db.trainingPlanExercises.where('planId').equals(currentPlanId).sortBy('order') : []),
     [currentPlanId],
   )
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id || !rows) return
+    const oldIndex = rows.findIndex((r) => r.id === active.id)
+    const newIndex = rows.findIndex((r) => r.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(rows, oldIndex, newIndex)
+    await db.transaction('rw', db.trainingPlanExercises, async () => {
+      for (let i = 0; i < reordered.length; i++) {
+        await db.trainingPlanExercises.update(reordered[i].id, { order: i })
+      }
+    })
+  }
 
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
   const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup }))
@@ -50,6 +69,7 @@ export default function TrainingPlanPage() {
       id: crypto.randomUUID(),
       planId: currentPlanId,
       exerciseId: exercises[0].id,
+      order: rows?.length ?? 0,
       sets: 3,
       reps: '8-12',
     }
@@ -99,51 +119,15 @@ export default function TrainingPlanPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
-            {(rows ?? []).map((row) => {
-              const exercise = exerciseMap.get(row.exerciseId)
-              return (
-                <div key={row.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <SearchPicker
-                        items={pickerItems}
-                        value={row.exerciseId}
-                        onChange={(id) => db.trainingPlanExercises.update(row.id, { exerciseId: id })}
-                        placeholder="Übung suchen..."
-                      />
-                    </div>
-                    <Button variant="ghost" onClick={() => db.trainingPlanExercises.delete(row.id)}>
-                      ✕
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={row.sets}
-                      onChange={(e) => db.trainingPlanExercises.update(row.id, { sets: Number(e.target.value) })}
-                      placeholder="Sätze"
-                      className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-                    />
-                    <input
-                      value={row.reps}
-                      onChange={(e) => db.trainingPlanExercises.update(row.id, { reps: e.target.value })}
-                      placeholder="Wdh., z.B. 8-12"
-                      className="w-24 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-                    />
-                    <div className="flex-1">
-                      <DecimalInput
-                        value={row.targetWeightKg}
-                        onChange={(n) => db.trainingPlanExercises.update(row.id, { targetWeightKg: n })}
-                        placeholder="Zielgewicht (kg)"
-                      />
-                    </div>
-                  </div>
-                  {exercise?.muscleGroup && <div className="pl-1 text-xs text-muted">{exercise.muscleGroup}</div>}
-                </div>
-              )
-            })}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={(rows ?? []).map((r) => r.id)} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-2">
+                {(rows ?? []).map((row) => (
+                  <SortableRow key={row.id} row={row} exercise={exerciseMap.get(row.exerciseId)} pickerItems={pickerItems} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
 
           <Button variant="secondary" onClick={addRow}>
             + Übung hinzufügen
@@ -156,6 +140,72 @@ export default function TrainingPlanPage() {
       )}
 
       <ExportTrainingPlanButton athlete={athlete} />
+    </div>
+  )
+}
+
+function SortableRow({
+  row,
+  exercise,
+  pickerItems,
+}: {
+  row: TrainingPlanExercise
+  exercise?: Exercise
+  pickerItems: { id: string; label: string; sublabel?: string }[]
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="flex flex-col gap-2 rounded-lg border border-border p-2"
+    >
+      <div className="flex items-center gap-2">
+        <button
+          {...attributes}
+          {...listeners}
+          type="button"
+          className="shrink-0 touch-none px-1 text-lg text-muted"
+          aria-label="Verschieben"
+        >
+          ⠿
+        </button>
+        <div className="flex-1">
+          <SearchPicker
+            items={pickerItems}
+            value={row.exerciseId}
+            onChange={(id) => db.trainingPlanExercises.update(row.id, { exerciseId: id })}
+            placeholder="Übung suchen..."
+          />
+        </div>
+        <Button variant="ghost" onClick={() => db.trainingPlanExercises.delete(row.id)}>
+          ✕
+        </Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={row.sets}
+          onChange={(e) => db.trainingPlanExercises.update(row.id, { sets: Number(e.target.value) })}
+          placeholder="Sätze"
+          className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+        />
+        <input
+          value={row.reps}
+          onChange={(e) => db.trainingPlanExercises.update(row.id, { reps: e.target.value })}
+          placeholder="Wdh., z.B. 8-12"
+          className="w-24 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+        />
+        <div className="flex-1">
+          <DecimalInput
+            value={row.targetWeightKg}
+            onChange={(n) => db.trainingPlanExercises.update(row.id, { targetWeightKg: n })}
+            placeholder="Zielgewicht (kg)"
+          />
+        </div>
+      </div>
+      {exercise?.muscleGroup && <div className="pl-1 text-xs text-muted">{exercise.muscleGroup}</div>}
     </div>
   )
 }

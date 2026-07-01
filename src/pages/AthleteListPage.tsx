@@ -1,7 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { db, ensureExerciseSeed, ensureFoodSeed, ensureSupplementSeed } from '../db/db'
+import {
+  db,
+  ensureExerciseSeed,
+  ensureFoodSeed,
+  ensureSupplementSeed,
+  ensureTrainingPlanExerciseOrder,
+  ensureWorkoutSetMigration,
+  exportAllData,
+  importAllData,
+} from '../db/db'
 import { createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
@@ -12,11 +21,47 @@ export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleExport() {
+    const json = await exportAllData()
+    const blob = new Blob([json], { type: 'application/json' })
+    const file = new File([blob], `bodybuilding-coach-backup-${isoDate(new Date())}.json`, { type: 'application/json' })
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Bodybuilding Coach Backup' })
+        return
+      } catch {
+        // Nutzer hat Teilen abgebrochen - fällt durch zum Download
+      }
+    }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.name
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImport(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file) return
+    if (!confirm('Import überschreibt vorhandene Daten mit gleicher ID. Fortfahren?')) return
+    const text = await file.text()
+    try {
+      await importAllData(text)
+      alert('Import abgeschlossen.')
+    } catch {
+      alert('Import fehlgeschlagen. Ist die Datei ein gültiges Backup?')
+    }
+  }
 
   useEffect(() => {
     ensureFoodSeed()
     ensureSupplementSeed()
     ensureExerciseSeed()
+    ensureTrainingPlanExerciseOrder()
+    ensureWorkoutSetMigration()
   }, [])
 
   return (
@@ -82,6 +127,25 @@ export default function AthleteListPage() {
           + Athlet hinzufügen
         </Button>
       )}
+
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={handleExport} className="flex-1">
+          Daten exportieren
+        </Button>
+        <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
+          Daten importieren
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            void handleImport(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      </div>
     </div>
   )
 }

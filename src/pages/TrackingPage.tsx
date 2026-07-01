@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -6,7 +6,7 @@ import { db } from '../db/db'
 import { upsertDailyEntry, isoDate, getTrackingSeries } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
 import { rollingAverage7, weeklyDelta } from '../lib/calculator'
-import { Button, Card, DecimalInput, Field, Input } from '../components/ui'
+import { Card, DecimalInput, Field, Input } from '../components/ui'
 
 type Ctx = { athlete: Athlete }
 
@@ -141,30 +141,39 @@ function DayEditor({
   delta?: number
   photoCount: number
 }) {
-  const [form, setForm] = useState<DailyEntry>(
-    entry ?? { id: crypto.randomUUID(), athleteId, date, weightKg: undefined, bodyFatPct: undefined },
-  )
+  const current: DailyEntry = entry ?? { id: crypto.randomUUID(), athleteId, date }
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [showSaved, setShowSaved] = useState(false)
+
+  useEffect(() => {
+    if (savedAt === null) return
+    setShowSaved(true)
+    const timeout = setTimeout(() => setShowSaved(false), 1500)
+    return () => clearTimeout(timeout)
+  }, [savedAt])
+
+  function persist(patch: Partial<DailyEntry>) {
+    const updated = { ...current, ...patch, athleteId, date }
+    void upsertDailyEntry(updated)
+    setSavedAt(Date.now())
+  }
 
   function field<K extends keyof DailyEntry>(key: K) {
     return {
-      value: form[key] ?? '',
+      value: current[key] ?? '',
       onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const raw = e.target.value
         const isNumeric = key !== 'notes' && key !== 'id' && key !== 'athleteId' && key !== 'date'
-        setForm((f) => ({ ...f, [key]: isNumeric ? (raw === '' ? undefined : Number(raw)) : raw }))
+        persist({ [key]: isNumeric ? (raw === '' ? undefined : Number(raw)) : raw } as Partial<DailyEntry>)
       },
     }
   }
 
   function decimalField<K extends keyof DailyEntry>(key: K) {
     return {
-      value: form[key] as number | undefined,
-      onChange: (n: number | undefined) => setForm((f) => ({ ...f, [key]: n })),
+      value: current[key] as number | undefined,
+      onChange: (n: number | undefined) => persist({ [key]: n } as Partial<DailyEntry>),
     }
-  }
-
-  async function save() {
-    await upsertDailyEntry({ ...form, athleteId, date })
   }
 
   async function addPhoto(fileList: FileList | null) {
@@ -176,7 +185,12 @@ function DayEditor({
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Eintrag {date}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Eintrag {date}</h2>
+          <span className={`text-xs text-accent transition-opacity duration-500 ${showSaved ? 'opacity-100' : 'opacity-0'}`}>
+            ✓ Gespeichert
+          </span>
+        </div>
         <span className="text-xs text-muted">
           {avg7 !== undefined ? `Ø7: ${avg7.toFixed(1)} kg` : ''}
           {delta !== undefined ? `  Δ Woche: ${delta.toFixed(1)} kg` : ''}
@@ -222,11 +236,8 @@ function DayEditor({
         />
       </Field>
       <div className="flex items-center gap-2">
-        <Button variant="primary" onClick={save} className="flex-1">
-          Speichern
-        </Button>
-        <label className="cursor-pointer rounded-lg border border-border px-3 py-2 text-sm text-muted hover:border-accent">
-          📷 {photoCount > 0 ? `(${photoCount})` : ''}
+        <label className="flex-1 cursor-pointer rounded-lg border border-border px-3 py-2 text-center text-sm text-muted hover:border-accent">
+          📷 Foto hinzufügen {photoCount > 0 ? `(${photoCount})` : ''}
           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addPhoto(e.target.files)} />
         </label>
       </div>

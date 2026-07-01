@@ -156,16 +156,30 @@ async function buildStrengthLines(athleteId: string): Promise<string[]> {
   if (logIds.length === 0) return []
   const dateByLogId = new Map(logs.map((l) => [l.id, l.date]))
   const logExercises = await db.workoutLogExercises.where('workoutLogId').anyOf(logIds).toArray()
+  const logExerciseIds = logExercises.map((r) => r.id)
+  const workoutSets = logExerciseIds.length ? await db.workoutSets.where('workoutLogExerciseId').anyOf(logExerciseIds).toArray() : []
   const exercises = await db.exercises.toArray()
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]))
+  const logExerciseById = new Map(logExercises.map((r) => [r.id, r]))
+
+  // Bestes (schwerstes) Satzgewicht je Trainings-Einheit als Kandidat für den zuletzt geloggten Wert.
+  const topWeightByLogExercise = new Map<string, number>()
+  for (const set of workoutSets) {
+    if (set.weightKg === undefined) continue
+    const current = topWeightByLogExercise.get(set.workoutLogExerciseId)
+    if (current === undefined || set.weightKg > current) {
+      topWeightByLogExercise.set(set.workoutLogExerciseId, set.weightKg)
+    }
+  }
 
   const latestByExercise = new Map<string, { date: string; weightKg: number }>()
-  for (const row of logExercises) {
-    if (row.weightKg === undefined) continue
+  for (const [logExerciseId, weightKg] of topWeightByLogExercise) {
+    const row = logExerciseById.get(logExerciseId)
+    if (!row) continue
     const date = dateByLogId.get(row.workoutLogId) ?? ''
     const existing = latestByExercise.get(row.exerciseId)
     if (!existing || date > existing.date) {
-      latestByExercise.set(row.exerciseId, { date, weightKg: row.weightKg })
+      latestByExercise.set(row.exerciseId, { date, weightKg })
     }
   }
 

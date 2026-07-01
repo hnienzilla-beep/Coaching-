@@ -11,12 +11,30 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
     () => (logIds.length ? db.workoutLogExercises.where('workoutLogId').anyOf(logIds).toArray() : []),
     [logIds.join(',')],
   )
+  const logExerciseIds = (logExercises ?? []).map((r) => r.id)
+  const workoutSets = useLiveQuery(
+    () => (logExerciseIds.length ? db.workoutSets.where('workoutLogExerciseId').anyOf(logExerciseIds).toArray() : []),
+    [logExerciseIds.join(',')],
+  )
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
 
   const dateByLogId = new Map((logs ?? []).map((l) => [l.id, l.date]))
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
+  const logExerciseById = new Map((logExercises ?? []).map((r) => [r.id, r]))
 
-  const loggedExerciseIds = [...new Set((logExercises ?? []).filter((r) => r.weightKg !== undefined).map((r) => r.exerciseId))]
+  // Bestes (schwerstes) Satzgewicht je Trainings-Einheit und Übung als Verlaufswert.
+  const topWeightByLogExercise = new Map<string, number>()
+  for (const set of workoutSets ?? []) {
+    if (set.weightKg === undefined) continue
+    const current = topWeightByLogExercise.get(set.workoutLogExerciseId)
+    if (current === undefined || set.weightKg > current) {
+      topWeightByLogExercise.set(set.workoutLogExerciseId, set.weightKg)
+    }
+  }
+
+  const loggedExerciseIds = [
+    ...new Set([...topWeightByLogExercise.keys()].map((leId) => logExerciseById.get(leId)?.exerciseId).filter((id): id is string => !!id)),
+  ]
   const availableExercises = loggedExerciseIds
     .map((id) => exerciseMap.get(id))
     .filter((e): e is NonNullable<typeof e> => !!e)
@@ -25,9 +43,12 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null)
   const currentExerciseId = selectedExerciseId ?? availableExercises[0]?.id ?? null
 
-  const chartData = (logExercises ?? [])
-    .filter((r) => r.exerciseId === currentExerciseId && r.weightKg !== undefined)
-    .map((r) => ({ fullDate: dateByLogId.get(r.workoutLogId) ?? '', weight: r.weightKg }))
+  const chartData = [...topWeightByLogExercise.entries()]
+    .filter(([logExerciseId]) => logExerciseById.get(logExerciseId)?.exerciseId === currentExerciseId)
+    .map(([logExerciseId, weight]) => ({
+      fullDate: dateByLogId.get(logExerciseById.get(logExerciseId)?.workoutLogId ?? '') ?? '',
+      weight,
+    }))
     .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
     .map((d) => ({ date: d.fullDate.slice(5), weight: d.weight }))
 

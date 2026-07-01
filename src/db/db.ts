@@ -14,6 +14,7 @@ import type {
   TrainingPlanExercise,
   WorkoutLog,
   WorkoutLogExercise,
+  WorkoutSet,
 } from '../models/types'
 import { FOOD_SEED } from '../data/foodSeed'
 import { SUPPLEMENT_SEED } from '../data/supplementSeed'
@@ -34,6 +35,7 @@ export class CoachDB extends Dexie {
   trainingPlanExercises!: EntityTable<TrainingPlanExercise, 'id'>
   workoutLogs!: EntityTable<WorkoutLog, 'id'>
   workoutLogExercises!: EntityTable<WorkoutLogExercise, 'id'>
+  workoutSets!: EntityTable<WorkoutSet, 'id'>
 
   constructor() {
     super('bodybuilding-coach')
@@ -57,6 +59,9 @@ export class CoachDB extends Dexie {
       trainingPlanExercises: 'id, planId',
       workoutLogs: 'id, athleteId, date, [athleteId+date]',
       workoutLogExercises: 'id, workoutLogId',
+    })
+    this.version(4).stores({
+      workoutSets: 'id, workoutLogExerciseId',
     })
   }
 }
@@ -109,4 +114,94 @@ export async function ensureExerciseSeed(): Promise<void> {
     if (missing.length === 0) return
     await db.exercises.bulkAdd(missing.map((e) => ({ id: crypto.randomUUID(), name: e.name, muscleGroup: e.muscleGroup })))
   })
+}
+
+// Bestandsdaten (vor Einführung von order) bekommen eine Reihenfolge nach Einfüge-Position.
+export async function ensureTrainingPlanExerciseOrder(): Promise<void> {
+  await db.transaction('rw', db.trainingPlanExercises, async () => {
+    const all = await db.trainingPlanExercises.toArray()
+    const missingOrder = all.filter((r) => r.order === undefined)
+    if (missingOrder.length === 0) return
+    const byPlan = new Map<string, typeof all>()
+    for (const row of missingOrder) {
+      const list = byPlan.get(row.planId) ?? []
+      list.push(row)
+      byPlan.set(row.planId, list)
+    }
+    for (const [, rows] of byPlan) {
+      for (let i = 0; i < rows.length; i++) {
+        await db.trainingPlanExercises.update(rows[i].id, { order: i })
+      }
+    }
+  })
+}
+
+// Migriert alte WorkoutLogExercise-Datensätze (mit sets/reps/weightKg direkt am Datensatz)
+// zu einzelnen WorkoutSet-Zeilen, damit bereits geloggte Trainingsdaten nicht verloren gehen.
+export async function ensureWorkoutSetMigration(): Promise<void> {
+  await db.transaction('rw', db.workoutLogExercises, db.workoutSets, async () => {
+    const exercises = await db.workoutLogExercises.toArray()
+    for (const ex of exercises) {
+      const legacy = ex as unknown as { sets?: number; reps?: string; weightKg?: number }
+      if (legacy.sets === undefined) continue
+      const existingSets = await db.workoutSets.where('workoutLogExerciseId').equals(ex.id).count()
+      if (existingSets === 0) {
+        const setsToCreate = Math.max(1, legacy.sets)
+        const repsNum = legacy.reps ? Number.parseInt(legacy.reps, 10) : undefined
+        for (let i = 0; i < setsToCreate; i++) {
+          await db.workoutSets.add({
+            id: crypto.randomUUID(),
+            workoutLogExerciseId: ex.id,
+            setNumber: i + 1,
+            reps: Number.isFinite(repsNum) ? repsNum : undefined,
+            weightKg: legacy.weightKg,
+          })
+        }
+      }
+      await db.workoutLogExercises.update(ex.id, { sets: undefined, reps: undefined, weightKg: undefined } as never)
+    }
+  })
+}
+
+export async function exportAllData(): Promise<string> {
+  const data: Record<string, unknown[]> = {}
+  for (const table of db.tables) {
+    if (table.name === 'progressPhotos') {
+      const rows = await table.toArray()
+      data[table.name] = await Promise.all(rows.map(async (r) => ({ ...r, blob: await blobToBase64(r.blob as Blob) })))
+    } else {
+      data[table.name] = await table.toArray()
+    }
+  }
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data })
+}
+
+export async function importAllData(json: string): Promise<void> {
+  const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
+  await db.transaction('rw', db.tables, async () => {
+    for (const table of db.tables) {
+      const rows = parsed.data[table.name]
+      if (!rows) continue
+      if (table.name === 'progressPhotos') {
+        const converted = await Promise.all(rows.map(async (r) => ({ ...r, blob: await base64ToBlob(r.blob as string) })))
+        await table.bulkPut(converted)
+      } else {
+        await table.bulkPut(rows)
+      }
+    }
+  })
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function base64ToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl)
+  return res.blob()
 }

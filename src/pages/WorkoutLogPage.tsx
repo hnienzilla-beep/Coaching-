@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateWorkoutLog, isoDate } from '../db/queries'
-import type { Athlete } from '../models/types'
+import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import RestTimer from '../components/RestTimer'
@@ -25,20 +25,45 @@ export default function WorkoutLogPage() {
     [currentLog?.id],
   )
 
+  const planExercises = useLiveQuery(
+    () =>
+      currentLog?.trainingPlanId
+        ? db.trainingPlanExercises.where('planId').equals(currentLog.trainingPlanId).sortBy('order')
+        : [],
+    [currentLog?.trainingPlanId],
+  )
+
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
   const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup }))
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
+  const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
   async function addExerciseRow() {
     if (!exercises?.length) return
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
-    await db.workoutLogExercises.add({
-      id: crypto.randomUUID(),
-      workoutLogId: log.id,
-      exerciseId: exercises[0].id,
-      sets: 3,
-      reps: '8-12',
-    })
+    const loggedExerciseIds = new Set((rows ?? []).map((r) => r.exerciseId))
+    const suggestion = (planExercises ?? []).find((pe) => !loggedExerciseIds.has(pe.exerciseId))
+    const exerciseId = suggestion?.exerciseId ?? exercises[0].id
+    const logExerciseId = crypto.randomUUID()
+    await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId })
+    if (suggestion) {
+      const repsNum = Number.parseInt(suggestion.reps, 10)
+      const setsToCreate = Math.max(1, suggestion.sets)
+      for (let i = 0; i < setsToCreate; i++) {
+        await db.workoutSets.add({
+          id: crypto.randomUUID(),
+          workoutLogExerciseId: logExerciseId,
+          setNumber: i + 1,
+          reps: Number.isFinite(repsNum) ? repsNum : undefined,
+          weightKg: suggestion.targetWeightKg,
+        })
+      }
+    }
+  }
+
+  async function deleteExerciseRow(rowId: string) {
+    await db.workoutSets.where('workoutLogExerciseId').equals(rowId).delete()
+    await db.workoutLogExercises.delete(rowId)
   }
 
   async function setTrainingPlanId(planId: string) {
@@ -53,6 +78,10 @@ export default function WorkoutLogPage() {
 
   async function deleteLog() {
     if (!currentLog) return
+    const logExercises = await db.workoutLogExercises.where('workoutLogId').equals(currentLog.id).toArray()
+    for (const ex of logExercises) {
+      await db.workoutSets.where('workoutLogExerciseId').equals(ex.id).delete()
+    }
     await db.workoutLogExercises.where('workoutLogId').equals(currentLog.id).delete()
     await db.workoutLogs.delete(currentLog.id)
   }
@@ -96,46 +125,15 @@ export default function WorkoutLogPage() {
 
         <div className="flex flex-col gap-2">
           {(rows ?? []).map((row) => (
-            <div key={row.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <SearchPicker
-                    items={pickerItems}
-                    value={row.exerciseId}
-                    onChange={(id) => db.workoutLogExercises.update(row.id, { exerciseId: id })}
-                    placeholder="Übung suchen..."
-                  />
-                </div>
-                <Button variant="ghost" onClick={() => db.workoutLogExercises.delete(row.id)}>
-                  ✕
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={row.sets}
-                  onChange={(e) => db.workoutLogExercises.update(row.id, { sets: Number(e.target.value) })}
-                  placeholder="Sätze"
-                  className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-                />
-                <input
-                  value={row.reps}
-                  onChange={(e) => db.workoutLogExercises.update(row.id, { reps: e.target.value })}
-                  placeholder="Wdh."
-                  className="w-20 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-                />
-                <div className="flex-1">
-                  <DecimalInput
-                    value={row.weightKg}
-                    onChange={(n) => db.workoutLogExercises.update(row.id, { weightKg: n })}
-                    placeholder="Gewicht (kg)"
-                  />
-                </div>
-              </div>
-              {exerciseMap.get(row.exerciseId)?.muscleGroup && (
-                <div className="pl-1 text-xs text-muted">{exerciseMap.get(row.exerciseId)?.muscleGroup}</div>
-              )}
-            </div>
+            <WorkoutExerciseRow
+              key={row.id}
+              rowId={row.id}
+              exerciseId={row.exerciseId}
+              pickerItems={pickerItems}
+              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+              onDelete={() => deleteExerciseRow(row.id)}
+            />
           ))}
         </div>
 
@@ -171,6 +169,98 @@ export default function WorkoutLogPage() {
           ))}
         </div>
       </Card>
+    </div>
+  )
+}
+
+function WorkoutExerciseRow({
+  rowId,
+  exerciseId,
+  pickerItems,
+  muscleGroup,
+  planExercise,
+  onDelete,
+}: {
+  rowId: string
+  exerciseId: string
+  pickerItems: { id: string; label: string; sublabel?: string }[]
+  muscleGroup?: string
+  planExercise?: TrainingPlanExercise
+  onDelete: () => void
+}) {
+  const sets = useLiveQuery(() => db.workoutSets.where('workoutLogExerciseId').equals(rowId).sortBy('setNumber'), [rowId]) ?? []
+
+  async function addSet() {
+    const last = sets[sets.length - 1]
+    let reps: number | undefined
+    let weightKg: number | undefined
+    if (last) {
+      reps = last.reps
+      weightKg = last.weightKg
+    } else if (planExercise) {
+      const repsNum = Number.parseInt(planExercise.reps, 10)
+      reps = Number.isFinite(repsNum) ? repsNum : undefined
+      weightKg = planExercise.targetWeightKg
+    }
+    const set: WorkoutSet = { id: crypto.randomUUID(), workoutLogExerciseId: rowId, setNumber: sets.length + 1, reps, weightKg }
+    await db.workoutSets.add(set)
+  }
+
+  async function deleteSet(setId: string) {
+    await db.workoutSets.delete(setId)
+    const remaining = sets.filter((s) => s.id !== setId)
+    await db.transaction('rw', db.workoutSets, async () => {
+      for (let i = 0; i < remaining.length; i++) {
+        await db.workoutSets.update(remaining[i].id, { setNumber: i + 1 })
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SearchPicker
+            items={pickerItems}
+            value={exerciseId}
+            onChange={(id) => db.workoutLogExercises.update(rowId, { exerciseId: id })}
+            placeholder="Übung suchen..."
+          />
+        </div>
+        <Button variant="ghost" onClick={onDelete}>
+          ✕
+        </Button>
+      </div>
+      {muscleGroup && <div className="pl-1 text-xs text-muted">{muscleGroup}</div>}
+
+      <div className="flex flex-col gap-1.5">
+        {sets.map((set) => (
+          <div key={set.id} className="flex items-center gap-2">
+            <span className="w-14 shrink-0 text-xs text-muted">Satz {set.setNumber}</span>
+            <input
+              type="number"
+              value={set.reps ?? ''}
+              onChange={(e) => db.workoutSets.update(set.id, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
+              placeholder="Wdh."
+              className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+            />
+            <div className="flex-1">
+              <DecimalInput
+                value={set.weightKg}
+                onChange={(n) => db.workoutSets.update(set.id, { weightKg: n })}
+                placeholder="Gewicht (kg)"
+              />
+            </div>
+            <Button variant="ghost" onClick={() => deleteSet(set.id)}>
+              ✕
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <Button variant="ghost" onClick={addSet}>
+        + Satz hinzufügen
+      </Button>
     </div>
   )
 }

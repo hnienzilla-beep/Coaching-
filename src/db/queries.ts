@@ -58,6 +58,7 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
       db.trainingPlanExercises,
       db.workoutLogs,
       db.workoutLogExercises,
+      db.workoutSets,
     ],
     async () => {
       const plans = await db.nutritionPlans.where('athleteId').equals(athleteId).toArray()
@@ -80,6 +81,10 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
 
       const workoutLogs = await db.workoutLogs.where('athleteId').equals(athleteId).toArray()
       for (const log of workoutLogs) {
+        const logExercises = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+        for (const ex of logExercises) {
+          await db.workoutSets.where('workoutLogExerciseId').equals(ex.id).delete()
+        }
         await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
       }
       await db.workoutLogs.where('athleteId').equals(athleteId).delete()

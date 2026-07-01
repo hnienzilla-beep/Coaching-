@@ -134,6 +134,7 @@ export interface TrainingPlanExercise {
   id: string
   planId: string
   exerciseId: string
+  order: number
   sets: number
   reps: string // z.B. "8-12" oder "10"
   targetWeightKg?: number
@@ -152,8 +153,13 @@ export interface WorkoutLogExercise {
   id: string
   workoutLogId: string
   exerciseId: string
-  sets: number
-  reps: string
-  weightKg?: number
   notes?: string
+}
+
+export interface WorkoutSet {
+  id: string
+  workoutLogExerciseId: string
+  setNumber: number
+  reps?: number
+  weightKg?: number
 }
