@@ -139,6 +139,26 @@ export async function ensureTrainingPlanExerciseOrder(): Promise<void> {
   })
 }
 
+// Bestandsdaten (vor Einführung von order) bekommen eine Reihenfolge nach Einfüge-Position.
+export async function ensurePlanMealOrder(): Promise<void> {
+  await db.transaction('rw', db.planMeals, async () => {
+    const all = await db.planMeals.toArray()
+    const missingOrder = all.filter((r) => r.order === undefined)
+    if (missingOrder.length === 0) return
+    const byPlan = new Map<string, typeof all>()
+    for (const row of missingOrder) {
+      const list = byPlan.get(row.planId) ?? []
+      list.push(row)
+      byPlan.set(row.planId, list)
+    }
+    for (const [, rows] of byPlan) {
+      for (let i = 0; i < rows.length; i++) {
+        await db.planMeals.update(rows[i].id, { order: i })
+      }
+    }
+  })
+}
+
 // Migriert alte WorkoutLogExercise-Datensätze (mit sets/reps/weightKg direkt am Datensatz)
 // zu einzelnen WorkoutSet-Zeilen, damit bereits geloggte Trainingsdaten nicht verloren gehen.
 export async function ensureWorkoutSetMigration(): Promise<void> {
@@ -210,7 +230,7 @@ interface NutritionPlanTemplate {
 export async function exportNutritionPlan(planId: string): Promise<string> {
   const plan = await db.nutritionPlans.get(planId)
   if (!plan) throw new Error('Plan nicht gefunden')
-  const meals = await db.planMeals.where('planId').equals(planId).toArray()
+  const meals = await db.planMeals.where('planId').equals(planId).sortBy('order')
   const foods = await db.foodItems.bulkGet(meals.map((m) => m.foodItemId))
   const template: NutritionPlanTemplate = {
     kind: 'nutritionPlan',
@@ -236,14 +256,21 @@ export async function importNutritionPlan(json: string, athleteId: string): Prom
   await db.transaction('rw', db.nutritionPlans, db.planMeals, db.foodItems, async () => {
     const order = await db.nutritionPlans.where('athleteId').equals(athleteId).count()
     await db.nutritionPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
-    for (const item of template.items) {
+    for (const [index, item] of template.items.entries()) {
       let food = await db.foodItems.where('name').equals(item.foodName).first()
       if (!food && item.foodMacros) {
         food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
         await db.foodItems.add(food)
       }
       if (!food) continue
-      await db.planMeals.add({ id: crypto.randomUUID(), planId, mealType: item.mealType, foodItemId: food.id, grams: item.grams })
+      await db.planMeals.add({
+        id: crypto.randomUUID(),
+        planId,
+        mealType: item.mealType,
+        foodItemId: food.id,
+        grams: item.grams,
+        order: index,
+      })
     }
   })
   return planId

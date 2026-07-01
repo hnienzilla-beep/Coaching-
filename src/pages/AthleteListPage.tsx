@@ -5,6 +5,7 @@ import {
   db,
   ensureExerciseSeed,
   ensureFoodSeed,
+  ensurePlanMealOrder,
   ensureSupplementSeed,
   ensureTrainingPlanExerciseOrder,
   ensureWorkoutSetMigration,
@@ -62,6 +63,7 @@ export default function AthleteListPage() {
     ensureExerciseSeed()
     ensureTrainingPlanExerciseOrder()
     ensureWorkoutSetMigration()
+    ensurePlanMealOrder()
   }, [])
 
   return (

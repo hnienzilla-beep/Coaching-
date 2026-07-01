@@ -69,6 +69,7 @@ export interface PlanMeal {
   mealType: MealType
   foodItemId: string
   grams: number
+  order: number
 }
 
 export interface ProgressPhoto {

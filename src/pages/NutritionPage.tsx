@@ -27,7 +27,10 @@ export default function NutritionPage() {
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
 
-  const meals = useLiveQuery(() => (currentPlanId ? db.planMeals.where('planId').equals(currentPlanId).toArray() : []), [currentPlanId])
+  const meals = useLiveQuery(
+    () => (currentPlanId ? db.planMeals.where('planId').equals(currentPlanId).sortBy('order') : []),
+    [currentPlanId],
+  )
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
   const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g` }))
@@ -85,6 +88,7 @@ export default function NutritionPage() {
       mealType: MEAL_TYPES[0],
       foodItemId: foods[0].id,
       grams: 100,
+      order: meals?.length ?? 0,
     }
     await db.planMeals.add(meal)
   }
@@ -156,11 +160,17 @@ export default function NutritionPage() {
           <div className="flex flex-col gap-2">
             {rows.map(({ meal, kcal, protein, carbs, fat }) => (
               <div key={meal.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
+                <SearchPicker
+                  items={foodPickerItems}
+                  value={meal.foodItemId}
+                  onChange={(id) => db.planMeals.update(meal.id, { foodItemId: id })}
+                  placeholder="Lebensmittel suchen..."
+                />
                 <div className="flex items-center gap-2">
                   <Select
                     value={meal.mealType}
                     onChange={(e) => db.planMeals.update(meal.id, { mealType: e.target.value as MealType })}
-                    className="w-32 shrink-0"
+                    className="flex-1"
                   >
                     {MEAL_TYPES.map((mt) => (
                       <option key={mt} value={mt}>
@@ -168,19 +178,12 @@ export default function NutritionPage() {
                       </option>
                     ))}
                   </Select>
-                  <div className="flex-1">
-                    <SearchPicker
-                      items={foodPickerItems}
-                      value={meal.foodItemId}
-                      onChange={(id) => db.planMeals.update(meal.id, { foodItemId: id })}
-                      placeholder="Lebensmittel suchen..."
-                    />
-                  </div>
                   <input
                     type="number"
                     value={meal.grams}
                     onChange={(e) => db.planMeals.update(meal.id, { grams: Number(e.target.value) })}
-                    className="w-16 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+                    placeholder="Gramm"
+                    className="w-20 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                   />
                   <Button variant="ghost" onClick={() => db.planMeals.delete(meal.id)}>
                     ✕
@@ -265,8 +268,16 @@ function NutritionOverview({
           <div key={group.mealType}>
             <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
             <div className="flex flex-col gap-1">
-              {group.rows.map(({ meal, kcal }) => (
-                <FoodRow key={meal.id} meal={meal} kcal={kcal} foodName={foodMap.get(meal.foodItemId)?.name} />
+              {group.rows.map(({ meal, kcal, protein, carbs, fat }) => (
+                <FoodRow
+                  key={meal.id}
+                  meal={meal}
+                  kcal={kcal}
+                  protein={protein}
+                  carbs={carbs}
+                  fat={fat}
+                  foodName={foodMap.get(meal.foodItemId)?.name}
+                />
               ))}
             </div>
           </div>
@@ -278,13 +289,32 @@ function NutritionOverview({
   )
 }
 
-function FoodRow({ meal, kcal, foodName }: { meal: PlanMeal; kcal: number; foodName?: string }) {
+function FoodRow({
+  meal,
+  kcal,
+  protein,
+  carbs,
+  fat,
+  foodName,
+}: {
+  meal: PlanMeal
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  foodName?: string
+}) {
   return (
-    <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
-      <span className="text-fg">
-        {foodName ?? '–'} <span className="text-muted">({meal.grams} g)</span>
-      </span>
-      <span className="text-muted">{kcal.toFixed(0)} kcal</span>
+    <div className="flex flex-col gap-0.5 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+      <div className="flex items-center justify-between">
+        <span className="text-fg">
+          {foodName ?? '–'} <span className="text-muted">({meal.grams} g)</span>
+        </span>
+        <span className="text-muted">{kcal.toFixed(0)} kcal</span>
+      </div>
+      <div className="text-xs text-muted">
+        P {protein.toFixed(1)} g · C {carbs.toFixed(1)} g · F {fat.toFixed(1)} g
+      </div>
     </div>
   )
 }
