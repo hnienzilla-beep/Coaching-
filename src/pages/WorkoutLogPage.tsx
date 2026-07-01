@@ -53,6 +53,17 @@ export default function WorkoutLogPage() {
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
   const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
+  // Reihenfolge folgt dem Trainingsplan (order); Übungen ohne Plan-Zuordnung (z.B. manuell
+  // ergänzt) bleiben ans Ende sortiert, sortierstabil in ihrer bisherigen Reihenfolge.
+  const sortedRows = [...(rows ?? [])].sort((a, b) => {
+    const orderA = planExerciseByExerciseId.get(a.exerciseId)?.order
+    const orderB = planExerciseByExerciseId.get(b.exerciseId)?.order
+    if (orderA !== undefined && orderB !== undefined) return orderA - orderB
+    if (orderA !== undefined) return -1
+    if (orderB !== undefined) return 1
+    return 0
+  })
+
   async function addExerciseRow() {
     if (!exercises?.length) return
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
@@ -141,7 +152,7 @@ export default function WorkoutLogPage() {
         </Field>
 
         <div className="flex flex-col gap-2">
-          {(rows ?? []).map((row) => (
+          {sortedRows.map((row) => (
             <WorkoutExerciseRow
               key={row.id}
               rowId={row.id}
