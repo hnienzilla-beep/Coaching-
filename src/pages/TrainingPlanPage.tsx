@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import type { Athlete, TrainingPlanExercise } from '../models/types'
+import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
@@ -14,6 +14,7 @@ export default function TrainingPlanPage() {
   const plans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
+  const [mode, setMode] = useState<'view' | 'edit'>('view')
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
@@ -74,7 +75,16 @@ export default function TrainingPlanPage() {
         </button>
       </div>
 
-      {activePlan && (
+      {activePlan && mode === 'view' && (
+        <TrainingPlanOverview
+          phaseName={activePlan.phaseName}
+          rows={rows ?? []}
+          exerciseMap={exerciseMap}
+          onEdit={() => setMode('edit')}
+        />
+      )}
+
+      {activePlan && mode === 'edit' && (
         <Card className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -138,10 +148,57 @@ export default function TrainingPlanPage() {
           <Button variant="secondary" onClick={addRow}>
             + Übung hinzufügen
           </Button>
+
+          <Button variant="primary" onClick={() => setMode('view')}>
+            Fertig
+          </Button>
         </Card>
       )}
 
       <ExportTrainingPlanButton athlete={athlete} />
     </div>
+  )
+}
+
+function TrainingPlanOverview({
+  phaseName,
+  rows,
+  exerciseMap,
+  onEdit,
+}: {
+  phaseName: string
+  rows: TrainingPlanExercise[]
+  exerciseMap: Map<string, Exercise>
+  onEdit: () => void
+}) {
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
+        <Button variant="secondary" onClick={onEdit}>
+          Bearbeiten
+        </Button>
+      </div>
+
+      {rows.length === 0 && <p className="text-sm text-muted">Noch keine Übungen an diesem Tag.</p>}
+
+      <div className="flex flex-col gap-1">
+        {rows.map((row) => {
+          const exercise = exerciseMap.get(row.exerciseId)
+          return (
+            <div key={row.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+              <div>
+                <div className="text-fg">{exercise?.name ?? '–'}</div>
+                {exercise?.muscleGroup && <div className="text-xs text-muted">{exercise.muscleGroup}</div>}
+              </div>
+              <span className="text-muted">
+                {row.sets} x {row.reps}
+                {row.targetWeightKg !== undefined ? ` @ ${row.targetWeightKg} kg` : ''}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
   )
 }

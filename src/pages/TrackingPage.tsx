@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
 import { upsertDailyEntry, isoDate, getTrackingSeries } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
@@ -49,6 +49,14 @@ export default function TrackingPage() {
               <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="weight" stroke="#60a5fa" dot={false} name="Gewicht (kg)" connectNulls />
               <Line type="monotone" dataKey="weightAvg7" stroke="#a3e635" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
+              {athlete.targetWeightKg !== undefined && (
+                <ReferenceLine
+                  y={athlete.targetWeightKg}
+                  stroke="#f472b6"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Ziel', position: 'insideTopRight', fill: '#f472b6', fontSize: 10 }}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

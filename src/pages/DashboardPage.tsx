@@ -2,7 +2,7 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
-import type { Athlete, Gender } from '../models/types'
+import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
 import { addDays, isoDate } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
@@ -118,7 +118,21 @@ export default function DashboardPage() {
             onChange={(e) => update(athlete.id, { startDate: e.target.value })}
           />
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Zielgewicht (kg)">
+            <DecimalInput value={athlete.targetWeightKg} onChange={(n) => update(athlete.id, { targetWeightKg: n })} />
+          </Field>
+          <Field label="Ziel-Datum">
+            <Input
+              type="date"
+              value={athlete.targetDate ?? ''}
+              onChange={(e) => update(athlete.id, { targetDate: e.target.value || undefined })}
+            />
+          </Field>
+        </div>
       </Card>
+
+      <WeightGoalProgress athlete={athlete} entries={entries ?? []} />
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kalorienrechner</h2>
@@ -135,5 +149,43 @@ export default function DashboardPage() {
 
       <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />
     </div>
+  )
+}
+
+function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: DailyEntry[] }) {
+  if (athlete.targetWeightKg === undefined) return null
+
+  const weighed = entries.filter((e) => e.weightKg !== undefined).sort((a, b) => a.date.localeCompare(b.date))
+  const startWeight = weighed[0]?.weightKg
+  const currentWeight = weighed[weighed.length - 1]?.weightKg
+
+  if (startWeight === undefined || currentWeight === undefined) {
+    return (
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Zielgewicht</h2>
+        <p className="text-sm text-muted">Noch keine Trackingdaten für den Fortschritt vorhanden.</p>
+      </Card>
+    )
+  }
+
+  const totalDelta = athlete.targetWeightKg - startWeight
+  const currentDelta = currentWeight - startWeight
+  const pct = totalDelta === 0 ? 100 : Math.min(100, Math.max(0, (currentDelta / totalDelta) * 100))
+  const remaining = Math.abs(athlete.targetWeightKg - currentWeight)
+
+  return (
+    <Card className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Zielgewicht</h2>
+        <span className="text-sm text-fg">{pct.toFixed(0)}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-xs text-muted">
+        {currentWeight} kg → {athlete.targetWeightKg} kg · noch {remaining.toFixed(1)} kg
+        {athlete.targetDate ? ` · Ziel: ${athlete.targetDate}` : ''}
+      </p>
+    </Card>
   )
 }

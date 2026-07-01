@@ -13,11 +13,14 @@ type Ctx = { athlete: Athlete }
 const CAL_TOLERANCE = 100
 const MACRO_TOLERANCE = 15
 
+type Row = { meal: PlanMeal; kcal: number; protein: number; carbs: number; fat: number }
+
 export default function NutritionPage() {
   const { athlete } = useOutletContext<Ctx>()
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
+  const [mode, setMode] = useState<'view' | 'edit'>('view')
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
@@ -38,7 +41,7 @@ export default function NutritionPage() {
     calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
-  const rows = (meals ?? []).map((m) => {
+  const rows: Row[] = (meals ?? []).map((m) => {
     const food = foodMap.get(m.foodItemId)
     const factor = m.grams / 100
     return {
@@ -56,7 +59,7 @@ export default function NutritionPage() {
   )
 
   async function addPhase() {
-    const order = (plans?.length ?? 0)
+    const order = plans?.length ?? 0
     const id = crypto.randomUUID()
     await db.nutritionPlans.add({ id, athleteId: athlete.id, phaseName: `Phase ${order + 1}`, order })
     setActivePlanId(id)
@@ -103,7 +106,18 @@ export default function NutritionPage() {
         </button>
       </div>
 
-      {activePlan && (
+      {activePlan && mode === 'view' && (
+        <NutritionOverview
+          phaseName={activePlan.phaseName}
+          rows={rows}
+          foodMap={foodMap}
+          sums={sums}
+          target={target}
+          onEdit={() => setMode('edit')}
+        />
+      )}
+
+      {activePlan && mode === 'edit' && (
         <Card className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -163,8 +177,72 @@ export default function NutritionPage() {
           </Button>
 
           <SumTable sums={sums} target={target} />
+
+          <Button variant="primary" onClick={() => setMode('view')}>
+            Fertig
+          </Button>
         </Card>
       )}
+    </div>
+  )
+}
+
+function NutritionOverview({
+  phaseName,
+  rows,
+  foodMap,
+  sums,
+  target,
+  onEdit,
+}: {
+  phaseName: string
+  rows: Row[]
+  foodMap: Map<string, { name: string }>
+  sums: { kcal: number; protein: number; carbs: number; fat: number }
+  target: ReturnType<typeof calculate>
+  onEdit: () => void
+}) {
+  const groups = MEAL_TYPES.map((mealType) => ({
+    mealType,
+    rows: rows.filter((r) => r.meal.mealType === mealType),
+  })).filter((g) => g.rows.length > 0)
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
+        <Button variant="secondary" onClick={onEdit}>
+          Bearbeiten
+        </Button>
+      </div>
+
+      {groups.length === 0 && <p className="text-sm text-muted">Noch keine Mahlzeiten in dieser Phase.</p>}
+
+      <div className="flex flex-col gap-3">
+        {groups.map((group) => (
+          <div key={group.mealType}>
+            <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
+            <div className="flex flex-col gap-1">
+              {group.rows.map(({ meal, kcal }) => (
+                <FoodRow key={meal.id} meal={meal} kcal={kcal} foodName={foodMap.get(meal.foodItemId)?.name} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <SumTable sums={sums} target={target} />
+    </Card>
+  )
+}
+
+function FoodRow({ meal, kcal, foodName }: { meal: PlanMeal; kcal: number; foodName?: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+      <span className="text-fg">
+        {foodName ?? '–'} <span className="text-muted">({meal.grams} g)</span>
+      </span>
+      <span className="text-muted">{kcal.toFixed(0)} kcal</span>
     </div>
   )
 }

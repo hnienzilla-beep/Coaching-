@@ -14,6 +14,8 @@ export interface Athlete {
   fatPerKg: number
   calorieAdjustmentKcal?: number // manuelles Kalorien-Defizit (negativ) / -überschuss (positiv), überschreibt die Ziel-Voreinstellung
   startDate: string // ISO date
+  targetWeightKg?: number
+  targetDate?: string // ISO date
 }
 
 export interface DailyEntry {
