@@ -10,6 +10,7 @@ import SupplementPlanPage from './pages/SupplementPlanPage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
 import TrainingPlanPage from './pages/TrainingPlanPage'
 import WorkoutLogPage from './pages/WorkoutLogPage'
+import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/" element={<AthleteListPage />} />
         <Route path="/lebensmittel" element={<FoodDatabasePage />} />
         <Route path="/supplemente" element={<SupplementDatabasePage />} />
+        <Route path="/uebungen" element={<ExerciseDatabasePage />} />
         <Route path="/athlete/:athleteId" element={<AthleteLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="tracking" element={<TrackingPage />} />

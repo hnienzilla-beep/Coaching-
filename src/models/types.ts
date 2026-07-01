@@ -111,10 +111,14 @@ export interface SupplementPlanItem {
   notes?: string
 }
 
+export const MUSCLE_GROUPS = ['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme', 'Bauch', 'Ganzkörper', 'Sonstiges'] as const
+
+export type MuscleGroup = (typeof MUSCLE_GROUPS)[number]
+
 export interface Exercise {
   id: string
   name: string
-  muscleGroup: string
+  muscleGroup: MuscleGroup
 }
 
 export interface TrainingPlan {

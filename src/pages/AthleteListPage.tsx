@@ -31,6 +31,9 @@ export default function AthleteListPage() {
           <Link to="/supplemente" className="text-sm text-accent underline underline-offset-2">
             Supplement-DB
           </Link>
+          <Link to="/uebungen" className="text-sm text-accent underline underline-offset-2">
+            Trainings-DB
+          </Link>
         </div>
       </header>
 

@@ -1,6 +1,8 @@
+import type { MuscleGroup } from '../models/types'
+
 export interface ExerciseSeed {
   name: string
-  muscleGroup: string
+  muscleGroup: MuscleGroup
 }
 
 // Startbestand gängiger Übungen, vom Nutzer erweiterbar.

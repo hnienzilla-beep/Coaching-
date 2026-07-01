@@ -1,7 +1,7 @@
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
 import { isoDate } from '../db/queries'
@@ -78,12 +78,22 @@ export default function DashboardPage() {
           </Select>
         </Field>
         <Field label="Kalorien-Anpassung (kcal, +Überschuss/-Defizit)">
-          <Input
-            type="number"
-            step="10"
-            value={result.calorieAdjustmentKcal}
-            onChange={(e) => update(athlete.id, { calorieAdjustmentKcal: Number(e.target.value) })}
-          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => update(athlete.id, { calorieAdjustmentKcal: -result.calorieAdjustmentKcal })}
+              className="shrink-0 px-3"
+              title="Vorzeichen umkehren"
+            >
+              ±
+            </Button>
+            <DecimalInput
+              value={result.calorieAdjustmentKcal}
+              onChange={(n) => update(athlete.id, { calorieAdjustmentKcal: n ?? 0 })}
+              className="flex-1"
+            />
+          </div>
         </Field>
         <Field label="Startdatum (Tag 1)">
           <Input
