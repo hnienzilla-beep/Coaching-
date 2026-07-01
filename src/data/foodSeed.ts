@@ -304,4 +304,5 @@ export const FOOD_SEED: FoodSeed[] = [
   { name: "Kollagen-Pulver", kcal: 370, protein: 90.0, carbs: 0.0, fat: 0.5 },
   { name: "Marzipan", kcal: 459, protein: 8.9, carbs: 46.0, fat: 26.0 },
   { name: "Rosinenbrot", kcal: 265, protein: 7.5, carbs: 50.0, fat: 3.5 },
+  { name: "Rice Pudding (ESN, Pulver)", kcal: 373, protein: 7.7, carbs: 83.0, fat: 0.7 },
 ]
