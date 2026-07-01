@@ -27,6 +27,7 @@ export default function DashboardPage() {
     goal: athlete.goal,
     proteinPerKg: athlete.proteinPerKg,
     fatPerKg: athlete.fatPerKg,
+    calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
   return (
@@ -82,7 +83,7 @@ export default function DashboardPage() {
             ))}
           </Select>
         </Field>
-        <Field label="Ziel">
+        <Field label="Ziel (Schnellauswahl)">
           <Select value={athlete.goal} onChange={(e) => update(athlete.id, { goal: e.target.value })}>
             {GOALS.map((g) => (
               <option key={g.label} value={g.label}>
@@ -90,6 +91,14 @@ export default function DashboardPage() {
               </option>
             ))}
           </Select>
+        </Field>
+        <Field label="Kalorien-Anpassung (kcal, +Überschuss/-Defizit)">
+          <Input
+            type="number"
+            step="10"
+            value={result.calorieAdjustmentKcal}
+            onChange={(e) => update(athlete.id, { calorieAdjustmentKcal: Number(e.target.value) })}
+          />
         </Field>
         <Field label="Startdatum (Tag 1)">
           <Input

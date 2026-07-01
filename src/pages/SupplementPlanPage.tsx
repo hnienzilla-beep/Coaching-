@@ -1,0 +1,150 @@
+import { useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../db/db'
+import type { Athlete, SupplementPlanItem, SupplementTiming } from '../models/types'
+import { SUPPLEMENT_TIMINGS } from '../models/types'
+import { Button, Card, Select } from '../components/ui'
+import SearchPicker from '../components/SearchPicker'
+
+type Ctx = { athlete: Athlete }
+
+export default function SupplementPlanPage() {
+  const { athlete } = useOutletContext<Ctx>()
+  const plans = useLiveQuery(() => db.supplementPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
+  const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
+  const [activePlanId, setActivePlanId] = useState<string | null>(null)
+
+  const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
+  const activePlan = plans?.find((p) => p.id === currentPlanId)
+
+  const items = useLiveQuery(
+    () => (currentPlanId ? db.supplementPlanItems.where('planId').equals(currentPlanId).toArray() : []),
+    [currentPlanId],
+  )
+
+  const supplementMap = new Map((supplements ?? []).map((s) => [s.id, s]))
+  const pickerItems = (supplements ?? []).map((s) => ({ id: s.id, label: s.name, sublabel: s.defaultDose }))
+
+  async function addPhase() {
+    const order = plans?.length ?? 0
+    const id = crypto.randomUUID()
+    await db.supplementPlans.add({ id, athleteId: athlete.id, phaseName: `Phase ${order + 1}`, order })
+    setActivePlanId(id)
+  }
+
+  async function deletePhase(planId: string) {
+    await db.supplementPlanItems.where('planId').equals(planId).delete()
+    await db.supplementPlans.delete(planId)
+    setActivePlanId(null)
+  }
+
+  async function renamePhase(planId: string, name: string) {
+    await db.supplementPlans.update(planId, { phaseName: name })
+  }
+
+  async function addRow() {
+    if (!currentPlanId || !supplements?.length) return
+    const first = supplements[0]
+    const item: SupplementPlanItem = {
+      id: crypto.randomUUID(),
+      planId: currentPlanId,
+      supplementId: first.id,
+      dose: first.defaultDose,
+      timing: first.defaultTiming,
+    }
+    await db.supplementPlanItems.add(item)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {plans?.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setActivePlanId(p.id)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${
+              p.id === currentPlanId ? 'bg-accent text-black font-medium' : 'bg-surface-2 text-muted'
+            }`}
+          >
+            {p.phaseName}
+          </button>
+        ))}
+        <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
+          + Phase
+        </button>
+      </div>
+
+      {activePlan && (
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={activePlan.phaseName}
+              onChange={(e) => renamePhase(activePlan.id, e.target.value)}
+              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-zinc-100 outline-none focus:border-accent"
+            />
+            {plans && plans.length > 1 && (
+              <Button variant="danger" onClick={() => deletePhase(activePlan.id)}>
+                Phase löschen
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {(items ?? []).map((item) => {
+              const supplement = supplementMap.get(item.supplementId)
+              return (
+                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <SearchPicker
+                        items={pickerItems}
+                        value={item.supplementId}
+                        onChange={(id) => {
+                          const s = supplementMap.get(id)
+                          db.supplementPlanItems.update(item.id, {
+                            supplementId: id,
+                            dose: s?.defaultDose ?? item.dose,
+                            timing: s?.defaultTiming ?? item.timing,
+                          })
+                        }}
+                        placeholder="Supplement suchen..."
+                      />
+                    </div>
+                    <Button variant="ghost" onClick={() => db.supplementPlanItems.delete(item.id)}>
+                      ✕
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={item.dose}
+                      onChange={(e) => db.supplementPlanItems.update(item.id, { dose: e.target.value })}
+                      placeholder="Dosis, z.B. 5 g"
+                      className="w-28 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+                    />
+                    <Select
+                      value={item.timing}
+                      onChange={(e) => db.supplementPlanItems.update(item.id, { timing: e.target.value as SupplementTiming })}
+                      className="flex-1"
+                    >
+                      {SUPPLEMENT_TIMINGS.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  {supplement?.notes && <div className="pl-1 text-xs text-muted">{supplement.notes}</div>}
+                </div>
+              )
+            })}
+          </div>
+
+          <Button variant="secondary" onClick={addRow}>
+            + Supplement hinzufügen
+          </Button>
+        </Card>
+      )}
+    </div>
+  )
+}

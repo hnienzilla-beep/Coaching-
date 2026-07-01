@@ -1,6 +1,17 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Athlete, DailyEntry, FoodItem, NutritionPlan, PlanMeal, ProgressPhoto } from '../models/types'
+import type {
+  Athlete,
+  DailyEntry,
+  FoodItem,
+  NutritionPlan,
+  PlanMeal,
+  ProgressPhoto,
+  Supplement,
+  SupplementPlan,
+  SupplementPlanItem,
+} from '../models/types'
 import { FOOD_SEED } from '../data/foodSeed'
+import { SUPPLEMENT_SEED } from '../data/supplementSeed'
 
 export class CoachDB extends Dexie {
   athletes!: EntityTable<Athlete, 'id'>
@@ -9,6 +20,9 @@ export class CoachDB extends Dexie {
   nutritionPlans!: EntityTable<NutritionPlan, 'id'>
   planMeals!: EntityTable<PlanMeal, 'id'>
   progressPhotos!: EntityTable<ProgressPhoto, 'id'>
+  supplements!: EntityTable<Supplement, 'id'>
+  supplementPlans!: EntityTable<SupplementPlan, 'id'>
+  supplementPlanItems!: EntityTable<SupplementPlanItem, 'id'>
 
   constructor() {
     super('bodybuilding-coach')
@@ -20,6 +34,12 @@ export class CoachDB extends Dexie {
       planMeals: 'id, planId, mealType',
       progressPhotos: 'id, athleteId, date',
     })
+    // Additive Erweiterung - bestehende Stores bleiben unverändert erhalten.
+    this.version(2).stores({
+      supplements: 'id, name',
+      supplementPlans: 'id, athleteId, order',
+      supplementPlanItems: 'id, planId',
+    })
   }
 }
 
@@ -28,17 +48,37 @@ export const db = new CoachDB()
 export async function ensureFoodSeed(): Promise<void> {
   // Transaktion serialisiert parallele Aufrufe (z.B. React StrictMode-Doppelaufruf in Dev) -
   // ohne das würde ein zweiter Aufruf den Datenbestand ein zweites Mal einfügen.
+  // Nachfüll-Logik statt reinem "leer?"-Check: ergänzt neu hinzugekommene FOOD_SEED-Einträge
+  // auch bei Bestandsnutzern, ohne eigene/bearbeitete Lebensmittel anzufassen.
   await db.transaction('rw', db.foodItems, async () => {
-    const count = await db.foodItems.count()
-    if (count > 0) return
+    const existingNames = new Set(await db.foodItems.orderBy('name').keys())
+    const missing = FOOD_SEED.filter((f) => !existingNames.has(f.name))
+    if (missing.length === 0) return
     await db.foodItems.bulkAdd(
-      FOOD_SEED.map((f) => ({
+      missing.map((f) => ({
         id: crypto.randomUUID(),
         name: f.name,
         kcal: f.kcal,
         protein: f.protein,
         carbs: f.carbs,
         fat: f.fat,
+      })),
+    )
+  })
+}
+
+export async function ensureSupplementSeed(): Promise<void> {
+  await db.transaction('rw', db.supplements, async () => {
+    const existingNames = new Set(await db.supplements.orderBy('name').keys())
+    const missing = SUPPLEMENT_SEED.filter((s) => !existingNames.has(s.name))
+    if (missing.length === 0) return
+    await db.supplements.bulkAdd(
+      missing.map((s) => ({
+        id: crypto.randomUUID(),
+        name: s.name,
+        defaultDose: s.defaultDose,
+        defaultTiming: s.defaultTiming,
+        notes: s.notes,
       })),
     )
   })

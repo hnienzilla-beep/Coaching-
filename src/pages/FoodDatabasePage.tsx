@@ -18,7 +18,7 @@ export default function FoodDatabasePage() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 p-4 pb-10">
-      <header className="flex items-center gap-3 pt-2">
+      <header className="flex items-center gap-3 pt-[max(1rem,env(safe-area-inset-top))]">
         <Link to="/" className="text-muted">
           ←
         </Link>

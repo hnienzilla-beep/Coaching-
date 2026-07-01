@@ -1,32 +1,38 @@
 import { useMemo, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db/db'
 import { Input } from './ui'
 
-export default function FoodPicker({
+export interface SearchPickerItem {
+  id: string
+  label: string
+  sublabel?: string
+}
+
+export default function SearchPicker({
+  items,
   value,
   onChange,
+  placeholder = 'Suchen...',
 }: {
+  items: SearchPickerItem[]
   value: string | undefined
-  onChange: (foodItemId: string) => void
+  onChange: (id: string) => void
+  placeholder?: string
 }) {
-  const foods = useLiveQuery(() => db.foodItems.orderBy('name').toArray(), [])
-  const selected = foods?.find((f) => f.id === value)
+  const selected = items.find((i) => i.id === value)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    if (!foods) return []
     const q = query.trim().toLowerCase()
-    if (!q) return foods.slice(0, 30)
-    return foods.filter((f) => f.name.toLowerCase().includes(q)).slice(0, 30)
-  }, [foods, query])
+    if (!q) return items.slice(0, 30)
+    return items.filter((i) => i.label.toLowerCase().includes(q)).slice(0, 30)
+  }, [items, query])
 
   return (
     <div className="relative">
       <Input
-        placeholder="Lebensmittel suchen..."
-        value={open ? query : (selected?.name ?? '')}
+        placeholder={placeholder}
+        value={open ? query : (selected?.label ?? '')}
         onFocus={() => {
           setQuery('')
           setOpen(true)
@@ -37,18 +43,18 @@ export default function FoodPicker({
       {open && (
         <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-surface-2 shadow-xl">
           {filtered.length === 0 && <div className="px-3 py-2 text-sm text-muted">Keine Treffer</div>}
-          {filtered.map((f) => (
+          {filtered.map((i) => (
             <button
-              key={f.id}
+              key={i.id}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                onChange(f.id)
+                onChange(i.id)
                 setOpen(false)
               }}
               className="block w-full px-3 py-2 text-left text-sm text-zinc-100 hover:bg-accent/10"
             >
-              {f.name} <span className="text-xs text-muted">({f.kcal} kcal/100g)</span>
+              {i.label} {i.sublabel && <span className="text-xs text-muted">({i.sublabel})</span>}
             </button>
           ))}
         </div>

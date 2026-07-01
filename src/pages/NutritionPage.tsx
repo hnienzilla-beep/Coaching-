@@ -6,7 +6,7 @@ import { calculate } from '../lib/calculator'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
-import FoodPicker from '../components/FoodPicker'
+import SearchPicker from '../components/SearchPicker'
 
 type Ctx = { athlete: Athlete }
 
@@ -25,6 +25,7 @@ export default function NutritionPage() {
   const meals = useLiveQuery(() => (currentPlanId ? db.planMeals.where('planId').equals(currentPlanId).toArray() : []), [currentPlanId])
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
+  const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g` }))
   const target = calculate({
     gender: athlete.gender,
     age: athlete.age,
@@ -34,6 +35,7 @@ export default function NutritionPage() {
     goal: athlete.goal,
     proteinPerKg: athlete.proteinPerKg,
     fatPerKg: athlete.fatPerKg,
+    calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
   const rows = (meals ?? []).map((m) => {
@@ -132,7 +134,12 @@ export default function NutritionPage() {
                     ))}
                   </Select>
                   <div className="flex-1">
-                    <FoodPicker value={meal.foodItemId} onChange={(id) => db.planMeals.update(meal.id, { foodItemId: id })} />
+                    <SearchPicker
+                      items={foodPickerItems}
+                      value={meal.foodItemId}
+                      onChange={(id) => db.planMeals.update(meal.id, { foodItemId: id })}
+                      placeholder="Lebensmittel suchen..."
+                    />
                   </div>
                   <input
                     type="number"

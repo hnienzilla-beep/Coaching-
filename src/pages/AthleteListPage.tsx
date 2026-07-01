@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { db, ensureFoodSeed } from '../db/db'
+import { db, ensureFoodSeed, ensureSupplementSeed } from '../db/db'
 import { createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
@@ -13,18 +13,24 @@ export default function AthleteListPage() {
 
   useEffect(() => {
     ensureFoodSeed()
+    ensureSupplementSeed()
   }, [])
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 p-4 pb-10">
-      <header className="flex items-center justify-between pt-2">
+      <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
         <div>
           <h1 className="text-xl font-bold text-zinc-100">Bodybuilding Coach</h1>
           <p className="text-sm text-muted">Athleten verwalten</p>
         </div>
-        <Link to="/lebensmittel" className="text-sm text-accent underline underline-offset-2">
-          Lebensmittel-DB
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link to="/lebensmittel" className="text-sm text-accent underline underline-offset-2">
+            Lebensmittel-DB
+          </Link>
+          <Link to="/supplemente" className="text-sm text-accent underline underline-offset-2">
+            Supplement-DB
+          </Link>
+        </div>
       </header>
 
       <div className="flex flex-col gap-3">

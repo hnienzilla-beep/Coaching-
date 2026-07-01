@@ -12,6 +12,7 @@ export interface Athlete {
   goal: string
   proteinPerKg: number
   fatPerKg: number
+  calorieAdjustmentKcal?: number // manuelles Kalorien-Defizit (negativ) / -überschuss (positiv), überschreibt die Ziel-Voreinstellung
   startDate: string // ISO date
 }
 
@@ -73,4 +74,39 @@ export interface ProgressPhoto {
   athleteId: string
   date: string // ISO date
   blob: Blob
+}
+
+export const SUPPLEMENT_TIMINGS = [
+  'Morgens',
+  'Mittags',
+  'Abends',
+  'Vor dem Training',
+  'Nach dem Training',
+  'Vor dem Schlafen',
+] as const
+
+export type SupplementTiming = (typeof SUPPLEMENT_TIMINGS)[number]
+
+export interface Supplement {
+  id: string
+  name: string
+  defaultDose: string // z.B. "5 g", "1 Kapsel"
+  defaultTiming: SupplementTiming
+  notes?: string
+}
+
+export interface SupplementPlan {
+  id: string
+  athleteId: string
+  phaseName: string
+  order: number
+}
+
+export interface SupplementPlanItem {
+  id: string
+  planId: string
+  supplementId: string
+  dose: string
+  timing: SupplementTiming
+  notes?: string
 }

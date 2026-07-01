@@ -1,5 +1,5 @@
 import { db } from './db'
-import type { Athlete, DailyEntry, NutritionPlan, PlanMeal } from '../models/types'
+import type { Athlete, DailyEntry, PlanMeal } from '../models/types'
 
 export const ACCENT_COLORS = ['#a3e635', '#22d3ee', '#f472b6', '#fb923c', '#c084fc', '#facc15']
 
@@ -16,33 +16,50 @@ export async function createAthlete(partial: Omit<Athlete, 'id' | 'accentColor'>
   }
   await db.athletes.add(athlete)
   await createDefaultPlans(athlete.id)
+  await createDefaultSupplementPlans(athlete.id)
   return athlete
 }
 
-export async function createDefaultPlans(athleteId: string): Promise<void> {
+async function createDefaultPhases(
+  add: (phase: { id: string; athleteId: string; phaseName: string; order: number }) => Promise<unknown>,
+  athleteId: string,
+): Promise<void> {
   const phases = ['Phase 1', 'Phase 2', 'Phase 3']
   for (let i = 0; i < phases.length; i++) {
-    const plan: NutritionPlan = {
-      id: crypto.randomUUID(),
-      athleteId,
-      phaseName: phases[i],
-      order: i,
-    }
-    await db.nutritionPlans.add(plan)
+    await add({ id: crypto.randomUUID(), athleteId, phaseName: phases[i], order: i })
   }
 }
 
+export async function createDefaultPlans(athleteId: string): Promise<void> {
+  await createDefaultPhases((plan) => db.nutritionPlans.add(plan), athleteId)
+}
+
+export async function createDefaultSupplementPlans(athleteId: string): Promise<void> {
+  await createDefaultPhases((plan) => db.supplementPlans.add(plan), athleteId)
+}
+
 export async function deleteAthlete(athleteId: string): Promise<void> {
-  await db.transaction('rw', db.athletes, db.dailyEntries, db.nutritionPlans, db.planMeals, db.progressPhotos, async () => {
-    const plans = await db.nutritionPlans.where('athleteId').equals(athleteId).toArray()
-    for (const plan of plans) {
-      await db.planMeals.where('planId').equals(plan.id).delete()
-    }
-    await db.nutritionPlans.where('athleteId').equals(athleteId).delete()
-    await db.dailyEntries.where('athleteId').equals(athleteId).delete()
-    await db.progressPhotos.where('athleteId').equals(athleteId).delete()
-    await db.athletes.delete(athleteId)
-  })
+  await db.transaction(
+    'rw',
+    [db.athletes, db.dailyEntries, db.nutritionPlans, db.planMeals, db.progressPhotos, db.supplementPlans, db.supplementPlanItems],
+    async () => {
+      const plans = await db.nutritionPlans.where('athleteId').equals(athleteId).toArray()
+      for (const plan of plans) {
+        await db.planMeals.where('planId').equals(plan.id).delete()
+      }
+      await db.nutritionPlans.where('athleteId').equals(athleteId).delete()
+
+      const supplementPlans = await db.supplementPlans.where('athleteId').equals(athleteId).toArray()
+      for (const plan of supplementPlans) {
+        await db.supplementPlanItems.where('planId').equals(plan.id).delete()
+      }
+      await db.supplementPlans.where('athleteId').equals(athleteId).delete()
+
+      await db.dailyEntries.where('athleteId').equals(athleteId).delete()
+      await db.progressPhotos.where('athleteId').equals(athleteId).delete()
+      await db.athletes.delete(athleteId)
+    },
+  )
 }
 
 export function isoDate(d: Date): string {

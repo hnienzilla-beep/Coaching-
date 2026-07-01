@@ -14,9 +14,13 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+  // iOS zeigt bei type="number" ohne inputMode manchmal keine Komma-/Punkt-Taste an -
+  // "decimal" erzwingt die Zifferntastatur mit Dezimaltrennzeichen.
+  const inputMode = props.type === 'number' ? (props.inputMode ?? 'decimal') : props.inputMode
   return (
     <input
       {...props}
+      inputMode={inputMode}
       className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${props.className ?? ''}`}
     />
   )

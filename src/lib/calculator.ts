@@ -27,13 +27,16 @@ export interface CalculatorInput {
   goal: string
   proteinPerKg: number
   fatPerKg: number
+  // Manuelles Kalorien-Defizit/-überschuss in kcal (negativ = Defizit, positiv = Überschuss).
+  // Wenn gesetzt, hat es Vorrang vor der Ziel-Voreinstellung (GOALS-Prozentsatz).
+  calorieAdjustmentKcal?: number
 }
 
 export interface CalculatorResult {
   bmr: number
   activityFactor: number
   tdee: number
-  goalAdjustment: number
+  calorieAdjustmentKcal: number
   targetCalories: number
   proteinG: number
   fatG: number
@@ -47,7 +50,7 @@ function round0(n: number): number {
 
 // Mifflin-St-Jeor-Formel, identisch zur Excel-Formel in G4
 export function calculate(input: CalculatorInput): CalculatorResult {
-  const { gender, age, heightCm, weightKg, activityLevel, goal, proteinPerKg, fatPerKg } = input
+  const { gender, age, heightCm, weightKg, activityLevel, goal, proteinPerKg, fatPerKg, calorieAdjustmentKcal } = input
 
   const bmr =
     gender === 'Männlich'
@@ -57,15 +60,26 @@ export function calculate(input: CalculatorInput): CalculatorResult {
   const activityFactor = ACTIVITY_LEVELS.find((a) => a.label === activityLevel)?.factor ?? 0
   const tdee = round0(bmr * activityFactor)
 
-  const goalAdjustment = GOALS.find((g) => g.label === goal)?.adjustment ?? 0
-  const targetCalories = round0(tdee * (1 + goalAdjustment))
+  const goalPercentage = GOALS.find((g) => g.label === goal)?.adjustment ?? 0
+  const effectiveAdjustment = calorieAdjustmentKcal ?? round0(tdee * goalPercentage)
+  const targetCalories = round0(tdee + effectiveAdjustment)
 
   const proteinG = round0(weightKg * proteinPerKg)
   const fatG = round0(weightKg * fatPerKg)
   const carbsG = round0((targetCalories - proteinG * 4 - fatG * 9) / 4)
   const controlCalories = proteinG * 4 + carbsG * 4 + fatG * 9
 
-  return { bmr: round0(bmr), activityFactor, tdee, goalAdjustment, targetCalories, proteinG, fatG, carbsG, controlCalories }
+  return {
+    bmr: round0(bmr),
+    activityFactor,
+    tdee,
+    calorieAdjustmentKcal: effectiveAdjustment,
+    targetCalories,
+    proteinG,
+    fatG,
+    carbsG,
+    controlCalories,
+  }
 }
 
 export interface WeightPoint {
