@@ -1,0 +1,198 @@
+import { useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { db } from '../db/db'
+import { upsertDailyEntry, isoDate, getTrackingSeries } from '../db/queries'
+import type { Athlete, DailyEntry } from '../models/types'
+import { rollingAverage7, weeklyDelta } from '../lib/calculator'
+import { Button, Card, Field, Input } from '../components/ui'
+
+type Ctx = { athlete: Athlete }
+
+export default function TrackingPage() {
+  const { athlete } = useOutletContext<Ctx>()
+  const photos = useLiveQuery(() => db.progressPhotos.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
+  const series = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate]) ?? []
+
+  const chartData = series.map((entry, i) => ({
+    date: entry.date.slice(5),
+    weight: entry.weightKg,
+    bodyFat: entry.bodyFatPct,
+    weightAvg7: rollingAverage7(series, i),
+  }))
+
+  const today = isoDate(new Date())
+  const [selectedDate, setSelectedDate] = useState(today)
+  const selectedIndex = series.findIndex((e) => e.date === selectedDate)
+  const selectedEntry = selectedIndex >= 0 ? series[selectedIndex] : undefined
+  const delta = selectedIndex >= 0 ? weeklyDelta(series, selectedIndex) : undefined
+  const avg7 = selectedIndex >= 0 ? rollingAverage7(series, selectedIndex) : undefined
+
+  const photosByDate = new Map<string, number>()
+  for (const p of photos ?? []) photosByDate.set(p.date, (photosByDate.get(p.date) ?? 0) + 1)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Gewicht &amp; KFA</h2>
+        <div className="h-40">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2c2d33" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} minTickGap={24} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#9ca3af' }} width={36} />
+              <Tooltip contentStyle={{ background: '#17181c', border: '1px solid #2c2d33', fontSize: 12 }} />
+              <Line type="monotone" dataKey="weight" stroke="#60a5fa" dot={false} name="Gewicht (kg)" connectNulls />
+              <Line type="monotone" dataKey="weightAvg7" stroke="#a3e635" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="h-32">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2c2d33" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9ca3af' }} minTickGap={24} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#9ca3af' }} width={36} />
+              <Tooltip contentStyle={{ background: '#17181c', border: '1px solid #2c2d33', fontSize: 12 }} />
+              <Line type="monotone" dataKey="bodyFat" stroke="#f472b6" dot={false} name="KFA (%)" connectNulls />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      <DayEditor
+        key={selectedDate}
+        athleteId={athlete.id}
+        date={selectedDate}
+        entry={selectedEntry}
+        avg7={avg7}
+        delta={delta}
+        photoCount={photosByDate.get(selectedDate) ?? 0}
+      />
+
+      <Card className="flex flex-col gap-1">
+        <h2 className="pb-1 text-sm font-semibold uppercase tracking-wide text-muted">Verlauf</h2>
+        <div className="flex max-h-64 flex-col-reverse overflow-y-auto">
+          {series.map((e) => (
+            <button
+              key={e.date}
+              onClick={() => setSelectedDate(e.date)}
+              className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm ${
+                e.date === selectedDate ? 'bg-surface-2' : ''
+              }`}
+            >
+              <span className="text-muted">{e.date}</span>
+              <span className="flex items-center gap-2 text-zinc-100">
+                {photosByDate.get(e.date) ? '📷' : ''}
+                {e.weightKg !== undefined ? `${e.weightKg} kg` : '–'}
+                {e.bodyFatPct !== undefined ? ` · ${e.bodyFatPct}%` : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function DayEditor({
+  athleteId,
+  date,
+  entry,
+  avg7,
+  delta,
+  photoCount,
+}: {
+  athleteId: string
+  date: string
+  entry?: DailyEntry
+  avg7?: number
+  delta?: number
+  photoCount: number
+}) {
+  const [form, setForm] = useState<DailyEntry>(
+    entry ?? { id: crypto.randomUUID(), athleteId, date, weightKg: undefined, bodyFatPct: undefined },
+  )
+
+  function field<K extends keyof DailyEntry>(key: K) {
+    return {
+      value: form[key] ?? '',
+      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const raw = e.target.value
+        const isNumeric = key !== 'notes' && key !== 'id' && key !== 'athleteId' && key !== 'date'
+        setForm((f) => ({ ...f, [key]: isNumeric ? (raw === '' ? undefined : Number(raw)) : raw }))
+      },
+    }
+  }
+
+  async function save() {
+    await upsertDailyEntry({ ...form, athleteId, date })
+  }
+
+  async function addPhoto(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file) return
+    await db.progressPhotos.add({ id: crypto.randomUUID(), athleteId, date, blob: file })
+  }
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Eintrag {date}</h2>
+        <span className="text-xs text-muted">
+          {avg7 !== undefined ? `Ø7: ${avg7.toFixed(1)} kg` : ''}
+          {delta !== undefined ? `  Δ Woche: ${delta.toFixed(1)} kg` : ''}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Gewicht (kg)">
+          <Input type="number" step="0.1" {...field('weightKg')} />
+        </Field>
+        <Field label="KFA (%)">
+          <Input type="number" step="0.1" {...field('bodyFatPct')} />
+        </Field>
+        <Field label="Kalorien">
+          <Input type="number" {...field('calories')} />
+        </Field>
+        <Field label="Protein (g)">
+          <Input type="number" {...field('protein')} />
+        </Field>
+        <Field label="Carbs (g)">
+          <Input type="number" {...field('carbs')} />
+        </Field>
+        <Field label="Fett (g)">
+          <Input type="number" {...field('fat')} />
+        </Field>
+        <Field label="Bauch (cm)">
+          <Input type="number" step="0.1" {...field('waist')} />
+        </Field>
+        <Field label="Arm (cm)">
+          <Input type="number" step="0.1" {...field('arm')} />
+        </Field>
+        <Field label="Brust (cm)">
+          <Input type="number" step="0.1" {...field('chest')} />
+        </Field>
+        <Field label="Bein (cm)">
+          <Input type="number" step="0.1" {...field('leg')} />
+        </Field>
+      </div>
+      <Field label="Notizen">
+        <textarea
+          {...field('notes')}
+          rows={2}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent"
+        />
+      </Field>
+      <div className="flex items-center gap-2">
+        <Button variant="primary" onClick={save} className="flex-1">
+          Speichern
+        </Button>
+        <label className="cursor-pointer rounded-lg border border-border px-3 py-2 text-sm text-muted hover:border-accent">
+          📷 {photoCount > 0 ? `(${photoCount})` : ''}
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addPhoto(e.target.files)} />
+        </label>
+      </div>
+    </Card>
+  )
+}

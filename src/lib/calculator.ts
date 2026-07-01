@@ -1,0 +1,93 @@
+import type { Gender } from '../models/types'
+
+// Portiert aus dem "Daten"-Blatt der Excel-Vorlage
+export const ACTIVITY_LEVELS: { label: string; factor: number }[] = [
+  { label: 'Wenig aktiv (Bürojob)', factor: 1.2 },
+  { label: 'Leicht aktiv (1-3x/Woche)', factor: 1.375 },
+  { label: 'Mäßig aktiv (3-5x/Woche)', factor: 1.55 },
+  { label: 'Sehr aktiv (6-7x/Woche)', factor: 1.725 },
+  { label: 'Extrem aktiv (2x/Tag)', factor: 1.9 },
+]
+
+export const GOALS: { label: string; adjustment: number }[] = [
+  { label: 'Aggressive Diät', adjustment: -0.25 },
+  { label: 'Diät / Fettabbau', adjustment: -0.2 },
+  { label: 'Leichte Diät', adjustment: -0.1 },
+  { label: 'Erhaltung', adjustment: 0 },
+  { label: 'Lean Bulk', adjustment: 0.1 },
+  { label: 'Aufbau', adjustment: 0.2 },
+]
+
+export interface CalculatorInput {
+  gender: Gender
+  age: number
+  heightCm: number
+  weightKg: number
+  activityLevel: string
+  goal: string
+  proteinPerKg: number
+  fatPerKg: number
+}
+
+export interface CalculatorResult {
+  bmr: number
+  activityFactor: number
+  tdee: number
+  goalAdjustment: number
+  targetCalories: number
+  proteinG: number
+  fatG: number
+  carbsG: number
+  controlCalories: number
+}
+
+function round0(n: number): number {
+  return Math.round(n)
+}
+
+// Mifflin-St-Jeor-Formel, identisch zur Excel-Formel in G4
+export function calculate(input: CalculatorInput): CalculatorResult {
+  const { gender, age, heightCm, weightKg, activityLevel, goal, proteinPerKg, fatPerKg } = input
+
+  const bmr =
+    gender === 'Männlich'
+      ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+      : 10 * weightKg + 6.25 * heightCm - 5 * age - 161
+
+  const activityFactor = ACTIVITY_LEVELS.find((a) => a.label === activityLevel)?.factor ?? 0
+  const tdee = round0(bmr * activityFactor)
+
+  const goalAdjustment = GOALS.find((g) => g.label === goal)?.adjustment ?? 0
+  const targetCalories = round0(tdee * (1 + goalAdjustment))
+
+  const proteinG = round0(weightKg * proteinPerKg)
+  const fatG = round0(weightKg * fatPerKg)
+  const carbsG = round0((targetCalories - proteinG * 4 - fatG * 9) / 4)
+  const controlCalories = proteinG * 4 + carbsG * 4 + fatG * 9
+
+  return { bmr: round0(bmr), activityFactor, tdee, goalAdjustment, targetCalories, proteinG, fatG, carbsG, controlCalories }
+}
+
+export interface WeightPoint {
+  date: string
+  weightKg?: number
+}
+
+// Entspricht =AVERAGE(OFFSET(...,-MIN(7,ROW()-15),1)): Mittel der letzten (bis zu) 7 Tage
+// mit vorhandenem Gewichtswert, endend am aktuellen Tag.
+export function rollingAverage7(points: WeightPoint[], index: number): number | undefined {
+  const windowStart = Math.max(0, index - 6)
+  const values = points.slice(windowStart, index + 1).filter((p) => typeof p.weightKg === 'number')
+  if (values.length === 0) return undefined
+  const sum = values.reduce((acc, p) => acc + (p.weightKg as number), 0)
+  return sum / values.length
+}
+
+// Entspricht der Δ-Woche-Formel: Differenz zum Gewicht vor genau 7 Tagen, erst ab Tag 8.
+export function weeklyDelta(points: WeightPoint[], index: number): number | undefined {
+  if (index < 7) return undefined
+  const current = points[index]?.weightKg
+  const previous = points[index - 7]?.weightKg
+  if (typeof current !== 'number' || typeof previous !== 'number') return undefined
+  return current - previous
+}
