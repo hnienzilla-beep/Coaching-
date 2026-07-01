@@ -22,7 +22,7 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       inputMode={inputMode}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
+      className={`w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     />
   )
 }
@@ -64,7 +64,7 @@ export function DecimalInput({
         const normalized = raw.replace(',', '.')
         onChange(normalized === '' || normalized === '-' ? undefined : Number(normalized))
       }}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${className}`}
+      className={`w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${className}`}
     />
   )
 }
@@ -73,7 +73,7 @@ export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       {...props}
-      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
+      className={`min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     >
       {children}
     </select>

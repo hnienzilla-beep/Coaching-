@@ -156,7 +156,7 @@ export default function SupplementPlanPage() {
                       value={item.dose}
                       onChange={(e) => db.supplementPlanItems.update(item.id, { dose: e.target.value })}
                       placeholder="Dosis, z.B. 5 g"
-                      className="w-28 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+                      className="w-28 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                     />
                     <Select
                       value={item.timing}

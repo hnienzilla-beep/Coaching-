@@ -180,7 +180,7 @@ export default function NutritionPage() {
                     type="number"
                     value={meal.grams}
                     onChange={(e) => db.planMeals.update(meal.id, { grams: Number(e.target.value) })}
-                    className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+                    className="w-16 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
                   />
                   <Button variant="ghost" onClick={() => db.planMeals.delete(meal.id)}>
                     ✕

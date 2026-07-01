@@ -163,4 +163,5 @@ export interface WorkoutSet {
   setNumber: number
   reps?: number
   weightKg?: number
+  done?: boolean // während des Trainings per Häkchen als erledigt markiert
 }

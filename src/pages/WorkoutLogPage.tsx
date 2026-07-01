@@ -276,14 +276,24 @@ function WorkoutExerciseRow({
 
       <div className="flex flex-col gap-1.5">
         {sets.map((set) => (
-          <div key={set.id} className="flex items-center gap-2">
+          <div key={set.id} className={`flex items-center gap-2 ${set.done ? 'opacity-60' : ''}`}>
+            <button
+              type="button"
+              onClick={() => db.workoutSets.update(set.id, { done: !set.done })}
+              aria-label={set.done ? 'Satz als offen markieren' : 'Satz als erledigt markieren'}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
+                set.done ? 'border-accent bg-accent text-black' : 'border-border text-muted'
+              }`}
+            >
+              ✓
+            </button>
             <span className="w-14 shrink-0 text-xs text-muted">Satz {set.setNumber}</span>
             <input
               type="number"
               value={set.reps ?? ''}
               onChange={(e) => db.workoutSets.update(set.id, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
               placeholder="Wdh."
-              className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+              className="w-16 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
             />
             <div className="flex-1">
               <DecimalInput

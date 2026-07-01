@@ -231,13 +231,13 @@ function SortableRow({
           value={row.sets}
           onChange={(e) => db.trainingPlanExercises.update(row.id, { sets: Number(e.target.value) })}
           placeholder="Sätze"
-          className="w-16 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+          className="w-16 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
         />
         <input
           value={row.reps}
           onChange={(e) => db.trainingPlanExercises.update(row.id, { reps: e.target.value })}
           placeholder="Wdh., z.B. 8-12"
-          className="w-24 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+          className="w-24 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
         />
         <div className="flex-1">
           <DecimalInput
