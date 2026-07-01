@@ -1,5 +1,5 @@
 import { db } from './db'
-import type { Athlete, DailyEntry, PlanMeal } from '../models/types'
+import type { Athlete, DailyEntry, PlanMeal, WorkoutLog } from '../models/types'
 
 export const ACCENT_COLORS = ['#a3e635', '#22d3ee', '#f472b6', '#fb923c', '#c084fc', '#facc15']
 
@@ -17,16 +17,17 @@ export async function createAthlete(partial: Omit<Athlete, 'id' | 'accentColor'>
   await db.athletes.add(athlete)
   await createDefaultPlans(athlete.id)
   await createDefaultSupplementPlans(athlete.id)
+  await createDefaultTrainingPlans(athlete.id)
   return athlete
 }
 
 async function createDefaultPhases(
   add: (phase: { id: string; athleteId: string; phaseName: string; order: number }) => Promise<unknown>,
   athleteId: string,
+  names: string[] = ['Phase 1', 'Phase 2', 'Phase 3'],
 ): Promise<void> {
-  const phases = ['Phase 1', 'Phase 2', 'Phase 3']
-  for (let i = 0; i < phases.length; i++) {
-    await add({ id: crypto.randomUUID(), athleteId, phaseName: phases[i], order: i })
+  for (let i = 0; i < names.length; i++) {
+    await add({ id: crypto.randomUUID(), athleteId, phaseName: names[i], order: i })
   }
 }
 
@@ -38,10 +39,26 @@ export async function createDefaultSupplementPlans(athleteId: string): Promise<v
   await createDefaultPhases((plan) => db.supplementPlans.add(plan), athleteId)
 }
 
+export async function createDefaultTrainingPlans(athleteId: string): Promise<void> {
+  await createDefaultPhases((plan) => db.trainingPlans.add(plan), athleteId, ['Tag A', 'Tag B', 'Tag C'])
+}
+
 export async function deleteAthlete(athleteId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.athletes, db.dailyEntries, db.nutritionPlans, db.planMeals, db.progressPhotos, db.supplementPlans, db.supplementPlanItems],
+    [
+      db.athletes,
+      db.dailyEntries,
+      db.nutritionPlans,
+      db.planMeals,
+      db.progressPhotos,
+      db.supplementPlans,
+      db.supplementPlanItems,
+      db.trainingPlans,
+      db.trainingPlanExercises,
+      db.workoutLogs,
+      db.workoutLogExercises,
+    ],
     async () => {
       const plans = await db.nutritionPlans.where('athleteId').equals(athleteId).toArray()
       for (const plan of plans) {
@@ -54,6 +71,18 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
         await db.supplementPlanItems.where('planId').equals(plan.id).delete()
       }
       await db.supplementPlans.where('athleteId').equals(athleteId).delete()
+
+      const trainingPlans = await db.trainingPlans.where('athleteId').equals(athleteId).toArray()
+      for (const plan of trainingPlans) {
+        await db.trainingPlanExercises.where('planId').equals(plan.id).delete()
+      }
+      await db.trainingPlans.where('athleteId').equals(athleteId).delete()
+
+      const workoutLogs = await db.workoutLogs.where('athleteId').equals(athleteId).toArray()
+      for (const log of workoutLogs) {
+        await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
+      }
+      await db.workoutLogs.where('athleteId').equals(athleteId).delete()
 
       await db.dailyEntries.where('athleteId').equals(athleteId).delete()
       await db.progressPhotos.where('athleteId').equals(athleteId).delete()
@@ -107,4 +136,12 @@ export async function addPlanMeal(meal: PlanMeal): Promise<void> {
 
 export async function removePlanMeal(id: string): Promise<void> {
   await db.planMeals.delete(id)
+}
+
+export async function getOrCreateWorkoutLog(athleteId: string, date: string): Promise<WorkoutLog> {
+  const existing = await db.workoutLogs.where('[athleteId+date]').equals([athleteId, date]).first()
+  if (existing) return existing
+  const log: WorkoutLog = { id: crypto.randomUUID(), athleteId, date }
+  await db.workoutLogs.add(log)
+  return log
 }

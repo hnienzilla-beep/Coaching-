@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -22,6 +23,48 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       inputMode={inputMode}
       className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${props.className ?? ''}`}
+    />
+  )
+}
+
+// input type="number" akzeptiert nur einen Punkt als Trennzeichen - iOS zeigt bei
+// deutscher Tastatur aber ein Komma an, das dann schlicht ignoriert wird. Deshalb hier
+// type="text" mit eigenem Komma->Punkt-Handling und lokalem Text-State (damit "82,"
+// beim Tippen nicht sofort wieder verschwindet, bevor die Nachkommastelle folgt).
+export function DecimalInput({
+  value,
+  onChange,
+  className = '',
+  ...props
+}: {
+  value: number | undefined
+  onChange: (n: number | undefined) => void
+  className?: string
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const [text, setText] = useState(value !== undefined ? String(value) : '')
+
+  useEffect(() => {
+    const numeric = text === '' || text === '-' ? undefined : Number(text.replace(',', '.'))
+    if (numeric !== value) {
+      setText(value !== undefined ? String(value) : '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  return (
+    <input
+      {...props}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value
+        if (!/^-?\d*[.,]?\d*$/.test(raw)) return
+        setText(raw)
+        const normalized = raw.replace(',', '.')
+        onChange(normalized === '' || normalized === '-' ? undefined : Number(normalized))
+      }}
+      className={`rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent ${className}`}
     />
   )
 }

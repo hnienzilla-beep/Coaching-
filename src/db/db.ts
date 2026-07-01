@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie'
 import type {
   Athlete,
   DailyEntry,
+  Exercise,
   FoodItem,
   NutritionPlan,
   PlanMeal,
@@ -9,9 +10,14 @@ import type {
   Supplement,
   SupplementPlan,
   SupplementPlanItem,
+  TrainingPlan,
+  TrainingPlanExercise,
+  WorkoutLog,
+  WorkoutLogExercise,
 } from '../models/types'
 import { FOOD_SEED } from '../data/foodSeed'
 import { SUPPLEMENT_SEED } from '../data/supplementSeed'
+import { EXERCISE_SEED } from '../data/exerciseSeed'
 
 export class CoachDB extends Dexie {
   athletes!: EntityTable<Athlete, 'id'>
@@ -23,6 +29,11 @@ export class CoachDB extends Dexie {
   supplements!: EntityTable<Supplement, 'id'>
   supplementPlans!: EntityTable<SupplementPlan, 'id'>
   supplementPlanItems!: EntityTable<SupplementPlanItem, 'id'>
+  exercises!: EntityTable<Exercise, 'id'>
+  trainingPlans!: EntityTable<TrainingPlan, 'id'>
+  trainingPlanExercises!: EntityTable<TrainingPlanExercise, 'id'>
+  workoutLogs!: EntityTable<WorkoutLog, 'id'>
+  workoutLogExercises!: EntityTable<WorkoutLogExercise, 'id'>
 
   constructor() {
     super('bodybuilding-coach')
@@ -34,11 +45,18 @@ export class CoachDB extends Dexie {
       planMeals: 'id, planId, mealType',
       progressPhotos: 'id, athleteId, date',
     })
-    // Additive Erweiterung - bestehende Stores bleiben unverändert erhalten.
+    // Additive Erweiterungen - bestehende Stores bleiben unverändert erhalten.
     this.version(2).stores({
       supplements: 'id, name',
       supplementPlans: 'id, athleteId, order',
       supplementPlanItems: 'id, planId',
+    })
+    this.version(3).stores({
+      exercises: 'id, name',
+      trainingPlans: 'id, athleteId, order',
+      trainingPlanExercises: 'id, planId',
+      workoutLogs: 'id, athleteId, date, [athleteId+date]',
+      workoutLogExercises: 'id, workoutLogId',
     })
   }
 }
@@ -81,5 +99,14 @@ export async function ensureSupplementSeed(): Promise<void> {
         notes: s.notes,
       })),
     )
+  })
+}
+
+export async function ensureExerciseSeed(): Promise<void> {
+  await db.transaction('rw', db.exercises, async () => {
+    const existingNames = new Set(await db.exercises.orderBy('name').keys())
+    const missing = EXERCISE_SEED.filter((e) => !existingNames.has(e.name))
+    if (missing.length === 0) return
+    await db.exercises.bulkAdd(missing.map((e) => ({ id: crypto.randomUUID(), name: e.name, muscleGroup: e.muscleGroup })))
   })
 }

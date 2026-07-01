@@ -110,3 +110,44 @@ export interface SupplementPlanItem {
   timing: SupplementTiming
   notes?: string
 }
+
+export interface Exercise {
+  id: string
+  name: string
+  muscleGroup: string
+}
+
+export interface TrainingPlan {
+  id: string
+  athleteId: string
+  phaseName: string
+  order: number
+}
+
+export interface TrainingPlanExercise {
+  id: string
+  planId: string
+  exerciseId: string
+  sets: number
+  reps: string // z.B. "8-12" oder "10"
+  targetWeightKg?: number
+  notes?: string
+}
+
+export interface WorkoutLog {
+  id: string
+  athleteId: string
+  date: string // ISO date, ein Eintrag pro Tag
+  trainingPlanId?: string // welcher geplante Trainingstag absolviert wurde
+  notes?: string
+}
+
+export interface WorkoutLogExercise {
+  id: string
+  workoutLogId: string
+  exerciseId: string
+  sets: number
+  reps: string
+  weightKg?: number
+  notes?: string
+}

@@ -6,7 +6,7 @@ import { db } from '../db/db'
 import { upsertDailyEntry, isoDate, getTrackingSeries } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
 import { rollingAverage7, weeklyDelta } from '../lib/calculator'
-import { Button, Card, Field, Input } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Input } from '../components/ui'
 
 type Ctx = { athlete: Athlete }
 
@@ -126,6 +126,13 @@ function DayEditor({
     }
   }
 
+  function decimalField<K extends keyof DailyEntry>(key: K) {
+    return {
+      value: form[key] as number | undefined,
+      onChange: (n: number | undefined) => setForm((f) => ({ ...f, [key]: n })),
+    }
+  }
+
   async function save() {
     await upsertDailyEntry({ ...form, athleteId, date })
   }
@@ -147,10 +154,10 @@ function DayEditor({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Gewicht (kg)">
-          <Input type="number" step="0.1" {...field('weightKg')} />
+          <DecimalInput {...decimalField('weightKg')} />
         </Field>
         <Field label="KFA (%)">
-          <Input type="number" step="0.1" {...field('bodyFatPct')} />
+          <DecimalInput {...decimalField('bodyFatPct')} />
         </Field>
         <Field label="Kalorien">
           <Input type="number" {...field('calories')} />
@@ -165,16 +172,16 @@ function DayEditor({
           <Input type="number" {...field('fat')} />
         </Field>
         <Field label="Bauch (cm)">
-          <Input type="number" step="0.1" {...field('waist')} />
+          <DecimalInput {...decimalField('waist')} />
         </Field>
         <Field label="Arm (cm)">
-          <Input type="number" step="0.1" {...field('arm')} />
+          <DecimalInput {...decimalField('arm')} />
         </Field>
         <Field label="Brust (cm)">
-          <Input type="number" step="0.1" {...field('chest')} />
+          <DecimalInput {...decimalField('chest')} />
         </Field>
         <Field label="Bein (cm)">
-          <Input type="number" step="0.1" {...field('leg')} />
+          <DecimalInput {...decimalField('leg')} />
         </Field>
       </div>
       <Field label="Notizen">

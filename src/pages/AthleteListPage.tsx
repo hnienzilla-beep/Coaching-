@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { db, ensureFoodSeed, ensureSupplementSeed } from '../db/db'
+import { db, ensureExerciseSeed, ensureFoodSeed, ensureSupplementSeed } from '../db/db'
 import { createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
@@ -14,6 +14,7 @@ export default function AthleteListPage() {
   useEffect(() => {
     ensureFoodSeed()
     ensureSupplementSeed()
+    ensureExerciseSeed()
   }, [])
 
   return (

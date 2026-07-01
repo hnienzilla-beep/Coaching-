@@ -8,6 +8,8 @@ import PhotosPage from './pages/PhotosPage'
 import FoodDatabasePage from './pages/FoodDatabasePage'
 import SupplementPlanPage from './pages/SupplementPlanPage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
+import TrainingPlanPage from './pages/TrainingPlanPage'
+import WorkoutLogPage from './pages/WorkoutLogPage'
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
           <Route path="tracking" element={<TrackingPage />} />
           <Route path="ernaehrung" element={<NutritionPage />} />
           <Route path="supplemente" element={<SupplementPlanPage />} />
+          <Route path="trainingsplan" element={<TrainingPlanPage />} />
+          <Route path="trainingslog" element={<WorkoutLogPage />} />
           <Route path="fotos" element={<PhotosPage />} />
         </Route>
       </Routes>

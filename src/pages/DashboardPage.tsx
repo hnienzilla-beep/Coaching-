@@ -1,7 +1,7 @@
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { Card, Field, Input, Select, StatBadge } from '../components/ui'
+import { Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
 import { isoDate } from '../db/queries'
@@ -44,34 +44,19 @@ export default function DashboardPage() {
             </Select>
           </Field>
           <Field label="Alter (Jahre)">
-            <Input type="number" value={athlete.age} onChange={(e) => update(athlete.id, { age: Number(e.target.value) })} />
+            <DecimalInput value={athlete.age} onChange={(n) => update(athlete.id, { age: n ?? 0 })} />
           </Field>
           <Field label="Größe (cm)">
-            <Input type="number" value={athlete.heightCm} onChange={(e) => update(athlete.id, { heightCm: Number(e.target.value) })} />
+            <DecimalInput value={athlete.heightCm} onChange={(n) => update(athlete.id, { heightCm: n ?? 0 })} />
           </Field>
           <Field label="Gewicht (kg)">
-            <Input
-              type="number"
-              step="0.1"
-              value={athlete.weightKg}
-              onChange={(e) => update(athlete.id, { weightKg: Number(e.target.value) })}
-            />
+            <DecimalInput value={athlete.weightKg} onChange={(n) => update(athlete.id, { weightKg: n ?? 0 })} />
           </Field>
           <Field label="Protein (g/kg)">
-            <Input
-              type="number"
-              step="0.1"
-              value={athlete.proteinPerKg}
-              onChange={(e) => update(athlete.id, { proteinPerKg: Number(e.target.value) })}
-            />
+            <DecimalInput value={athlete.proteinPerKg} onChange={(n) => update(athlete.id, { proteinPerKg: n ?? 0 })} />
           </Field>
           <Field label="Fett (g/kg)">
-            <Input
-              type="number"
-              step="0.1"
-              value={athlete.fatPerKg}
-              onChange={(e) => update(athlete.id, { fatPerKg: Number(e.target.value) })}
-            />
+            <DecimalInput value={athlete.fatPerKg} onChange={(n) => update(athlete.id, { fatPerKg: n ?? 0 })} />
           </Field>
         </div>
         <Field label="Aktivitätslevel">

@@ -8,6 +8,8 @@ const TABS = [
   { to: 'tracking', label: 'Tracking', end: false },
   { to: 'ernaehrung', label: 'Ernährung', end: false },
   { to: 'supplemente', label: 'Supplements', end: false },
+  { to: 'trainingsplan', label: 'Trainingsplan', end: false },
+  { to: 'trainingslog', label: 'Trainingslog', end: false },
   { to: 'fotos', label: 'Fotos', end: false },
 ]
 
