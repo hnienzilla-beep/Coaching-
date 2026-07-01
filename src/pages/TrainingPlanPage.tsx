@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { db } from '../db/db'
+import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
+import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
@@ -18,6 +19,7 @@ export default function TrainingPlanPage() {
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
@@ -74,6 +76,25 @@ export default function TrainingPlanPage() {
       reps: '8-12',
     }
     await db.trainingPlanExercises.add(row)
+  }
+
+  async function handleExportPlan() {
+    if (!activePlan) return
+    const json = await exportTrainingPlan(activePlan.id)
+    const file = new File([json], `Trainingsplan-Vorlage-${activePlan.phaseName}.json`, { type: 'application/json' })
+    await shareOrDownloadFile(file)
+  }
+
+  async function handleImportPlan(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const newPlanId = await importTrainingPlan(text, athlete.id)
+      setActivePlanId(newPlanId)
+    } catch {
+      alert('Import fehlgeschlagen. Ist die Datei eine gültige Trainingsplan-Vorlage?')
+    }
   }
 
   return (
@@ -137,6 +158,27 @@ export default function TrainingPlanPage() {
             Fertig
           </Button>
         </Card>
+      )}
+
+      {activePlan && (
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
+            Plan exportieren
+          </Button>
+          <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
+            Plan importieren
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => {
+              void handleImportPlan(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
       )}
 
       <ExportTrainingPlanButton athlete={athlete} />

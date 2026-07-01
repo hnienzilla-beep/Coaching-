@@ -4,12 +4,15 @@ import type {
   DailyEntry,
   Exercise,
   FoodItem,
+  MealType,
+  MuscleGroup,
   NutritionPlan,
   PlanMeal,
   ProgressPhoto,
   Supplement,
   SupplementPlan,
   SupplementPlanItem,
+  SupplementTiming,
   TrainingPlan,
   TrainingPlanExercise,
   WorkoutLog,
@@ -190,6 +193,194 @@ export async function importAllData(json: string): Promise<void> {
       }
     }
   })
+}
+
+// Plan-Vorlagen (einzelne Phase/Tag) als portables JSON exportieren/importieren.
+// Referenzen (Lebensmittel/Supplemente/Übungen) werden über den Namen aufgelöst, da
+// IDs pro Browser-Profil zufällig generiert werden und daher nicht athletenübergreifend
+// gültig sind - Fallback-Daten im Export erlauben das Neuanlegen im Ziel-Datenbestand.
+
+interface NutritionPlanTemplate {
+  kind: 'nutritionPlan'
+  version: 1
+  phaseName: string
+  items: { mealType: MealType; grams: number; foodName: string; foodMacros?: Omit<FoodItem, 'id' | 'name'> }[]
+}
+
+export async function exportNutritionPlan(planId: string): Promise<string> {
+  const plan = await db.nutritionPlans.get(planId)
+  if (!plan) throw new Error('Plan nicht gefunden')
+  const meals = await db.planMeals.where('planId').equals(planId).toArray()
+  const foods = await db.foodItems.bulkGet(meals.map((m) => m.foodItemId))
+  const template: NutritionPlanTemplate = {
+    kind: 'nutritionPlan',
+    version: 1,
+    phaseName: plan.phaseName,
+    items: meals.map((m, i) => {
+      const food = foods[i]
+      return {
+        mealType: m.mealType,
+        grams: m.grams,
+        foodName: food?.name ?? '?',
+        foodMacros: food ? { kcal: food.kcal, protein: food.protein, carbs: food.carbs, fat: food.fat } : undefined,
+      }
+    }),
+  }
+  return JSON.stringify(template)
+}
+
+export async function importNutritionPlan(json: string, athleteId: string): Promise<string> {
+  const template = JSON.parse(json) as NutritionPlanTemplate
+  if (template.kind !== 'nutritionPlan') throw new Error('Ungültige Vorlagen-Datei (kein Ernährungsplan)')
+  const planId = crypto.randomUUID()
+  await db.transaction('rw', db.nutritionPlans, db.planMeals, db.foodItems, async () => {
+    const order = await db.nutritionPlans.where('athleteId').equals(athleteId).count()
+    await db.nutritionPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    for (const item of template.items) {
+      let food = await db.foodItems.where('name').equals(item.foodName).first()
+      if (!food && item.foodMacros) {
+        food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
+        await db.foodItems.add(food)
+      }
+      if (!food) continue
+      await db.planMeals.add({ id: crypto.randomUUID(), planId, mealType: item.mealType, foodItemId: food.id, grams: item.grams })
+    }
+  })
+  return planId
+}
+
+interface SupplementPlanTemplate {
+  kind: 'supplementPlan'
+  version: 1
+  phaseName: string
+  items: {
+    supplementName: string
+    supplementFallback?: Omit<Supplement, 'id' | 'name'>
+    dose: string
+    timing: SupplementTiming
+    notes?: string
+  }[]
+}
+
+export async function exportSupplementPlan(planId: string): Promise<string> {
+  const plan = await db.supplementPlans.get(planId)
+  if (!plan) throw new Error('Plan nicht gefunden')
+  const items = await db.supplementPlanItems.where('planId').equals(planId).toArray()
+  const supplements = await db.supplements.bulkGet(items.map((i) => i.supplementId))
+  const template: SupplementPlanTemplate = {
+    kind: 'supplementPlan',
+    version: 1,
+    phaseName: plan.phaseName,
+    items: items.map((i, idx) => {
+      const supplement = supplements[idx]
+      return {
+        supplementName: supplement?.name ?? '?',
+        supplementFallback: supplement
+          ? { defaultDose: supplement.defaultDose, defaultTiming: supplement.defaultTiming, notes: supplement.notes }
+          : undefined,
+        dose: i.dose,
+        timing: i.timing,
+        notes: i.notes,
+      }
+    }),
+  }
+  return JSON.stringify(template)
+}
+
+export async function importSupplementPlan(json: string, athleteId: string): Promise<string> {
+  const template = JSON.parse(json) as SupplementPlanTemplate
+  if (template.kind !== 'supplementPlan') throw new Error('Ungültige Vorlagen-Datei (kein Supplementplan)')
+  const planId = crypto.randomUUID()
+  await db.transaction('rw', db.supplementPlans, db.supplementPlanItems, db.supplements, async () => {
+    const order = await db.supplementPlans.where('athleteId').equals(athleteId).count()
+    await db.supplementPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    for (const item of template.items) {
+      let supplement = await db.supplements.where('name').equals(item.supplementName).first()
+      if (!supplement && item.supplementFallback) {
+        supplement = { id: crypto.randomUUID(), name: item.supplementName, ...item.supplementFallback }
+        await db.supplements.add(supplement)
+      }
+      if (!supplement) continue
+      await db.supplementPlanItems.add({
+        id: crypto.randomUUID(),
+        planId,
+        supplementId: supplement.id,
+        dose: item.dose,
+        timing: item.timing,
+        notes: item.notes,
+      })
+    }
+  })
+  return planId
+}
+
+interface TrainingPlanTemplate {
+  kind: 'trainingPlan'
+  version: 1
+  phaseName: string
+  items: {
+    exerciseName: string
+    exerciseFallback?: { muscleGroup: MuscleGroup }
+    order: number
+    sets: number
+    reps: string
+    targetWeightKg?: number
+    notes?: string
+  }[]
+}
+
+export async function exportTrainingPlan(planId: string): Promise<string> {
+  const plan = await db.trainingPlans.get(planId)
+  if (!plan) throw new Error('Plan nicht gefunden')
+  const rows = await db.trainingPlanExercises.where('planId').equals(planId).sortBy('order')
+  const exercises = await db.exercises.bulkGet(rows.map((r) => r.exerciseId))
+  const template: TrainingPlanTemplate = {
+    kind: 'trainingPlan',
+    version: 1,
+    phaseName: plan.phaseName,
+    items: rows.map((r, i) => {
+      const exercise = exercises[i]
+      return {
+        exerciseName: exercise?.name ?? '?',
+        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup } : undefined,
+        order: r.order,
+        sets: r.sets,
+        reps: r.reps,
+        targetWeightKg: r.targetWeightKg,
+        notes: r.notes,
+      }
+    }),
+  }
+  return JSON.stringify(template)
+}
+
+export async function importTrainingPlan(json: string, athleteId: string): Promise<string> {
+  const template = JSON.parse(json) as TrainingPlanTemplate
+  if (template.kind !== 'trainingPlan') throw new Error('Ungültige Vorlagen-Datei (kein Trainingsplan)')
+  const planId = crypto.randomUUID()
+  await db.transaction('rw', db.trainingPlans, db.trainingPlanExercises, db.exercises, async () => {
+    const order = await db.trainingPlans.where('athleteId').equals(athleteId).count()
+    await db.trainingPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    for (const item of template.items) {
+      let exercise = await db.exercises.where('name').equals(item.exerciseName).first()
+      if (!exercise && item.exerciseFallback) {
+        exercise = { id: crypto.randomUUID(), name: item.exerciseName, ...item.exerciseFallback }
+        await db.exercises.add(exercise)
+      }
+      if (!exercise) continue
+      await db.trainingPlanExercises.add({
+        id: crypto.randomUUID(),
+        planId,
+        exerciseId: exercise.id,
+        order: item.order,
+        sets: item.sets,
+        reps: item.reps,
+        targetWeightKg: item.targetWeightKg,
+        notes: item.notes,
+      })
+    }
+  })
+  return planId
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

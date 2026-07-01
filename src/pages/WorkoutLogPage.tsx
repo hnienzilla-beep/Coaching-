@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateWorkoutLog, isoDate } from '../db/queries'
@@ -11,8 +11,23 @@ import StrengthChart from '../components/StrengthChart'
 
 type Ctx = { athlete: Athlete }
 
+async function createSetsFromPlanExercise(logExerciseId: string, pe: TrainingPlanExercise): Promise<void> {
+  const repsNum = Number.parseInt(pe.reps, 10)
+  const setsToCreate = Math.max(1, pe.sets)
+  for (let i = 0; i < setsToCreate; i++) {
+    await db.workoutSets.add({
+      id: crypto.randomUUID(),
+      workoutLogExerciseId: logExerciseId,
+      setNumber: i + 1,
+      reps: Number.isFinite(repsNum) ? repsNum : undefined,
+      weightKg: pe.targetWeightKg,
+    })
+  }
+}
+
 export default function WorkoutLogPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const navigate = useNavigate()
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -41,24 +56,7 @@ export default function WorkoutLogPage() {
   async function addExerciseRow() {
     if (!exercises?.length) return
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
-    const loggedExerciseIds = new Set((rows ?? []).map((r) => r.exerciseId))
-    const suggestion = (planExercises ?? []).find((pe) => !loggedExerciseIds.has(pe.exerciseId))
-    const exerciseId = suggestion?.exerciseId ?? exercises[0].id
-    const logExerciseId = crypto.randomUUID()
-    await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId })
-    if (suggestion) {
-      const repsNum = Number.parseInt(suggestion.reps, 10)
-      const setsToCreate = Math.max(1, suggestion.sets)
-      for (let i = 0; i < setsToCreate; i++) {
-        await db.workoutSets.add({
-          id: crypto.randomUUID(),
-          workoutLogExerciseId: logExerciseId,
-          setNumber: i + 1,
-          reps: Number.isFinite(repsNum) ? repsNum : undefined,
-          weightKg: suggestion.targetWeightKg,
-        })
-      }
-    }
+    await db.workoutLogExercises.add({ id: crypto.randomUUID(), workoutLogId: log.id, exerciseId: exercises[0].id })
   }
 
   async function deleteExerciseRow(rowId: string) {
@@ -69,11 +67,30 @@ export default function WorkoutLogPage() {
   async function setTrainingPlanId(planId: string) {
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
     await db.workoutLogs.update(log.id, { trainingPlanId: planId || undefined })
+    if (!planId) return
+
+    const planRows = await db.trainingPlanExercises.where('planId').equals(planId).sortBy('order')
+    await db.transaction('rw', db.workoutLogExercises, db.workoutSets, async () => {
+      const existingRows = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+      const loggedExerciseIds = new Set(existingRows.map((r) => r.exerciseId))
+      for (const pe of planRows) {
+        if (loggedExerciseIds.has(pe.exerciseId)) continue
+        const logExerciseId = crypto.randomUUID()
+        await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: pe.exerciseId })
+        await createSetsFromPlanExercise(logExerciseId, pe)
+      }
+    })
   }
 
   async function setNotes(notes: string) {
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
     await db.workoutLogs.update(log.id, { notes })
+  }
+
+  async function completeWorkout() {
+    if (!currentLog) return
+    await db.workoutLogs.update(currentLog.id, { completedAt: new Date().toISOString() })
+    navigate(`/athlete/${athlete.id}`)
   }
 
   async function deleteLog() {
@@ -149,6 +166,16 @@ export default function WorkoutLogPage() {
             className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </Field>
+
+        {currentLog?.completedAt ? (
+          <p className="text-center text-sm text-ok">
+            ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+          </p>
+        ) : (
+          <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
+            Training beenden
+          </Button>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-1">
@@ -164,7 +191,10 @@ export default function WorkoutLogPage() {
               }`}
             >
               <span className="text-muted">{log.date}</span>
-              <span className="text-fg">{log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}</span>
+              <span className="text-fg">
+                {log.completedAt ? '✓ ' : ''}
+                {log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}
+              </span>
             </button>
           ))}
         </div>

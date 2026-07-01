@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db/db'
+import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
 import { calculate } from '../lib/calculator'
+import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
@@ -21,6 +22,7 @@ export default function NutritionPage() {
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
@@ -85,6 +87,25 @@ export default function NutritionPage() {
       grams: 100,
     }
     await db.planMeals.add(meal)
+  }
+
+  async function handleExportPlan() {
+    if (!activePlan) return
+    const json = await exportNutritionPlan(activePlan.id)
+    const file = new File([json], `Ernaehrungsplan-${activePlan.phaseName}.json`, { type: 'application/json' })
+    await shareOrDownloadFile(file)
+  }
+
+  async function handleImportPlan(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const newPlanId = await importNutritionPlan(text, athlete.id)
+      setActivePlanId(newPlanId)
+    } catch {
+      alert('Import fehlgeschlagen. Ist die Datei eine gültige Ernährungsplan-Vorlage?')
+    }
   }
 
   return (
@@ -182,6 +203,27 @@ export default function NutritionPage() {
             Fertig
           </Button>
         </Card>
+      )}
+
+      {activePlan && (
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
+            Plan exportieren
+          </Button>
+          <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
+            Plan importieren
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => {
+              void handleImportPlan(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
       )}
     </div>
   )

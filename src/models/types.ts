@@ -147,6 +147,7 @@ export interface WorkoutLog {
   date: string // ISO date, ein Eintrag pro Tag
   trainingPlanId?: string // welcher geplante Trainingstag absolviert wurde
   notes?: string
+  completedAt?: string // ISO-Zeitstempel, gesetzt über den "Training beenden"-Button
 }
 
 export interface WorkoutLogExercise {
