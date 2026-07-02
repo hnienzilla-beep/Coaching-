@@ -74,10 +74,15 @@ export default function NutritionPage() {
     )
   }
 
+  function sortDraftMeals(list: PlanMeal[]): PlanMeal[] {
+    return [...list].sort((a, b) => MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType) || a.order - b.order)
+  }
+
   const rows: Row[] = toRows(meals ?? [])
   const sums = sumRows(rows)
   const draftRows: Row[] = toRows(draftMeals ?? [])
   const draftSums = sumRows(draftRows)
+  const sortedDraftMeals = sortDraftMeals(draftMeals ?? [])
 
   async function addPhase() {
     const order = plans?.length ?? 0
@@ -125,13 +130,12 @@ export default function NutritionPage() {
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    setDraftMeals((prev) => {
-      if (!prev) return prev
-      const oldIndex = prev.findIndex((m) => m.id === active.id)
-      const newIndex = prev.findIndex((m) => m.id === over.id)
-      if (oldIndex === -1 || newIndex === -1) return prev
-      return arrayMove(prev, oldIndex, newIndex)
-    })
+    const oldIndex = sortedDraftMeals.findIndex((m) => m.id === active.id)
+    const newIndex = sortedDraftMeals.findIndex((m) => m.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(sortedDraftMeals, oldIndex, newIndex)
+    const orderById = new Map(reordered.map((m, i) => [m.id, i]))
+    setDraftMeals((prev) => (prev ?? []).map((m) => ({ ...m, order: orderById.get(m.id) ?? m.order })))
   }
 
   async function saveDraft() {
@@ -139,7 +143,7 @@ export default function NutritionPage() {
       setMode('view')
       return
     }
-    const finalMeals = draftMeals.filter((m) => m.foodItemId !== '')
+    const finalMeals = sortDraftMeals(draftMeals).filter((m) => m.foodItemId !== '')
     await db.transaction('rw', db.planMeals, async () => {
       await db.planMeals.where('planId').equals(currentPlanId).delete()
       for (let i = 0; i < finalMeals.length; i++) {
@@ -217,9 +221,9 @@ export default function NutritionPage() {
           </div>
 
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={(draftMeals ?? []).map((m) => m.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={sortedDraftMeals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-2">
-                {(draftMeals ?? []).map((meal) => (
+                {sortedDraftMeals.map((meal) => (
                   <SortableMealRow
                     key={meal.id}
                     meal={meal}
