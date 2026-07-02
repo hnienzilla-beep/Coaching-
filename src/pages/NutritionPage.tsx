@@ -158,7 +158,7 @@ export default function NutritionPage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {rows.map(({ meal, kcal, protein, carbs, fat }) => (
+            {rows.map(({ meal }) => (
               <div key={meal.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
                 <SearchPicker
                   items={foodPickerItems}
@@ -188,9 +188,6 @@ export default function NutritionPage() {
                   <Button variant="ghost" onClick={() => db.planMeals.delete(meal.id)}>
                     ✕
                   </Button>
-                </div>
-                <div className="pl-1 text-xs text-muted">
-                  {kcal.toFixed(0)} kcal · P {protein.toFixed(1)} g · C {carbs.toFixed(1)} g · F {fat.toFixed(1)} g
                 </div>
               </div>
             ))}
@@ -247,10 +244,14 @@ function NutritionOverview({
   target: ReturnType<typeof calculate>
   onEdit: () => void
 }) {
-  const groups = MEAL_TYPES.map((mealType) => ({
-    mealType,
-    rows: rows.filter((r) => r.meal.mealType === mealType),
-  })).filter((g) => g.rows.length > 0)
+  const groups = MEAL_TYPES.map((mealType) => {
+    const groupRows = rows.filter((r) => r.meal.mealType === mealType)
+    const groupSum = groupRows.reduce(
+      (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+    )
+    return { mealType, rows: groupRows, sum: groupSum }
+  }).filter((g) => g.rows.length > 0)
 
   return (
     <Card className="flex flex-col gap-3">
@@ -266,18 +267,16 @@ function NutritionOverview({
       <div className="flex flex-col gap-3">
         {groups.map((group) => (
           <div key={group.mealType}>
-            <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
+            <div className="flex items-center justify-between pb-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
+              <div className="text-xs text-muted">
+                {group.sum.kcal.toFixed(0)} kcal · P {group.sum.protein.toFixed(1)} g · C {group.sum.carbs.toFixed(1)} g · F{' '}
+                {group.sum.fat.toFixed(1)} g
+              </div>
+            </div>
             <div className="flex flex-col gap-1">
-              {group.rows.map(({ meal, kcal, protein, carbs, fat }) => (
-                <FoodRow
-                  key={meal.id}
-                  meal={meal}
-                  kcal={kcal}
-                  protein={protein}
-                  carbs={carbs}
-                  fat={fat}
-                  foodName={foodMap.get(meal.foodItemId)?.name}
-                />
+              {group.rows.map(({ meal }) => (
+                <FoodRow key={meal.id} meal={meal} foodName={foodMap.get(meal.foodItemId)?.name} />
               ))}
             </div>
           </div>
@@ -289,32 +288,11 @@ function NutritionOverview({
   )
 }
 
-function FoodRow({
-  meal,
-  kcal,
-  protein,
-  carbs,
-  fat,
-  foodName,
-}: {
-  meal: PlanMeal
-  kcal: number
-  protein: number
-  carbs: number
-  fat: number
-  foodName?: string
-}) {
+function FoodRow({ meal, foodName }: { meal: PlanMeal; foodName?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-fg">
-          {foodName ?? '–'} <span className="text-muted">({meal.grams} g)</span>
-        </span>
-        <span className="text-muted">{kcal.toFixed(0)} kcal</span>
-      </div>
-      <div className="text-xs text-muted">
-        P {protein.toFixed(1)} g · C {carbs.toFixed(1)} g · F {fat.toFixed(1)} g
-      </div>
+    <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+      <span className="text-fg">{foodName ?? '–'}</span>
+      <span className="text-muted">{meal.grams} g</span>
     </div>
   )
 }
