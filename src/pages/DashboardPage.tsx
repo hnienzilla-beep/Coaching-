@@ -1,10 +1,11 @@
+import { useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
-import { ACTIVITY_LEVELS, GOALS, calculate } from '../lib/calculator'
-import { addDays, isoDate } from '../db/queries'
+import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
+import { addDays, isoDate, syncBodyFatToDailyEntry } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
@@ -37,6 +38,15 @@ export default function DashboardPage() {
     fatPerKg: athlete.fatPerKg,
     calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
+
+  const bmi = calculateBmi(athlete.weightKg, athlete.heightCm)
+  const bodyFatFromFfmi =
+    athlete.ffmi !== undefined ? calculateBodyFatFromFfmi(athlete.ffmi, athlete.weightKg, athlete.heightCm) : undefined
+
+  useEffect(() => {
+    if (bodyFatFromFfmi === undefined || !Number.isFinite(bodyFatFromFfmi)) return
+    void syncBodyFatToDailyEntry(athlete.id, isoDate(new Date()), bodyFatFromFfmi)
+  }, [athlete.id, bodyFatFromFfmi])
 
   return (
     <div className="flex flex-col gap-4">
@@ -133,6 +143,24 @@ export default function DashboardPage() {
             />
           </Field>
         </div>
+      </Card>
+
+      <Card className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körperzusammensetzung</h2>
+        <Field label="FFMI (Fettfreie-Masse-Index, kg/m²)">
+          <DecimalInput value={athlete.ffmi} onChange={(n) => update(athlete.id, { ffmi: n })} placeholder="z.B. 22" />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <StatBadge
+            label="BMI"
+            value={bmi !== undefined ? bmi.toFixed(1) : '–'}
+            tone={bmi !== undefined ? (bmi >= 18.5 && bmi <= 24.9 ? 'ok' : 'danger') : 'default'}
+          />
+          <StatBadge label="KFA (berechnet)" value={bodyFatFromFfmi !== undefined ? `${bodyFatFromFfmi.toFixed(1)}%` : '–'} />
+        </div>
+        {bodyFatFromFfmi !== undefined && (
+          <p className="text-xs text-muted">Wird automatisch in den heutigen Tracking-Eintrag übernommen.</p>
+        )}
       </Card>
 
       <WeightGoalProgress athlete={athlete} entries={entries ?? []} />

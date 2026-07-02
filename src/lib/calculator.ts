@@ -82,6 +82,21 @@ export function calculate(input: CalculatorInput): CalculatorResult {
   }
 }
 
+export function calculateBmi(weightKg: number, heightCm: number): number | undefined {
+  if (!weightKg || !heightCm) return undefined
+  const heightM = heightCm / 100
+  return weightKg / (heightM * heightM)
+}
+
+// FFMI = fettfreie Masse / Größe(m)² -> umgekehrt lässt sich daraus der KFA schätzen,
+// wenn FFMI, Gewicht und Größe bekannt sind: fettfreie Masse = FFMI * Größe(m)².
+export function calculateBodyFatFromFfmi(ffmi: number, weightKg: number, heightCm: number): number | undefined {
+  if (!ffmi || !weightKg || !heightCm) return undefined
+  const heightM = heightCm / 100
+  const leanMassKg = ffmi * heightM * heightM
+  return (1 - leanMassKg / weightKg) * 100
+}
+
 export interface WeightPoint {
   date: string
   weightKg?: number

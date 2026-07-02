@@ -164,6 +164,18 @@ export async function syncNutritionTotalsToDailyEntry(
   }
 }
 
+// Übernimmt den aus dem FFMI berechneten KFA-Wert in den heutigen Tracking-Eintrag,
+// ohne andere Felder (Gewicht, Kalorien, Makros, Notizen) anzutasten.
+export async function syncBodyFatToDailyEntry(athleteId: string, date: string, bodyFatPct: number): Promise<void> {
+  const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
+  const rounded = Math.round(bodyFatPct * 10) / 10
+  if (existing) {
+    await db.dailyEntries.update(existing.id, { bodyFatPct: rounded })
+  } else {
+    await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, bodyFatPct: rounded })
+  }
+}
+
 export async function addPlanMeal(meal: PlanMeal): Promise<void> {
   await db.planMeals.add(meal)
 }

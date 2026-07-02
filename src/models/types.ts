@@ -16,6 +16,7 @@ export interface Athlete {
   startDate: string // ISO date
   targetWeightKg?: number
   targetDate?: string // ISO date
+  ffmi?: number // Fettfreie-Masse-Index (kg/m²), manuell erfasst - dient zur Rückrechnung des KFA
 }
 
 export interface DailyEntry {
