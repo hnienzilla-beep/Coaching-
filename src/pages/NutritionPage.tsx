@@ -8,6 +8,7 @@ import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
+import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
 
@@ -18,6 +19,7 @@ type Row = { meal: PlanMeal; kcal: number; protein: number; carbs: number; fat: 
 
 export default function NutritionPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const [coachMode] = useCoachMode()
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -126,9 +128,11 @@ export default function NutritionPage() {
             {p.phaseName}
           </button>
         ))}
-        <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
-          + Phase
-        </button>
+        {coachMode && (
+          <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
+            + Phase
+          </button>
+        )}
       </div>
 
       {activePlan && mode === 'view' && (
@@ -138,11 +142,11 @@ export default function NutritionPage() {
           foodMap={foodMap}
           sums={sums}
           target={target}
-          onEdit={() => setMode('edit')}
+          onEdit={coachMode ? () => setMode('edit') : undefined}
         />
       )}
 
-      {activePlan && mode === 'edit' && (
+      {activePlan && mode === 'edit' && coachMode && (
         <Card className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -205,7 +209,7 @@ export default function NutritionPage() {
         </Card>
       )}
 
-      {activePlan && (
+      {activePlan && coachMode && (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -242,7 +246,7 @@ function NutritionOverview({
   foodMap: Map<string, { name: string }>
   sums: { kcal: number; protein: number; carbs: number; fat: number }
   target: ReturnType<typeof calculate>
-  onEdit: () => void
+  onEdit?: () => void
 }) {
   const groups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
@@ -257,9 +261,11 @@ function NutritionOverview({
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
-        <Button variant="secondary" onClick={onEdit}>
-          Bearbeiten
-        </Button>
+        {onEdit && (
+          <Button variant="secondary" onClick={onEdit}>
+            Bearbeiten
+          </Button>
+        )}
       </div>
 
       {groups.length === 0 && <p className="text-sm text-muted">Noch keine Mahlzeiten in dieser Phase.</p>}

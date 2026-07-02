@@ -10,11 +10,13 @@ import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
+import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
 
 export default function TrainingPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const [coachMode] = useCoachMode()
   const plans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -111,9 +113,11 @@ export default function TrainingPlanPage() {
             {p.phaseName}
           </button>
         ))}
-        <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
-          + Tag
-        </button>
+        {coachMode && (
+          <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
+            + Tag
+          </button>
+        )}
       </div>
 
       {activePlan && mode === 'view' && (
@@ -121,11 +125,11 @@ export default function TrainingPlanPage() {
           phaseName={activePlan.phaseName}
           rows={rows ?? []}
           exerciseMap={exerciseMap}
-          onEdit={() => setMode('edit')}
+          onEdit={coachMode ? () => setMode('edit') : undefined}
         />
       )}
 
-      {activePlan && mode === 'edit' && (
+      {activePlan && mode === 'edit' && coachMode && (
         <Card className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -160,7 +164,7 @@ export default function TrainingPlanPage() {
         </Card>
       )}
 
-      {activePlan && (
+      {activePlan && coachMode && (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -261,15 +265,17 @@ function TrainingPlanOverview({
   phaseName: string
   rows: TrainingPlanExercise[]
   exerciseMap: Map<string, Exercise>
-  onEdit: () => void
+  onEdit?: () => void
 }) {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
-        <Button variant="secondary" onClick={onEdit}>
-          Bearbeiten
-        </Button>
+        {onEdit && (
+          <Button variant="secondary" onClick={onEdit}>
+            Bearbeiten
+          </Button>
+        )}
       </div>
 
       {rows.length === 0 && <p className="text-sm text-muted">Noch keine Übungen an diesem Tag.</p>}

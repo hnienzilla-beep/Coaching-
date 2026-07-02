@@ -7,6 +7,7 @@ import type { Athlete, Supplement, SupplementPlanItem, SupplementTiming } from '
 import { SUPPLEMENT_TIMINGS } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
+import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
 
@@ -16,6 +17,7 @@ function sortByTiming<T extends { timing: SupplementTiming }>(items: T[]): T[] {
 
 export default function SupplementPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const [coachMode] = useCoachMode()
   const plans = useLiveQuery(() => db.supplementPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -97,9 +99,11 @@ export default function SupplementPlanPage() {
             {p.phaseName}
           </button>
         ))}
-        <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
-          + Phase
-        </button>
+        {coachMode && (
+          <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
+            + Phase
+          </button>
+        )}
       </div>
 
       {activePlan && mode === 'view' && (
@@ -107,11 +111,11 @@ export default function SupplementPlanPage() {
           phaseName={activePlan.phaseName}
           items={sortedItems}
           supplementMap={supplementMap}
-          onEdit={() => setMode('edit')}
+          onEdit={coachMode ? () => setMode('edit') : undefined}
         />
       )}
 
-      {activePlan && mode === 'edit' && (
+      {activePlan && mode === 'edit' && coachMode && (
         <Card className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <input
@@ -186,7 +190,7 @@ export default function SupplementPlanPage() {
         </Card>
       )}
 
-      {activePlan && (
+      {activePlan && coachMode && (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -219,7 +223,7 @@ function SupplementOverview({
   phaseName: string
   items: SupplementPlanItem[]
   supplementMap: Map<string, Supplement>
-  onEdit: () => void
+  onEdit?: () => void
 }) {
   const groups = SUPPLEMENT_TIMINGS.map((timing) => ({
     timing,
@@ -230,9 +234,11 @@ function SupplementOverview({
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
-        <Button variant="secondary" onClick={onEdit}>
-          Bearbeiten
-        </Button>
+        {onEdit && (
+          <Button variant="secondary" onClick={onEdit}>
+            Bearbeiten
+          </Button>
+        )}
       </div>
 
       {groups.length === 0 && <p className="text-sm text-muted">Noch keine Supplements in dieser Phase.</p>}

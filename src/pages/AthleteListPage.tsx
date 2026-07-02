@@ -17,11 +17,15 @@ import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
+import { useCoachMode } from '../lib/coachMode'
 
 export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
+  const [coachMode, setCoachMode] = useCoachMode()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   async function handleExport() {
@@ -66,6 +70,17 @@ export default function AthleteListPage() {
     ensurePlanMealOrder()
   }, [])
 
+  useEffect(() => {
+    if (!settingsOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [settingsOpen])
+
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 p-4 pb-10">
       <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
@@ -73,22 +88,52 @@ export default function AthleteListPage() {
           <h1 className="text-xl font-bold text-fg">Bodybuilding Coach</h1>
           <p className="text-sm text-muted">Athleten verwalten</p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div ref={settingsRef} className="relative">
           <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="text-sm text-muted underline underline-offset-2"
+            onClick={() => setSettingsOpen((v) => !v)}
+            aria-label="Einstellungen"
+            className="rounded-lg border border-border bg-surface-2 p-2 text-lg leading-none text-fg"
           >
-            {theme === 'dark' ? '☀️ Hell' : '🌙 Dunkel'}
+            ⚙️
           </button>
-          <Link to="/lebensmittel" className="text-sm text-accent underline underline-offset-2">
-            Lebensmittel-DB
-          </Link>
-          <Link to="/supplemente" className="text-sm text-accent underline underline-offset-2">
-            Supplement-DB
-          </Link>
-          <Link to="/uebungen" className="text-sm text-accent underline underline-offset-2">
-            Trainings-DB
-          </Link>
+          {settingsOpen && (
+            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                {theme === 'dark' ? '☀️ Hell-Modus' : '🌙 Dunkel-Modus'}
+              </button>
+              <button
+                onClick={() => setCoachMode(!coachMode)}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                {coachMode ? '🧑‍🏫 Coach-Modus: An' : '🧑‍🏫 Coach-Modus: Aus'}
+              </button>
+              <div className="my-1 border-t border-border" />
+              <Link
+                to="/lebensmittel"
+                onClick={() => setSettingsOpen(false)}
+                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+              >
+                Lebensmittel-DB
+              </Link>
+              <Link
+                to="/supplemente"
+                onClick={() => setSettingsOpen(false)}
+                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+              >
+                Supplement-DB
+              </Link>
+              <Link
+                to="/uebungen"
+                onClick={() => setSettingsOpen(false)}
+                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+              >
+                Trainings-DB
+              </Link>
+            </div>
+          )}
         </div>
       </header>
 
