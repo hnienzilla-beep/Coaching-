@@ -10,6 +10,7 @@ import SupplementPlanPage from './pages/SupplementPlanPage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
 import TrainingPlanPage from './pages/TrainingPlanPage'
 import WorkoutLogPage from './pages/WorkoutLogPage'
+import NutritionLogPage from './pages/NutritionLogPage'
 import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <Route path="supplemente" element={<SupplementPlanPage />} />
           <Route path="trainingsplan" element={<TrainingPlanPage />} />
           <Route path="trainingslog" element={<WorkoutLogPage />} />
+          <Route path="ernaehrungslog" element={<NutritionLogPage />} />
           <Route path="fotos" element={<PhotosPage />} />
         </Route>
       </Routes>

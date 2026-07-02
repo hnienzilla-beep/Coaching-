@@ -6,6 +6,8 @@ import type {
   FoodItem,
   MealType,
   MuscleGroup,
+  NutritionLog,
+  NutritionLogItem,
   NutritionPlan,
   PlanMeal,
   ProgressPhoto,
@@ -39,6 +41,8 @@ export class CoachDB extends Dexie {
   workoutLogs!: EntityTable<WorkoutLog, 'id'>
   workoutLogExercises!: EntityTable<WorkoutLogExercise, 'id'>
   workoutSets!: EntityTable<WorkoutSet, 'id'>
+  nutritionLogs!: EntityTable<NutritionLog, 'id'>
+  nutritionLogItems!: EntityTable<NutritionLogItem, 'id'>
 
   constructor() {
     super('bodybuilding-coach')
@@ -65,6 +69,10 @@ export class CoachDB extends Dexie {
     })
     this.version(4).stores({
       workoutSets: 'id, workoutLogExerciseId',
+    })
+    this.version(5).stores({
+      nutritionLogs: 'id, athleteId, date, [athleteId+date]',
+      nutritionLogItems: 'id, nutritionLogId',
     })
   }
 }

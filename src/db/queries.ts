@@ -1,5 +1,5 @@
 import { db } from './db'
-import type { Athlete, DailyEntry, PlanMeal, WorkoutLog } from '../models/types'
+import type { Athlete, DailyEntry, NutritionLog, PlanMeal, WorkoutLog } from '../models/types'
 
 export const ACCENT_COLORS = ['#a3e635', '#22d3ee', '#f472b6', '#fb923c', '#c084fc', '#facc15']
 
@@ -59,6 +59,8 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
       db.workoutLogs,
       db.workoutLogExercises,
       db.workoutSets,
+      db.nutritionLogs,
+      db.nutritionLogItems,
     ],
     async () => {
       const plans = await db.nutritionPlans.where('athleteId').equals(athleteId).toArray()
@@ -88,6 +90,12 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
         await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
       }
       await db.workoutLogs.where('athleteId').equals(athleteId).delete()
+
+      const nutritionLogs = await db.nutritionLogs.where('athleteId').equals(athleteId).toArray()
+      for (const log of nutritionLogs) {
+        await db.nutritionLogItems.where('nutritionLogId').equals(log.id).delete()
+      }
+      await db.nutritionLogs.where('athleteId').equals(athleteId).delete()
 
       await db.dailyEntries.where('athleteId').equals(athleteId).delete()
       await db.progressPhotos.where('athleteId').equals(athleteId).delete()
@@ -135,6 +143,27 @@ export async function upsertDailyEntry(entry: DailyEntry): Promise<void> {
   }
 }
 
+// Übernimmt die Tagessumme aus dem Ernährungslog (abgehakte Einträge) in die
+// Tracking-Felder, ohne andere Felder (Gewicht, Körpermaße, Notizen) anzutasten.
+export async function syncNutritionTotalsToDailyEntry(
+  athleteId: string,
+  date: string,
+  totals: { calories: number; protein: number; carbs: number; fat: number },
+): Promise<void> {
+  const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
+  const rounded = {
+    calories: Math.round(totals.calories),
+    protein: Math.round(totals.protein),
+    carbs: Math.round(totals.carbs),
+    fat: Math.round(totals.fat),
+  }
+  if (existing) {
+    await db.dailyEntries.update(existing.id, rounded)
+  } else {
+    await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, ...rounded })
+  }
+}
+
 export async function addPlanMeal(meal: PlanMeal): Promise<void> {
   await db.planMeals.add(meal)
 }
@@ -148,5 +177,13 @@ export async function getOrCreateWorkoutLog(athleteId: string, date: string): Pr
   if (existing) return existing
   const log: WorkoutLog = { id: crypto.randomUUID(), athleteId, date }
   await db.workoutLogs.add(log)
+  return log
+}
+
+export async function getOrCreateNutritionLog(athleteId: string, date: string): Promise<NutritionLog> {
+  const existing = await db.nutritionLogs.where('[athleteId+date]').equals([athleteId, date]).first()
+  if (existing) return existing
+  const log: NutritionLog = { id: crypto.randomUUID(), athleteId, date }
+  await db.nutritionLogs.add(log)
   return log
 }

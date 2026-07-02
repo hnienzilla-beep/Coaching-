@@ -166,3 +166,22 @@ export interface WorkoutSet {
   weightKg?: number
   done?: boolean // während des Trainings per Häkchen als erledigt markiert
 }
+
+export interface NutritionLog {
+  id: string
+  athleteId: string
+  date: string // ISO date, ein Eintrag pro Tag
+  nutritionPlanId?: string // welche geplante Ernährungsplan-Phase übernommen wurde
+  notes?: string
+  completedAt?: string // ISO-Zeitstempel, gesetzt über den "Ernährung abschließen"-Button
+}
+
+export interface NutritionLogItem {
+  id: string
+  nutritionLogId: string
+  mealType: MealType
+  foodItemId: string
+  grams: number
+  order: number
+  done?: boolean // "gegessen"-Häkchen
+}

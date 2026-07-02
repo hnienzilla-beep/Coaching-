@@ -10,6 +10,7 @@ const TABS = [
   { to: 'supplemente', label: 'Supplements', end: false },
   { to: 'trainingsplan', label: 'Trainingsplan', end: false },
   { to: 'trainingslog', label: 'Trainingslog', end: false },
+  { to: 'ernaehrungslog', label: 'Ernähr.-Log', end: false },
   { to: 'fotos', label: 'Fotos', end: false },
 ]
 
