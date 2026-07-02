@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
 import { calculate } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
@@ -24,7 +27,9 @@ export default function NutritionPage() {
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
+  const [draftMeals, setDraftMeals] = useState<PlanMeal[] | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
@@ -48,22 +53,31 @@ export default function NutritionPage() {
     calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
-  const rows: Row[] = (meals ?? []).map((m) => {
-    const food = foodMap.get(m.foodItemId)
-    const factor = m.grams / 100
-    return {
-      meal: m,
-      kcal: food ? food.kcal * factor : 0,
-      protein: food ? food.protein * factor : 0,
-      carbs: food ? food.carbs * factor : 0,
-      fat: food ? food.fat * factor : 0,
-    }
-  })
+  function toRows(list: PlanMeal[]): Row[] {
+    return list.map((m) => {
+      const food = foodMap.get(m.foodItemId)
+      const factor = m.grams / 100
+      return {
+        meal: m,
+        kcal: food ? food.kcal * factor : 0,
+        protein: food ? food.protein * factor : 0,
+        carbs: food ? food.carbs * factor : 0,
+        fat: food ? food.fat * factor : 0,
+      }
+    })
+  }
 
-  const sums = rows.reduce(
-    (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
-    { kcal: 0, protein: 0, carbs: 0, fat: 0 },
-  )
+  function sumRows(list: Row[]): { kcal: number; protein: number; carbs: number; fat: number } {
+    return list.reduce(
+      (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+    )
+  }
+
+  const rows: Row[] = toRows(meals ?? [])
+  const sums = sumRows(rows)
+  const draftRows: Row[] = toRows(draftMeals ?? [])
+  const draftSums = sumRows(draftRows)
 
   async function addPhase() {
     const order = plans?.length ?? 0
@@ -82,17 +96,58 @@ export default function NutritionPage() {
     await db.nutritionPlans.update(planId, { phaseName: name })
   }
 
-  async function addRow() {
-    if (!currentPlanId || !foods?.length) return
-    const meal: PlanMeal = {
-      id: crypto.randomUUID(),
-      planId: currentPlanId,
-      mealType: MEAL_TYPES[0],
-      foodItemId: foods[0].id,
-      grams: 100,
-      order: meals?.length ?? 0,
+  function startEdit() {
+    setDraftMeals((meals ?? []).map((m) => ({ ...m })))
+    setMode('edit')
+  }
+
+  function cancelEdit() {
+    setDraftMeals(null)
+    setMode('view')
+  }
+
+  function addDraftRow() {
+    if (!currentPlanId) return
+    setDraftMeals((prev) => [
+      ...(prev ?? []),
+      { id: crypto.randomUUID(), planId: currentPlanId, mealType: MEAL_TYPES[0], foodItemId: '', grams: 100, order: (prev ?? []).length },
+    ])
+  }
+
+  function updateDraftMeal(id: string, patch: Partial<PlanMeal>) {
+    setDraftMeals((prev) => (prev ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)))
+  }
+
+  function removeDraftMeal(id: string) {
+    setDraftMeals((prev) => (prev ?? []).filter((m) => m.id !== id))
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setDraftMeals((prev) => {
+      if (!prev) return prev
+      const oldIndex = prev.findIndex((m) => m.id === active.id)
+      const newIndex = prev.findIndex((m) => m.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+
+  async function saveDraft() {
+    if (!currentPlanId || !draftMeals) {
+      setMode('view')
+      return
     }
-    await db.planMeals.add(meal)
+    const finalMeals = draftMeals.filter((m) => m.foodItemId !== '')
+    await db.transaction('rw', db.planMeals, async () => {
+      await db.planMeals.where('planId').equals(currentPlanId).delete()
+      for (let i = 0; i < finalMeals.length; i++) {
+        await db.planMeals.add({ ...finalMeals[i], order: i })
+      }
+    })
+    setDraftMeals(null)
+    setMode('view')
   }
 
   async function handleExportPlan() {
@@ -142,7 +197,7 @@ export default function NutritionPage() {
           foodMap={foodMap}
           sums={sums}
           target={target}
-          onEdit={coachMode ? () => setMode('edit') : undefined}
+          onEdit={coachMode ? startEdit : undefined}
         />
       )}
 
@@ -161,51 +216,36 @@ export default function NutritionPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
-            {rows.map(({ meal }) => (
-              <div key={meal.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
-                <SearchPicker
-                  items={foodPickerItems}
-                  value={meal.foodItemId}
-                  onChange={(id) => db.planMeals.update(meal.id, { foodItemId: id })}
-                  placeholder="Lebensmittel suchen..."
-                />
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={meal.mealType}
-                    onChange={(e) => db.planMeals.update(meal.id, { mealType: e.target.value as MealType })}
-                    className="flex-1"
-                  >
-                    {MEAL_TYPES.map((mt) => (
-                      <option key={mt} value={mt}>
-                        {mt}
-                      </option>
-                    ))}
-                  </Select>
-                  <input
-                    type="number"
-                    value={meal.grams}
-                    onChange={(e) => db.planMeals.update(meal.id, { grams: Number(e.target.value) })}
-                    placeholder="Gramm"
-                    className="w-20 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={(draftMeals ?? []).map((m) => m.id)} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-2">
+                {(draftMeals ?? []).map((meal) => (
+                  <SortableMealRow
+                    key={meal.id}
+                    meal={meal}
+                    foodPickerItems={foodPickerItems}
+                    onChange={(patch) => updateDraftMeal(meal.id, patch)}
+                    onRemove={() => removeDraftMeal(meal.id)}
                   />
-                  <Button variant="ghost" onClick={() => db.planMeals.delete(meal.id)}>
-                    ✕
-                  </Button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
 
-          <Button variant="secondary" onClick={addRow}>
+          <Button variant="secondary" onClick={addDraftRow}>
             + Zeile hinzufügen
           </Button>
 
-          <SumTable sums={sums} target={target} />
+          <SumTable sums={draftSums} target={target} />
 
-          <Button variant="primary" onClick={() => setMode('view')}>
-            Fertig
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={cancelEdit} className="flex-1">
+              Abbrechen
+            </Button>
+            <Button variant="primary" onClick={saveDraft} className="flex-1">
+              Fertig
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -229,6 +269,67 @@ export default function NutritionPage() {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+function SortableMealRow({
+  meal,
+  foodPickerItems,
+  onChange,
+  onRemove,
+}: {
+  meal: PlanMeal
+  foodPickerItems: { id: string; label: string; sublabel?: string }[]
+  onChange: (patch: Partial<PlanMeal>) => void
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="flex flex-col gap-2 rounded-lg border border-border p-2"
+    >
+      <div className="flex items-center gap-2">
+        <button
+          {...attributes}
+          {...listeners}
+          type="button"
+          className="shrink-0 touch-none px-1 text-lg text-muted"
+          aria-label="Verschieben"
+        >
+          ⠿
+        </button>
+        <div className="flex-1">
+          <SearchPicker
+            items={foodPickerItems}
+            value={meal.foodItemId || undefined}
+            onChange={(id) => onChange({ foodItemId: id })}
+            placeholder="Lebensmittel suchen..."
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Select value={meal.mealType} onChange={(e) => onChange({ mealType: e.target.value as MealType })} className="flex-1">
+          {MEAL_TYPES.map((mt) => (
+            <option key={mt} value={mt}>
+              {mt}
+            </option>
+          ))}
+        </Select>
+        <input
+          type="number"
+          value={meal.grams}
+          onChange={(e) => onChange({ grams: Number(e.target.value) })}
+          placeholder="Gramm"
+          className="w-20 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+        />
+        <Button variant="ghost" onClick={onRemove}>
+          ✕
+        </Button>
+      </div>
     </div>
   )
 }
