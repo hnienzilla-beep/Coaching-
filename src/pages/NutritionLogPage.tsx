@@ -8,6 +8,7 @@ import type { Athlete, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
+import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
 
@@ -27,6 +28,7 @@ function sumRows(rows: Row[]): Sums {
 export default function NutritionLogPage() {
   const { athlete } = useOutletContext<Ctx>()
   const navigate = useNavigate()
+  const [coachMode] = useCoachMode()
   const logs = useLiveQuery(() => db.nutritionLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const nutritionPlans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
@@ -88,16 +90,38 @@ export default function NutritionLogPage() {
   }).filter((g) => g.rows.length > 0)
 
   async function addFoodRow() {
-    if (!foods?.length) return
     const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
     await db.nutritionLogItems.add({
       id: crypto.randomUUID(),
       nutritionLogId: log.id,
       mealType: MEAL_TYPES[0],
-      foodItemId: foods[0].id,
+      foodItemId: '',
       grams: 100,
       order: items?.length ?? 0,
     })
+  }
+
+  async function saveLogAsPlan() {
+    if (!currentLog || !items?.length) return
+    const validItems = items.filter((item) => item.foodItemId !== '')
+    if (!validItems.length) return
+    const order = nutritionPlans?.length ?? 0
+    const planId = crypto.randomUUID()
+    await db.transaction('rw', db.nutritionPlans, db.planMeals, async () => {
+      await db.nutritionPlans.add({ id: planId, athleteId: athlete.id, phaseName: `Ernährungsplan ${selectedDate}`, order })
+      for (let i = 0; i < validItems.length; i++) {
+        const item = validItems[i]
+        await db.planMeals.add({
+          id: crypto.randomUUID(),
+          planId,
+          mealType: item.mealType,
+          foodItemId: item.foodItemId,
+          grams: item.grams,
+          order: i,
+        })
+      }
+    })
+    navigate(`/athlete/${athlete.id}/ernaehrung`)
   }
 
   async function setNutritionPlanId(planId: string) {
@@ -195,9 +219,16 @@ export default function NutritionLogPage() {
           ))}
         </div>
 
-        <Button variant="secondary" onClick={addFoodRow}>
-          + Lebensmittel hinzufügen
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={addFoodRow} className="flex-1">
+            + Lebensmittel hinzufügen
+          </Button>
+          {coachMode && currentLog && items && items.length > 0 && (
+            <Button variant="secondary" onClick={saveLogAsPlan} className="flex-1">
+              Als Ernährungsplan speichern
+            </Button>
+          )}
+        </div>
 
         <SumTable sums={sums} target={target} />
 
@@ -257,7 +288,7 @@ function LoggedFoodRow({
     <div className={`flex flex-col gap-2 rounded-lg border border-border p-2 ${item.done ? 'opacity-60' : ''}`}>
       <SearchPicker
         items={pickerItems}
-        value={item.foodItemId}
+        value={item.foodItemId || undefined}
         onChange={(id) => db.nutritionLogItems.update(item.id, { foodItemId: id })}
         placeholder="Lebensmittel suchen..."
       />

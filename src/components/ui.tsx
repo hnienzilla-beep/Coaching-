@@ -7,7 +7,7 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-sm text-muted">
+    <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
       <span>{label}</span>
       {children}
     </label>
