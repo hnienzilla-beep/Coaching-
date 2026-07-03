@@ -18,13 +18,22 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   // iOS zeigt bei type="number" ohne inputMode manchmal keine Komma-/Punkt-Taste an -
   // "decimal" erzwingt die Zifferntastatur mit Dezimaltrennzeichen.
   const inputMode = props.type === 'number' ? (props.inputMode ?? 'decimal') : props.inputMode
-  return (
+  const input = (
     <input
       {...props}
       inputMode={inputMode}
       className={`w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     />
   )
+  // Native type="date"-Widgets können auf manchen Geräten (v.a. iOS Safari, verstärkt
+  // durch größere Systemschriftgröße) breiter rendern als der verfügbare Platz -
+  // width/min-width auf dem Element selbst greifen dort nicht. Dieser Wrapper fängt den
+  // Überschuss als horizontales Scrollen innerhalb der Box ab, statt über die Karte
+  // hinauszuragen.
+  if (props.type === 'date') {
+    return <div className="w-full min-w-0 overflow-x-auto">{input}</div>
+  }
+  return input
 }
 
 // input type="number" akzeptiert nur einen Punkt als Trennzeichen - iOS zeigt bei

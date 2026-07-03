@@ -139,18 +139,16 @@ export default function DashboardPage() {
                 onChange={(e) => update(athlete.id, { startDate: e.target.value })}
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Zielgewicht (kg)">
-                <DecimalInput value={athlete.targetWeightKg} onChange={(n) => update(athlete.id, { targetWeightKg: n })} />
-              </Field>
-              <Field label="Ziel-Datum">
-                <Input
-                  type="date"
-                  value={athlete.targetDate ?? ''}
-                  onChange={(e) => update(athlete.id, { targetDate: e.target.value || undefined })}
-                />
-              </Field>
-            </div>
+            <Field label="Zielgewicht (kg)">
+              <DecimalInput value={athlete.targetWeightKg} onChange={(n) => update(athlete.id, { targetWeightKg: n })} />
+            </Field>
+            <Field label="Ziel-Datum">
+              <Input
+                type="date"
+                value={athlete.targetDate ?? ''}
+                onChange={(e) => update(athlete.id, { targetDate: e.target.value || undefined })}
+              />
+            </Field>
           </>
         )}
       </Card>
