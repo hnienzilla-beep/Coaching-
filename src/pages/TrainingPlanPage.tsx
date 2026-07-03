@@ -278,7 +278,7 @@ function TrainingPlanOverview({
         )}
       </div>
 
-      {rows.length === 0 && <p className="text-sm text-muted">Noch keine Übungen an diesem Tag.</p>}
+      {rows.length === 0 && <p className="text-sm text-muted">🏋️ Noch keine Übungen an diesem Tag.</p>}
 
       <div className="flex flex-col gap-1">
         {rows.map((row) => {

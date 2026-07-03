@@ -373,7 +373,7 @@ function NutritionOverview({
         )}
       </div>
 
-      {groups.length === 0 && <p className="text-sm text-muted">Noch keine Mahlzeiten in dieser Phase.</p>}
+      {groups.length === 0 && <p className="text-sm text-muted">🍽️ Noch keine Mahlzeiten in dieser Phase.</p>}
 
       <div className="flex flex-col gap-3">
         {groups.map((group) => (

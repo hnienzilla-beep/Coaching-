@@ -1,6 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
+import { ACCENT_COLORS } from '../db/queries'
 import type { Athlete } from '../models/types'
 
 // Gruppiert nach Themenbereich (Ernährung: Plan+Log nebeneinander, Training: Plan+Log
@@ -21,6 +23,27 @@ const TABS = [
 export default function AthleteLayout() {
   const { athleteId } = useParams()
   const athlete = useLiveQuery(() => (athleteId ? db.athletes.get(athleteId) : undefined), [athleteId])
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const colorPickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!athlete?.accentColor) return
+    document.documentElement.style.setProperty('--color-accent', athlete.accentColor)
+    return () => {
+      document.documentElement.style.removeProperty('--color-accent')
+    }
+  }, [athlete?.accentColor])
+
+  useEffect(() => {
+    if (!colorPickerOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setColorPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [colorPickerOpen])
 
   if (!athlete) {
     return (
@@ -38,7 +61,35 @@ export default function AthleteLayout() {
         <Link to="/" className="text-muted">
           ←
         </Link>
-        <span className="h-3 w-3 rounded-full" style={{ background: athlete.accentColor }} />
+        <div ref={colorPickerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setColorPickerOpen((v) => !v)}
+            aria-label="Akzentfarbe ändern"
+            className="h-3 w-3 rounded-full"
+            style={{ background: athlete.accentColor }}
+          />
+          {colorPickerOpen && (
+            <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+              {ACCENT_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => {
+                    void db.athletes.update(athlete.id, { accentColor: color })
+                    setColorPickerOpen(false)
+                  }}
+                  aria-label={`Akzentfarbe ${color}`}
+                  className="h-6 w-6 shrink-0 rounded-full"
+                  style={{
+                    background: color,
+                    boxShadow: athlete.accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
         <h1 className="flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
       </header>
 

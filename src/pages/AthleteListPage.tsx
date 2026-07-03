@@ -12,7 +12,7 @@ import {
   exportAllData,
   importAllData,
 } from '../db/db'
-import { createAthlete, deleteAthlete, isoDate } from '../db/queries'
+import { ACCENT_COLORS, createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
@@ -139,7 +139,7 @@ export default function AthleteListPage() {
 
       <div className="flex flex-col gap-3">
         {athletes?.length === 0 && (
-          <Card className="text-center text-sm text-muted">Noch keine Athleten angelegt. Leg den ersten an.</Card>
+          <Card className="text-center text-sm text-muted">👤 Noch keine Athleten angelegt. Leg den ersten an.</Card>
         )}
         {athletes?.map((a) => (
           <Card key={a.id} className="flex items-center justify-between">
@@ -205,6 +205,7 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
   const [weightKg, setWeightKg] = useState(80)
   const [activityLevel, setActivityLevel] = useState(ACTIVITY_LEVELS[2].label)
   const [goal, setGoal] = useState(GOALS[1].label)
+  const [accentColor, setAccentColor] = useState(ACCENT_COLORS[0])
 
   async function submit() {
     if (!name.trim()) return
@@ -219,6 +220,7 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
       proteinPerKg: 2.2,
       fatPerKg: 1,
       startDate: isoDate(new Date()),
+      accentColor,
     })
     onDone()
   }
@@ -262,6 +264,20 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
             </option>
           ))}
         </Select>
+      </Field>
+      <Field label="Akzentfarbe">
+        <div className="flex gap-2">
+          {ACCENT_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => setAccentColor(color)}
+              aria-label={`Akzentfarbe ${color}`}
+              className="h-7 w-7 rounded-full"
+              style={{ background: color, boxShadow: accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none' }}
+            />
+          ))}
+        </div>
       </Field>
       <div className="flex gap-2">
         <Button variant="primary" onClick={submit} className="flex-1">

@@ -56,7 +56,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
     return (
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kraft-Verlauf</h2>
-        <p className="text-sm text-muted">Noch keine Gewichte im Trainingslog erfasst.</p>
+        <p className="text-sm text-muted">💪 Noch keine Gewichte im Trainingslog erfasst.</p>
       </Card>
     )
   }

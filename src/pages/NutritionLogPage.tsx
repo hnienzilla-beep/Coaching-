@@ -200,7 +200,7 @@ export default function NutritionLogPage() {
         </Field>
 
         <div className="flex flex-col gap-3">
-          {groups.length === 0 && <p className="text-sm text-muted">Noch keine Lebensmittel für diesen Tag protokolliert.</p>}
+          {groups.length === 0 && <p className="text-sm text-muted">🍽️ Noch keine Lebensmittel für diesen Tag protokolliert.</p>}
           {groups.map((group) => (
             <div key={group.mealType}>
               <div className="flex items-center justify-between pb-1">
@@ -254,7 +254,7 @@ export default function NutritionLogPage() {
 
       <Card className="flex flex-col gap-1">
         <h2 className="pb-1 text-sm font-semibold uppercase tracking-wide text-muted">Verlauf</h2>
-        {!logs?.length && <p className="text-sm text-muted">Noch keine Ernährungstage aufgezeichnet.</p>}
+        {!logs?.length && <p className="text-sm text-muted">📅 Noch keine Ernährungstage aufgezeichnet.</p>}
         <div className="flex max-h-64 flex-col overflow-y-auto">
           {logs?.map((log) => (
             <button

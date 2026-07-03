@@ -191,7 +191,7 @@ export default function WorkoutLogPage() {
 
       <Card className="flex flex-col gap-1">
         <h2 className="pb-1 text-sm font-semibold uppercase tracking-wide text-muted">Verlauf</h2>
-        {!logs?.length && <p className="text-sm text-muted">Noch keine Trainingseinheiten aufgezeichnet.</p>}
+        {!logs?.length && <p className="text-sm text-muted">🏋️ Noch keine Trainingseinheiten aufgezeichnet.</p>}
         <div className="flex max-h-64 flex-col overflow-y-auto">
           {logs?.map((log) => (
             <button

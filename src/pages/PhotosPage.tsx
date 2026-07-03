@@ -56,7 +56,7 @@ export default function PhotosPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
           Galerie {photos?.length ? `(${photos.length})` : ''}
         </h2>
-        {!photos?.length && <p className="text-sm text-muted">Noch keine Fotos. Füge im Tracking-Tab ein Foto zu einem Tag hinzu.</p>}
+        {!photos?.length && <p className="text-sm text-muted">📷 Noch keine Fotos. Füge im Tracking-Tab ein Foto zu einem Tag hinzu.</p>}
         <div className="grid grid-cols-3 gap-2">
           {photos?.map((p) => (
             <Thumb key={p.id} photo={p} isSelected={selected.includes(p.id)} onToggle={() => toggle(p.id)} />

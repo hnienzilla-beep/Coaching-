@@ -7,12 +7,15 @@ export function pickAccentColor(existingCount: number): string {
   return ACCENT_COLORS[existingCount % ACCENT_COLORS.length]
 }
 
-export async function createAthlete(partial: Omit<Athlete, 'id' | 'accentColor'>): Promise<Athlete> {
+export async function createAthlete(
+  partial: Omit<Athlete, 'id' | 'accentColor'> & { accentColor?: string },
+): Promise<Athlete> {
   const count = await db.athletes.count()
+  const { accentColor, ...rest } = partial
   const athlete: Athlete = {
     id: crypto.randomUUID(),
-    accentColor: pickAccentColor(count),
-    ...partial,
+    accentColor: accentColor ?? pickAccentColor(count),
+    ...rest,
   }
   await db.athletes.add(athlete)
   await createDefaultPlans(athlete.id)

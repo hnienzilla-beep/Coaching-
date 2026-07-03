@@ -206,7 +206,7 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
     return (
       <Card className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Zielgewicht</h2>
-        <p className="text-sm text-muted">Noch keine Trackingdaten für den Fortschritt vorhanden.</p>
+        <p className="text-sm text-muted">📊 Noch keine Trackingdaten für den Fortschritt vorhanden.</p>
       </Card>
     )
   }
