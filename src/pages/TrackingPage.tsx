@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
-import { upsertDailyEntry, isoDate, getTrackingSeries } from '../db/queries'
+import { upsertDailyEntry, isoDate, getTrackingSeries, syncBodyFatToDailyEntry } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
-import { rollingAverage7, weeklyDelta } from '../lib/calculator'
+import { calculateBodyFatFromFfmi, rollingAverage7, weeklyDelta } from '../lib/calculator'
 import { Card, DecimalInput, Field, Input } from '../components/ui'
 
 type Ctx = { athlete: Athlete }
@@ -92,13 +92,14 @@ export default function TrackingPage() {
       </Card>
 
       <DayEditor
-        key={selectedDate}
         athleteId={athlete.id}
         date={selectedDate}
         entry={selectedEntry}
         avg7={avg7}
         delta={delta}
         photoCount={photosByDate.get(selectedDate) ?? 0}
+        ffmi={athlete.ffmi}
+        heightCm={athlete.heightCm}
       />
 
       <Card className="flex flex-col gap-1">
@@ -133,6 +134,8 @@ function DayEditor({
   avg7,
   delta,
   photoCount,
+  ffmi,
+  heightCm,
 }: {
   athleteId: string
   date: string
@@ -140,10 +143,33 @@ function DayEditor({
   avg7?: number
   delta?: number
   photoCount: number
+  ffmi?: number
+  heightCm: number
 }) {
   const current: DailyEntry = entry ?? { id: crypto.randomUUID(), athleteId, date }
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [showSaved, setShowSaved] = useState(false)
+
+  const bodyFatFromFfmi =
+    ffmi !== undefined && current.weightKg !== undefined ? calculateBodyFatFromFfmi(ffmi, current.weightKg, heightCm) : undefined
+
+  // Merkt sich pro Tag den zuletzt automatisch geschriebenen KFA-Wert, damit ein erneuter
+  // Besuch desselben Tages eine manuelle Anpassung nicht überschreibt - nur eine tatsächliche
+  // Änderung von FFMI/Gewicht/Größe (also ein neuer berechneter Wert) löst einen neuen Sync aus.
+  const lastSyncedRef = useRef<Map<string, number>>(new Map())
+
+  useEffect(() => {
+    if (bodyFatFromFfmi === undefined || !Number.isFinite(bodyFatFromFfmi)) return
+    const key = `${athleteId}:${date}`
+    if (lastSyncedRef.current.get(key) === bodyFatFromFfmi) return
+    lastSyncedRef.current.set(key, bodyFatFromFfmi)
+    void syncBodyFatToDailyEntry(athleteId, date, bodyFatFromFfmi)
+  }, [athleteId, date, bodyFatFromFfmi])
+
+  useEffect(() => {
+    setSavedAt(null)
+    setShowSaved(false)
+  }, [date])
 
   useEffect(() => {
     if (savedAt === null) return
@@ -228,6 +254,7 @@ function DayEditor({
           <DecimalInput {...decimalField('leg')} />
         </Field>
       </div>
+      {bodyFatFromFfmi !== undefined && <p className="text-xs text-muted">KFA automatisch aus FFMI berechnet.</p>}
       <Field label="Notizen">
         <textarea
           {...field('notes')}

@@ -134,13 +134,19 @@ export async function getTrackingSeries(athleteId: string, startDate: string): P
   return series
 }
 
+// In eine Transaktion gewrappt, da mehrere Aufrufer (manuelle Eingabe, Ernährungslog-Sync,
+// FFMI/KFA-Sync) für denselben [athleteId+date]-Schlüssel nebenläufig lesen+schreiben können -
+// ohne Transaktion könnten zwei "kein Eintrag vorhanden"-Lesungen jeweils einen eigenen,
+// doppelten Eintrag anlegen.
 export async function upsertDailyEntry(entry: DailyEntry): Promise<void> {
-  const existing = await db.dailyEntries.where('[athleteId+date]').equals([entry.athleteId, entry.date]).first()
-  if (existing) {
-    await db.dailyEntries.update(existing.id, { ...entry, id: existing.id })
-  } else {
-    await db.dailyEntries.add(entry)
-  }
+  await db.transaction('rw', db.dailyEntries, async () => {
+    const existing = await db.dailyEntries.where('[athleteId+date]').equals([entry.athleteId, entry.date]).first()
+    if (existing) {
+      await db.dailyEntries.update(existing.id, { ...entry, id: existing.id })
+    } else {
+      await db.dailyEntries.add(entry)
+    }
+  })
 }
 
 // Übernimmt die Tagessumme aus dem Ernährungslog (abgehakte Einträge) in die
@@ -150,30 +156,34 @@ export async function syncNutritionTotalsToDailyEntry(
   date: string,
   totals: { calories: number; protein: number; carbs: number; fat: number },
 ): Promise<void> {
-  const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
   const rounded = {
     calories: Math.round(totals.calories),
     protein: Math.round(totals.protein),
     carbs: Math.round(totals.carbs),
     fat: Math.round(totals.fat),
   }
-  if (existing) {
-    await db.dailyEntries.update(existing.id, rounded)
-  } else {
-    await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, ...rounded })
-  }
+  await db.transaction('rw', db.dailyEntries, async () => {
+    const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
+    if (existing) {
+      await db.dailyEntries.update(existing.id, rounded)
+    } else {
+      await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, ...rounded })
+    }
+  })
 }
 
-// Übernimmt den aus dem FFMI berechneten KFA-Wert in den heutigen Tracking-Eintrag,
-// ohne andere Felder (Gewicht, Kalorien, Makros, Notizen) anzutasten.
+// Übernimmt den aus dem FFMI berechneten KFA-Wert in den Tracking-Eintrag des jeweiligen
+// Tages, ohne andere Felder (Gewicht, Kalorien, Makros, Notizen) anzutasten.
 export async function syncBodyFatToDailyEntry(athleteId: string, date: string, bodyFatPct: number): Promise<void> {
-  const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
   const rounded = Math.round(bodyFatPct * 10) / 10
-  if (existing) {
-    await db.dailyEntries.update(existing.id, { bodyFatPct: rounded })
-  } else {
-    await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, bodyFatPct: rounded })
-  }
+  await db.transaction('rw', db.dailyEntries, async () => {
+    const existing = await db.dailyEntries.where('[athleteId+date]').equals([athleteId, date]).first()
+    if (existing) {
+      await db.dailyEntries.update(existing.id, { bodyFatPct: rounded })
+    } else {
+      await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, bodyFatPct: rounded })
+    }
+  })
 }
 
 export async function addPlanMeal(meal: PlanMeal): Promise<void> {
