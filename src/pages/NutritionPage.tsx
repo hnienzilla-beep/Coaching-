@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
@@ -12,6 +12,7 @@ import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import { useCoachMode } from '../lib/coachMode'
+import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
@@ -29,7 +30,7 @@ export default function NutritionPage() {
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [draftMeals, setDraftMeals] = useState<PlanMeal[] | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useDragSensors()
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)

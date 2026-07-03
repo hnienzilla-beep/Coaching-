@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { useDragSensors } from '../lib/dragSensors'
 import {
   db,
   ensureAthleteOrder,
@@ -38,7 +39,7 @@ export default function AthleteListPage() {
     return map
   }, [allEntries])
   const sortedAthletes = useMemo(() => [...(athletes ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [athletes])
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useDragSensors()
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event

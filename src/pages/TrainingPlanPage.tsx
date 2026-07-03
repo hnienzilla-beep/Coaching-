@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
@@ -11,6 +11,7 @@ import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
 import { useCoachMode } from '../lib/coachMode'
+import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
@@ -31,7 +32,7 @@ export default function TrainingPlanPage() {
     [currentPlanId],
   )
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+  const sensors = useDragSensors()
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
