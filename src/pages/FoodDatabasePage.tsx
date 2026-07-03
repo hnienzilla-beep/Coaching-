@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
-import { Button, Card, Field, Input } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Input } from '../components/ui'
 import type { FoodItem } from '../models/types'
 
 export default function FoodDatabasePage() {
@@ -72,16 +72,16 @@ function FoodRow({ food }: { food: FoodItem }) {
       <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       <div className="grid grid-cols-4 gap-2">
         <Field label="kcal">
-          <Input type="number" value={form.kcal} onChange={(e) => setForm({ ...form, kcal: Number(e.target.value) })} />
+          <DecimalInput value={form.kcal} onChange={(n) => setForm({ ...form, kcal: n ?? 0 })} />
         </Field>
         <Field label="Protein">
-          <Input type="number" value={form.protein} onChange={(e) => setForm({ ...form, protein: Number(e.target.value) })} />
+          <DecimalInput value={form.protein} onChange={(n) => setForm({ ...form, protein: n ?? 0 })} />
         </Field>
         <Field label="Carbs">
-          <Input type="number" value={form.carbs} onChange={(e) => setForm({ ...form, carbs: Number(e.target.value) })} />
+          <DecimalInput value={form.carbs} onChange={(n) => setForm({ ...form, carbs: n ?? 0 })} />
         </Field>
         <Field label="Fett">
-          <Input type="number" value={form.fat} onChange={(e) => setForm({ ...form, fat: Number(e.target.value) })} />
+          <DecimalInput value={form.fat} onChange={(n) => setForm({ ...form, fat: n ?? 0 })} />
         </Field>
       </div>
       <div className="flex gap-2">
@@ -124,16 +124,16 @@ function NewFoodForm({ onDone }: { onDone: () => void }) {
       <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
       <div className="grid grid-cols-4 gap-2">
         <Field label="kcal">
-          <Input type="number" value={form.kcal} onChange={(e) => setForm({ ...form, kcal: Number(e.target.value) })} />
+          <DecimalInput value={form.kcal} onChange={(n) => setForm({ ...form, kcal: n ?? 0 })} />
         </Field>
         <Field label="Protein">
-          <Input type="number" value={form.protein} onChange={(e) => setForm({ ...form, protein: Number(e.target.value) })} />
+          <DecimalInput value={form.protein} onChange={(n) => setForm({ ...form, protein: n ?? 0 })} />
         </Field>
         <Field label="Carbs">
-          <Input type="number" value={form.carbs} onChange={(e) => setForm({ ...form, carbs: Number(e.target.value) })} />
+          <DecimalInput value={form.carbs} onChange={(n) => setForm({ ...form, carbs: n ?? 0 })} />
         </Field>
         <Field label="Fett">
-          <Input type="number" value={form.fat} onChange={(e) => setForm({ ...form, fat: Number(e.target.value) })} />
+          <DecimalInput value={form.fat} onChange={(n) => setForm({ ...form, fat: n ?? 0 })} />
         </Field>
       </div>
       <div className="flex gap-2">

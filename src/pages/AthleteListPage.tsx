@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import {
@@ -21,6 +21,18 @@ import { useCoachMode } from '../lib/coachMode'
 
 export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
+  const allEntries = useLiveQuery(() => db.dailyEntries.toArray(), [])
+  const latestWeightByAthlete = useMemo(() => {
+    const map = new Map<string, { date: string; weightKg: number }>()
+    for (const e of allEntries ?? []) {
+      if (e.weightKg === undefined) continue
+      const existing = map.get(e.athleteId)
+      if (!existing || e.date > existing.date) {
+        map.set(e.athleteId, { date: e.date, weightKg: e.weightKg })
+      }
+    }
+    return map
+  }, [allEntries])
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
   const [coachMode, setCoachMode] = useCoachMode()
@@ -148,7 +160,7 @@ export default function AthleteListPage() {
               <div>
                 <div className="font-semibold text-fg">{a.name}</div>
                 <div className="text-xs text-muted">
-                  {a.weightKg} kg · {a.goal}
+                  {latestWeightByAthlete.get(a.id)?.weightKg ?? a.weightKg} kg · {a.goal}
                 </div>
               </div>
             </Link>
