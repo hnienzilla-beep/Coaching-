@@ -93,15 +93,15 @@ export default function AthleteLayout() {
         <h1 className="flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
       </header>
 
-      <nav className="grid grid-cols-4 border-b border-border">
+      <nav className="grid grid-cols-4 gap-1.5 border-b border-border bg-surface-2 p-2">
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
             to={`/athlete/${athleteId}${tab.to ? `/${tab.to}` : ''}`}
             end={tab.end}
             className={({ isActive }) =>
-              `truncate border-b-2 px-1 py-2.5 text-center text-[11px] font-medium leading-tight ${
-                isActive ? 'border-accent text-accent' : 'border-transparent text-muted'
+              `truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition active:scale-95 ${
+                isActive ? 'bg-accent text-black shadow-sm shadow-black/20' : 'text-muted hover:text-fg'
               }`
             }
           >
