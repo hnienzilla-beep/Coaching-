@@ -4,6 +4,7 @@ export interface Athlete {
   id: string
   name: string
   accentColor: string
+  order: number
   gender: Gender
   age: number
   heightCm: number

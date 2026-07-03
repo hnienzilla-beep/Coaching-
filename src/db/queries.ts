@@ -1,20 +1,34 @@
 import { db } from './db'
 import type { Athlete, DailyEntry, NutritionLog, PlanMeal, WorkoutLog } from '../models/types'
 
-export const ACCENT_COLORS = ['#a3e635', '#22d3ee', '#f472b6', '#fb923c', '#c084fc', '#facc15']
+export const ACCENT_COLORS = [
+  '#a3e635', // lime
+  '#22d3ee', // cyan
+  '#f472b6', // pink
+  '#fb923c', // orange
+  '#c084fc', // purple
+  '#facc15', // yellow
+  '#38bdf8', // sky
+  '#34d399', // emerald
+  '#fb7185', // rose
+  '#818cf8', // indigo
+  '#2dd4bf', // teal
+  '#e879f9', // fuchsia
+]
 
 export function pickAccentColor(existingCount: number): string {
   return ACCENT_COLORS[existingCount % ACCENT_COLORS.length]
 }
 
 export async function createAthlete(
-  partial: Omit<Athlete, 'id' | 'accentColor'> & { accentColor?: string },
+  partial: Omit<Athlete, 'id' | 'accentColor' | 'order'> & { accentColor?: string },
 ): Promise<Athlete> {
   const count = await db.athletes.count()
   const { accentColor, ...rest } = partial
   const athlete: Athlete = {
     id: crypto.randomUUID(),
     accentColor: accentColor ?? pickAccentColor(count),
+    order: count,
     ...rest,
   }
   await db.athletes.add(athlete)

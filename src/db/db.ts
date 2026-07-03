@@ -167,6 +167,19 @@ export async function ensurePlanMealOrder(): Promise<void> {
   })
 }
 
+// Bestandsathleten (vor Einführung von order) bekommen eine Reihenfolge nach aktueller Reihenfolge.
+export async function ensureAthleteOrder(): Promise<void> {
+  await db.transaction('rw', db.athletes, async () => {
+    const all = await db.athletes.toArray()
+    const missingOrder = all.filter((a) => a.order === undefined)
+    if (missingOrder.length === 0) return
+    const maxOrder = all.reduce((max, a) => (a.order !== undefined && a.order > max ? a.order : max), -1)
+    for (let i = 0; i < missingOrder.length; i++) {
+      await db.athletes.update(missingOrder[i].id, { order: maxOrder + 1 + i })
+    }
+  })
+}
+
 // Migriert alte WorkoutLogExercise-Datensätze (mit sets/reps/weightKg direkt am Datensatz)
 // zu einzelnen WorkoutSet-Zeilen, damit bereits geloggte Trainingsdaten nicht verloren gehen.
 export async function ensureWorkoutSetMigration(): Promise<void> {

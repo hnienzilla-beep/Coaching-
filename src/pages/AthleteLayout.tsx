@@ -70,7 +70,7 @@ export default function AthleteLayout() {
             style={{ background: athlete.accentColor }}
           />
           {colorPickerOpen && (
-            <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+            <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
               {ACCENT_COLORS.map((color) => (
                 <button
                   key={color}

@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   db,
+  ensureAthleteOrder,
   ensureExerciseSeed,
   ensureFoodSeed,
   ensurePlanMealOrder,
@@ -14,7 +18,7 @@ import {
 } from '../db/db'
 import { ACCENT_COLORS, createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
-import type { Gender } from '../models/types'
+import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
 import { useCoachMode } from '../lib/coachMode'
@@ -33,6 +37,23 @@ export default function AthleteListPage() {
     }
     return map
   }, [allEntries])
+  const sortedAthletes = useMemo(() => [...(athletes ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [athletes])
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sortedAthletes.findIndex((a) => a.id === active.id)
+    const newIndex = sortedAthletes.findIndex((a) => a.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(sortedAthletes, oldIndex, newIndex)
+    await db.transaction('rw', db.athletes, async () => {
+      for (let i = 0; i < reordered.length; i++) {
+        await db.athletes.update(reordered[i].id, { order: i })
+      }
+    })
+  }
+
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
   const [coachMode, setCoachMode] = useCoachMode()
@@ -80,6 +101,7 @@ export default function AthleteListPage() {
     ensureTrainingPlanExerciseOrder()
     ensureWorkoutSetMigration()
     ensurePlanMealOrder()
+    ensureAthleteOrder()
   }, [])
 
   useEffect(() => {
@@ -149,35 +171,19 @@ export default function AthleteListPage() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-3">
-        {athletes?.length === 0 && (
-          <Card className="text-center text-sm text-muted">👤 Noch keine Athleten angelegt. Leg den ersten an.</Card>
-        )}
-        {athletes?.map((a) => (
-          <Card key={a.id} className="flex items-center justify-between">
-            <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
-              <div>
-                <div className="font-semibold text-fg">{a.name}</div>
-                <div className="text-xs text-muted">
-                  {latestWeightByAthlete.get(a.id)?.weightKg ?? a.weightKg} kg · {a.goal}
-                </div>
-              </div>
-            </Link>
-            <Button
-              variant="danger"
-              onClick={async (e) => {
-                e.preventDefault()
-                if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) {
-                  await deleteAthlete(a.id)
-                }
-              }}
-            >
-              Löschen
-            </Button>
-          </Card>
-        ))}
-      </div>
+      {athletes?.length === 0 ? (
+        <Card className="text-center text-sm text-muted">👤 Noch keine Athleten angelegt. Leg den ersten an.</Card>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sortedAthletes.map((a) => a.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-3">
+              {sortedAthletes.map((a) => (
+                <SortableAthleteCard key={a.id} athlete={a} weightKg={latestWeightByAthlete.get(a.id)?.weightKg} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
       {showForm ? (
         <NewAthleteForm onDone={() => setShowForm(false)} />
@@ -205,6 +211,48 @@ export default function AthleteListPage() {
           }}
         />
       </div>
+    </div>
+  )
+}
+
+function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weightKg: number | undefined }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: a.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="flex items-center gap-2 rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        type="button"
+        className="shrink-0 touch-none px-1 text-lg text-muted"
+        aria-label="Verschieben"
+      >
+        ⠿
+      </button>
+      <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
+        <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
+        <div>
+          <div className="font-semibold text-fg">{a.name}</div>
+          <div className="text-xs text-muted">
+            {weightKg ?? a.weightKg} kg · {a.goal}
+          </div>
+        </div>
+      </Link>
+      <Button
+        variant="danger"
+        onClick={async (e) => {
+          e.preventDefault()
+          if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) {
+            await deleteAthlete(a.id)
+          }
+        }}
+      >
+        Löschen
+      </Button>
     </div>
   )
 }
@@ -278,7 +326,7 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
         </Select>
       </Field>
       <Field label="Akzentfarbe">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {ACCENT_COLORS.map((color) => (
             <button
               key={color}

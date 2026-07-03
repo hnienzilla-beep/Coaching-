@@ -82,7 +82,7 @@ export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       {...props}
-      className={`min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
+      className={`min-w-0 rounded-lg border border-accent bg-surface-2 px-3 py-2 text-sm text-fg outline-none ${props.className ?? ''}`}
     >
       {children}
     </select>
