@@ -270,13 +270,31 @@ function ImportAthleteSelector({
             Keine
           </Button>
         </div>
-        <div className="flex flex-col gap-1 overflow-y-auto">
+        <div className="flex flex-col gap-2 overflow-y-auto">
           {athletes.map((a) => (
-            <label key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-2">
-              <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggle(a.id)} />
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => toggle(a.id)}
+              className="flex items-center gap-3 rounded-xl border-2 p-3 text-left transition"
+              style={{
+                borderColor: selected.has(a.id) ? a.accentColor : 'var(--color-border)',
+                background: selected.has(a.id) ? `${a.accentColor}1a` : 'var(--color-surface-2)',
+              }}
+            >
               <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
-              <span className="text-fg">{a.name}</span>
-            </label>
+              <div className="flex-1">
+                <div className="font-semibold text-fg">{a.name}</div>
+                <div className="text-xs text-muted">
+                  {a.weightKg} kg · {a.goal}
+                </div>
+              </div>
+              {selected.has(a.id) && (
+                <span className="text-lg" style={{ color: a.accentColor }}>
+                  ✓
+                </span>
+              )}
+            </button>
           ))}
         </div>
         <p className="text-xs text-muted">Import überschreibt vorhandene Daten mit gleicher ID.</p>
