@@ -429,20 +429,6 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
           </div>
         </div>
       </Link>
-      <button
-        type="button"
-        onClick={async (e) => {
-          e.preventDefault()
-          const json = await exportAthletes([a.id])
-          const file = new File([json], `Athlet-${a.name}-${isoDate(new Date())}.json`, { type: 'application/json' })
-          await shareOrDownloadFile(file)
-        }}
-        aria-label="Athlet exportieren"
-        title="Athlet exportieren"
-        className="shrink-0 rounded-lg border border-border bg-surface-2 p-2 text-sm leading-none text-muted hover:border-accent"
-      >
-        ⬆️
-      </button>
       <Button
         variant="danger"
         onClick={async (e) => {
