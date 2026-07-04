@@ -236,6 +236,87 @@ export async function importAllData(json: string): Promise<void> {
   })
 }
 
+// Filtert ein vollständiges Backup-`data`-Objekt (gleiche Struktur wie exportAllData/
+// importAllData) auf nur die zu den angegebenen Athleten gehörenden Zeilen - direkt über
+// athleteId, transitiv über planId/workoutLogId/nutritionLogId für die jeweils
+// abhängigen Tabellen. Globale Referenztabellen (foodItems/supplements/exercises) werden
+// unverändert komplett durchgereicht, da bulkPut ein reines Upsert ist und nichts
+// Bestehendes überschreibt.
+function filterDataToAthletes(data: Record<string, Record<string, unknown>[]>, athleteIds: string[]): Record<string, Record<string, unknown>[]> {
+  const athleteIdSet = new Set(athleteIds)
+  const byAthlete = (rows: Record<string, unknown>[] | undefined) => (rows ?? []).filter((r) => athleteIdSet.has(r.athleteId as string))
+
+  const athletes = (data.athletes ?? []).filter((a) => athleteIdSet.has(a.id as string))
+  const dailyEntries = byAthlete(data.dailyEntries)
+  const progressPhotos = byAthlete(data.progressPhotos)
+  const nutritionPlans = byAthlete(data.nutritionPlans)
+  const supplementPlans = byAthlete(data.supplementPlans)
+  const trainingPlans = byAthlete(data.trainingPlans)
+  const workoutLogs = byAthlete(data.workoutLogs)
+  const nutritionLogs = byAthlete(data.nutritionLogs)
+
+  const nutritionPlanIds = new Set(nutritionPlans.map((p) => p.id))
+  const planMeals = (data.planMeals ?? []).filter((m) => nutritionPlanIds.has(m.planId))
+
+  const supplementPlanIds = new Set(supplementPlans.map((p) => p.id))
+  const supplementPlanItems = (data.supplementPlanItems ?? []).filter((i) => supplementPlanIds.has(i.planId))
+
+  const trainingPlanIds = new Set(trainingPlans.map((p) => p.id))
+  const trainingPlanExercises = (data.trainingPlanExercises ?? []).filter((e) => trainingPlanIds.has(e.planId))
+
+  const workoutLogIds = new Set(workoutLogs.map((w) => w.id))
+  const workoutLogExercises = (data.workoutLogExercises ?? []).filter((e) => workoutLogIds.has(e.workoutLogId))
+
+  const workoutLogExerciseIds = new Set(workoutLogExercises.map((e) => e.id))
+  const workoutSets = (data.workoutSets ?? []).filter((s) => workoutLogExerciseIds.has(s.workoutLogExerciseId))
+
+  const nutritionLogIds = new Set(nutritionLogs.map((n) => n.id))
+  const nutritionLogItems = (data.nutritionLogItems ?? []).filter((i) => nutritionLogIds.has(i.nutritionLogId))
+
+  return {
+    athletes,
+    dailyEntries,
+    progressPhotos,
+    nutritionPlans,
+    planMeals,
+    supplementPlans,
+    supplementPlanItems,
+    trainingPlans,
+    trainingPlanExercises,
+    workoutLogs,
+    workoutLogExercises,
+    workoutSets,
+    nutritionLogs,
+    nutritionLogItems,
+    foodItems: data.foodItems ?? [],
+    supplements: data.supplements ?? [],
+    exercises: data.exercises ?? [],
+  }
+}
+
+export async function exportAthlete(athleteId: string): Promise<string> {
+  const full = JSON.parse(await exportAllData()) as { data: Record<string, Record<string, unknown>[]> }
+  const filtered = filterDataToAthletes(full.data, [athleteId])
+  return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data: filtered })
+}
+
+export async function importSelectedAthletes(json: string, athleteIds: string[]): Promise<void> {
+  const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
+  const filtered = filterDataToAthletes(parsed.data, athleteIds)
+  await db.transaction('rw', db.tables, async () => {
+    for (const table of db.tables) {
+      const rows = filtered[table.name]
+      if (!rows) continue
+      if (table.name === 'progressPhotos') {
+        const converted = await Promise.all(rows.map(async (r) => ({ ...r, blob: await base64ToBlob(r.blob as string) })))
+        await table.bulkPut(converted)
+      } else {
+        await table.bulkPut(rows)
+      }
+    }
+  })
+}
+
 // Plan-Vorlagen (einzelne Phase/Tag) als portables JSON exportieren/importieren.
 // Referenzen (Lebensmittel/Supplemente/Übungen) werden über den Namen aufgelöst, da
 // IDs pro Browser-Profil zufällig generiert werden und daher nicht athletenübergreifend

@@ -5,6 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useDragSensors } from '../lib/dragSensors'
+import { shareOrDownloadFile } from '../lib/share'
 import {
   db,
   ensureAthleteOrder,
@@ -15,7 +16,9 @@ import {
   ensureTrainingPlanExerciseOrder,
   ensureWorkoutSetMigration,
   exportAllData,
+  exportAthlete,
   importAllData,
+  importSelectedAthletes,
 } from '../db/db'
 import { ACCENT_COLORS, createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
@@ -61,6 +64,7 @@ export default function AthleteListPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [pendingImport, setPendingImport] = useState<{ text: string; athletes: Athlete[] } | null>(null)
 
   async function handleExport() {
     const json = await exportAllData()
@@ -85,9 +89,15 @@ export default function AthleteListPage() {
   async function handleImport(fileList: FileList | null) {
     const file = fileList?.[0]
     if (!file) return
-    if (!confirm('Import überschreibt vorhandene Daten mit gleicher ID. Fortfahren?')) return
     const text = await file.text()
     try {
+      const parsed = JSON.parse(text) as { data?: { athletes?: Athlete[] } }
+      const athletesInFile = parsed.data?.athletes ?? []
+      if (athletesInFile.length > 1) {
+        setPendingImport({ text, athletes: athletesInFile })
+        return
+      }
+      if (!confirm('Import überschreibt vorhandene Daten mit gleicher ID. Fortfahren?')) return
       await importAllData(text)
       alert('Import abgeschlossen.')
     } catch {
@@ -212,6 +222,77 @@ export default function AthleteListPage() {
           }}
         />
       </div>
+
+      {pendingImport && (
+        <ImportAthleteSelector
+          athletes={pendingImport.athletes}
+          onCancel={() => setPendingImport(null)}
+          onConfirm={async (selectedIds) => {
+            await importSelectedAthletes(pendingImport.text, selectedIds)
+            setPendingImport(null)
+            alert('Import abgeschlossen.')
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ImportAthleteSelector({
+  athletes,
+  onCancel,
+  onConfirm,
+}: {
+  athletes: Athlete[]
+  onCancel: () => void
+  onConfirm: (selectedIds: string[]) => Promise<void>
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="flex max-h-[80vh] w-full max-w-md flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Athleten zum Importieren auswählen</h2>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setSelected(new Set(athletes.map((a) => a.id)))}>
+            Alle auswählen
+          </Button>
+          <Button variant="ghost" onClick={() => setSelected(new Set())}>
+            Keine
+          </Button>
+        </div>
+        <div className="flex flex-col gap-1 overflow-y-auto">
+          {athletes.map((a) => (
+            <label key={a.id} className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-2">
+              <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggle(a.id)} />
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
+              <span className="text-fg">{a.name}</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            className="flex-1"
+            disabled={selected.size === 0}
+            onClick={() => onConfirm([...selected])}
+          >
+            Importieren ({selected.size})
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Abbrechen
+          </Button>
+        </div>
+      </Card>
     </div>
   )
 }
@@ -243,6 +324,20 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
           </div>
         </div>
       </Link>
+      <button
+        type="button"
+        onClick={async (e) => {
+          e.preventDefault()
+          const json = await exportAthlete(a.id)
+          const file = new File([json], `Athlet-${a.name}-${isoDate(new Date())}.json`, { type: 'application/json' })
+          await shareOrDownloadFile(file)
+        }}
+        aria-label="Athlet exportieren"
+        title="Athlet exportieren"
+        className="shrink-0 rounded-lg border border-border bg-surface-2 p-2 text-sm leading-none text-muted hover:border-accent"
+      >
+        ⬆️
+      </button>
       <Button
         variant="danger"
         onClick={async (e) => {
