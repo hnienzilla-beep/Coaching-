@@ -294,9 +294,9 @@ function filterDataToAthletes(data: Record<string, Record<string, unknown>[]>, a
   }
 }
 
-export async function exportAthlete(athleteId: string): Promise<string> {
+export async function exportAthletes(athleteIds: string[]): Promise<string> {
   const full = JSON.parse(await exportAllData()) as { data: Record<string, Record<string, unknown>[]> }
-  const filtered = filterDataToAthletes(full.data, [athleteId])
+  const filtered = filterDataToAthletes(full.data, athleteIds)
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data: filtered })
 }
 

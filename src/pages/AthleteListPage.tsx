@@ -16,7 +16,7 @@ import {
   ensureTrainingPlanExerciseOrder,
   ensureWorkoutSetMigration,
   exportAllData,
-  exportAthlete,
+  exportAthletes,
   importAllData,
   importSelectedAthletes,
 } from '../db/db'
@@ -65,6 +65,7 @@ export default function AthleteListPage() {
   const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const [pendingImport, setPendingImport] = useState<{ text: string; athletes: Athlete[] } | null>(null)
+  const [exportSelectorOpen, setExportSelectorOpen] = useState(false)
 
   async function handleExport() {
     const json = await exportAllData()
@@ -204,6 +205,12 @@ export default function AthleteListPage() {
         </Button>
       )}
 
+      {athletes && athletes.length > 0 && (
+        <Button variant="secondary" onClick={() => setExportSelectorOpen(true)}>
+          Athleten exportieren
+        </Button>
+      )}
+
       <div className="flex gap-2">
         <Button variant="secondary" onClick={handleExport} className="flex-1">
           Daten exportieren
@@ -234,8 +241,80 @@ export default function AthleteListPage() {
           }}
         />
       )}
+
+      {exportSelectorOpen && (
+        <ExportAthleteSelector
+          athletes={sortedAthletes}
+          onCancel={() => setExportSelectorOpen(false)}
+          onConfirm={async (selectedIds) => {
+            const json = await exportAthletes(selectedIds)
+            const name =
+              selectedIds.length === 1
+                ? (sortedAthletes.find((a) => a.id === selectedIds[0])?.name ?? 'Athlet')
+                : `${selectedIds.length}-Athleten`
+            const file = new File([json], `Athleten-Export-${name}-${isoDate(new Date())}.json`, { type: 'application/json' })
+            await shareOrDownloadFile(file)
+            setExportSelectorOpen(false)
+          }}
+        />
+      )}
     </div>
   )
+}
+
+function AthleteTileList({
+  athletes,
+  selected,
+  onToggle,
+}: {
+  athletes: Athlete[]
+  selected: Set<string>
+  onToggle: (id: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2 overflow-y-auto">
+      {athletes.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => onToggle(a.id)}
+          className="flex items-center gap-3 rounded-xl border-2 p-3 text-left transition"
+          style={{
+            borderColor: selected.has(a.id) ? a.accentColor : 'var(--color-border)',
+            background: selected.has(a.id) ? `${a.accentColor}1a` : 'var(--color-surface-2)',
+          }}
+        >
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
+          <div className="flex-1">
+            <div className="font-semibold text-fg">{a.name}</div>
+            <div className="text-xs text-muted">
+              {a.weightKg} kg · {a.goal}
+            </div>
+          </div>
+          {selected.has(a.id) && (
+            <span className="text-lg" style={{ color: a.accentColor }}>
+              ✓
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function useAthleteSelection() {
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return { selected, toggle, setSelected }
 }
 
 function ImportAthleteSelector({
@@ -247,16 +326,7 @@ function ImportAthleteSelector({
   onCancel: () => void
   onConfirm: (selectedIds: string[]) => Promise<void>
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const { selected, toggle, setSelected } = useAthleteSelection()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -270,33 +340,7 @@ function ImportAthleteSelector({
             Keine
           </Button>
         </div>
-        <div className="flex flex-col gap-2 overflow-y-auto">
-          {athletes.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => toggle(a.id)}
-              className="flex items-center gap-3 rounded-xl border-2 p-3 text-left transition"
-              style={{
-                borderColor: selected.has(a.id) ? a.accentColor : 'var(--color-border)',
-                background: selected.has(a.id) ? `${a.accentColor}1a` : 'var(--color-surface-2)',
-              }}
-            >
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
-              <div className="flex-1">
-                <div className="font-semibold text-fg">{a.name}</div>
-                <div className="text-xs text-muted">
-                  {a.weightKg} kg · {a.goal}
-                </div>
-              </div>
-              {selected.has(a.id) && (
-                <span className="text-lg" style={{ color: a.accentColor }}>
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        <AthleteTileList athletes={athletes} selected={selected} onToggle={toggle} />
         <p className="text-xs text-muted">Import überschreibt vorhandene Daten mit gleicher ID.</p>
         <div className="flex gap-2">
           <Button
@@ -306,6 +350,48 @@ function ImportAthleteSelector({
             onClick={() => onConfirm([...selected])}
           >
             Importieren ({selected.size})
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Abbrechen
+          </Button>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function ExportAthleteSelector({
+  athletes,
+  onCancel,
+  onConfirm,
+}: {
+  athletes: Athlete[]
+  onCancel: () => void
+  onConfirm: (selectedIds: string[]) => Promise<void>
+}) {
+  const { selected, toggle, setSelected } = useAthleteSelection()
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="flex max-h-[80vh] w-full max-w-md flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Athleten zum Exportieren auswählen</h2>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setSelected(new Set(athletes.map((a) => a.id)))}>
+            Alle auswählen
+          </Button>
+          <Button variant="ghost" onClick={() => setSelected(new Set())}>
+            Keine
+          </Button>
+        </div>
+        <AthleteTileList athletes={athletes} selected={selected} onToggle={toggle} />
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            className="flex-1"
+            disabled={selected.size === 0}
+            onClick={() => onConfirm([...selected])}
+          >
+            Exportieren ({selected.size})
           </Button>
           <Button variant="ghost" onClick={onCancel}>
             Abbrechen
@@ -347,7 +433,7 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
         type="button"
         onClick={async (e) => {
           e.preventDefault()
-          const json = await exportAthlete(a.id)
+          const json = await exportAthletes([a.id])
           const file = new File([json], `Athlet-${a.name}-${isoDate(new Date())}.json`, { type: 'application/json' })
           await shareOrDownloadFile(file)
         }}
