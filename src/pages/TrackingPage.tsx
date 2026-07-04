@@ -40,12 +40,12 @@ export default function TrackingPage() {
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Gewicht &amp; KFA</h2>
-        <div className="h-40">
+        <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
               <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="weight" stroke="#60a5fa" dot={false} name="Gewicht (kg)" connectNulls />
               <Line type="monotone" dataKey="weightAvg7" stroke="#a3e635" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
@@ -60,9 +60,9 @@ export default function TrackingPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="h-32">
+        <div className="h-36">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
               <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
@@ -75,12 +75,12 @@ export default function TrackingPage() {
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körpermaße</h2>
-        <div className="h-40">
+        <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
               <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
               <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
