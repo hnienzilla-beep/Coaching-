@@ -1,4 +1,5 @@
 import type { Gender } from '../models/types'
+import { addDays } from '../db/queries'
 
 // Portiert aus dem "Daten"-Blatt der Excel-Vorlage
 export const ACTIVITY_LEVELS: { label: string; factor: number }[] = [
@@ -119,4 +120,39 @@ export function weeklyDelta(points: WeightPoint[], index: number): number | unde
   const previous = points[index - 7]?.weightKg
   if (typeof current !== 'number' || typeof previous !== 'number') return undefined
   return current - previous
+}
+
+function mondayOf(dateIso: string): string {
+  const d = new Date(dateIso + 'T00:00:00Z')
+  const day = d.getUTCDay() // 0=So, 1=Mo, ..., 6=Sa
+  return addDays(dateIso, day === 0 ? -6 : 1 - day)
+}
+
+export interface CalendarWeekComparison {
+  thisWeekAvg: number
+  lastWeekAvg: number
+  deltaKg: number
+}
+
+// Vergleicht den Gewichts-Durchschnitt der aktuellen ISO-Kalenderwoche (Montag-Sonntag,
+// bis "today") mit dem Durchschnitt der vorigen vollständigen Kalenderwoche - im
+// Unterschied zu weeklyDelta (rollierendes 7-Tage-Fenster, punktgenau) eine feste,
+// kalendarische Wochengrenze.
+export function calendarWeekWeightDelta(points: WeightPoint[], today: string): CalendarWeekComparison | undefined {
+  const thisMonday = mondayOf(today)
+  const lastMonday = addDays(thisMonday, -7)
+
+  function avgInWeek(mondayIso: string): number | undefined {
+    const end = addDays(mondayIso, 7)
+    const values = points
+      .filter((p) => p.date >= mondayIso && p.date < end && typeof p.weightKg === 'number')
+      .map((p) => p.weightKg as number)
+    if (values.length === 0) return undefined
+    return values.reduce((a, b) => a + b, 0) / values.length
+  }
+
+  const thisWeekAvg = avgInWeek(thisMonday)
+  const lastWeekAvg = avgInWeek(lastMonday)
+  if (thisWeekAvg === undefined || lastWeekAvg === undefined) return undefined
+  return { thisWeekAvg, lastWeekAvg, deltaKg: thisWeekAvg - lastWeekAvg }
 }

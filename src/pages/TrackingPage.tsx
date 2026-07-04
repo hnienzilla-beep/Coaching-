@@ -5,7 +5,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { db } from '../db/db'
 import { upsertDailyEntry, isoDate, getTrackingSeries, syncBodyFatToDailyEntry } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
-import { calculateBodyFatFromFfmi, rollingAverage7, weeklyDelta } from '../lib/calculator'
+import { calculateBodyFatFromFfmi, calendarWeekWeightDelta, rollingAverage7, weeklyDelta } from '../lib/calculator'
 import { Card, DecimalInput, Field, Input } from '../components/ui'
 
 type Ctx = { athlete: Athlete }
@@ -27,6 +27,7 @@ export default function TrackingPage() {
   }))
 
   const today = isoDate(new Date())
+  const calendarWeekComparison = calendarWeekWeightDelta(series, today)
   const [selectedDate, setSelectedDate] = useState(today)
   const selectedIndex = series.findIndex((e) => e.date === selectedDate)
   const selectedEntry = selectedIndex >= 0 ? series[selectedIndex] : undefined
@@ -71,6 +72,25 @@ export default function TrackingPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </Card>
+
+      <Card className="flex flex-col gap-1">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kalenderwochen-Vergleich</h2>
+        {calendarWeekComparison ? (
+          <>
+            <p className="text-lg font-semibold text-fg">
+              {calendarWeekComparison.deltaKg === 0
+                ? 'Gewicht gehalten'
+                : `${Math.abs(calendarWeekComparison.deltaKg).toFixed(1)} kg ${calendarWeekComparison.deltaKg < 0 ? 'abgenommen' : 'zugenommen'}`}
+            </p>
+            <p className="text-xs text-muted">
+              Ø {calendarWeekComparison.thisWeekAvg.toFixed(1)} kg diese Woche · Ø {calendarWeekComparison.lastWeekAvg.toFixed(1)} kg letzte
+              Woche
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-muted">📊 Noch nicht genug Daten für einen Kalenderwochen-Vergleich.</p>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-3">
