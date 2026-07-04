@@ -93,7 +93,7 @@ export default function AthleteListPage() {
     try {
       const parsed = JSON.parse(text) as { data?: { athletes?: Athlete[] } }
       const athletesInFile = parsed.data?.athletes ?? []
-      if (athletesInFile.length > 1) {
+      if (athletesInFile.length > 0) {
         setPendingImport({ text, athletes: athletesInFile })
         return
       }
@@ -279,6 +279,7 @@ function ImportAthleteSelector({
             </label>
           ))}
         </div>
+        <p className="text-xs text-muted">Import überschreibt vorhandene Daten mit gleicher ID.</p>
         <div className="flex gap-2">
           <Button
             variant="primary"
