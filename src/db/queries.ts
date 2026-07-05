@@ -1,5 +1,5 @@
 import { db } from './db'
-import type { Athlete, DailyEntry, NutritionLog, PlanMeal, WorkoutLog } from '../models/types'
+import type { Athlete, DailyEntry, NutritionLog, PlanMeal, WorkoutLog, WorkoutSet } from '../models/types'
 
 export const ACCENT_COLORS = [
   '#a3e635', // lime
@@ -225,4 +225,27 @@ export async function getOrCreateNutritionLog(athleteId: string, date: string): 
   const log: NutritionLog = { id: crypto.randomUUID(), athleteId, date }
   await db.nutritionLogs.add(log)
   return log
+}
+
+// Sucht rückwärts-chronologisch die letzte Trainingseinheit vor beforeDate, in der die
+// gegebene Übung vorkam, und liefert deren Sätze als Referenz für die aktuelle Session.
+export async function getLastExercisePerformance(
+  athleteId: string,
+  exerciseId: string,
+  beforeDate: string,
+): Promise<{ date: string; sets: WorkoutSet[] } | undefined> {
+  const logs = await db.workoutLogs.where('athleteId').equals(athleteId).reverse().sortBy('date')
+  for (const log of logs) {
+    if (log.date >= beforeDate) continue
+    const logExercise = await db.workoutLogExercises
+      .where('workoutLogId')
+      .equals(log.id)
+      .and((e) => e.exerciseId === exerciseId)
+      .first()
+    if (logExercise) {
+      const sets = await db.workoutSets.where('workoutLogExerciseId').equals(logExercise.id).sortBy('setNumber')
+      return { date: log.date, sets }
+    }
+  }
+  return undefined
 }

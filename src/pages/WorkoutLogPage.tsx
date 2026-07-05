@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { getOrCreateWorkoutLog, isoDate } from '../db/queries'
+import { getLastExercisePerformance, getOrCreateWorkoutLog, isoDate } from '../db/queries'
 import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
@@ -160,6 +160,8 @@ export default function WorkoutLogPage() {
               pickerItems={pickerItems}
               muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
               planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+              athleteId={athlete.id}
+              date={selectedDate}
               onDelete={() => deleteExerciseRow(row.id)}
             />
           ))}
@@ -220,6 +222,8 @@ function WorkoutExerciseRow({
   pickerItems,
   muscleGroup,
   planExercise,
+  athleteId,
+  date,
   onDelete,
 }: {
   rowId: string
@@ -227,9 +231,15 @@ function WorkoutExerciseRow({
   pickerItems: { id: string; label: string; sublabel?: string }[]
   muscleGroup?: string
   planExercise?: TrainingPlanExercise
+  athleteId: string
+  date: string
   onDelete: () => void
 }) {
   const sets = useLiveQuery(() => db.workoutSets.where('workoutLogExerciseId').equals(rowId).sortBy('setNumber'), [rowId]) ?? []
+  const lastPerformance = useLiveQuery(
+    () => getLastExercisePerformance(athleteId, exerciseId, date),
+    [athleteId, exerciseId, date],
+  )
 
   async function addSet() {
     const last = sets[sets.length - 1]
@@ -273,6 +283,11 @@ function WorkoutExerciseRow({
         </Button>
       </div>
       {muscleGroup && <div className="pl-1 text-xs text-muted">{muscleGroup}</div>}
+      {lastPerformance && (
+        <div className="pl-1 text-xs text-muted">
+          Letztes Mal ({lastPerformance.date}): {lastPerformance.sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'} kg`).join(' · ')}
+        </div>
+      )}
 
       <div className="flex flex-col gap-1.5">
         {sets.map((set) => (
