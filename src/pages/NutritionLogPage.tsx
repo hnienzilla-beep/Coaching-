@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, isoDate, syncNutritionTotalsToDailyEntry } from '../db/queries'
-import { calculate } from '../lib/calculator'
+import { calculate, mealTypeForTime } from '../lib/calculator'
 import type { Athlete, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, Select } from '../components/ui'
@@ -94,7 +94,7 @@ export default function NutritionLogPage() {
     await db.nutritionLogItems.add({
       id: crypto.randomUUID(),
       nutritionLogId: log.id,
-      mealType: MEAL_TYPES[0],
+      mealType: mealTypeForTime(),
       foodItemId: '',
       grams: 100,
       order: items?.length ?? 0,

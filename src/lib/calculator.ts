@@ -1,4 +1,4 @@
-import type { Gender } from '../models/types'
+import type { Gender, MealType } from '../models/types'
 import { addDays } from '../db/queries'
 
 // Portiert aus dem "Daten"-Blatt der Excel-Vorlage
@@ -155,4 +155,17 @@ export function calendarWeekWeightDelta(points: WeightPoint[], today: string): C
   const lastWeekAvg = avgInWeek(lastMonday)
   if (thisWeekAvg === undefined || lastWeekAvg === undefined) return undefined
   return { thisWeekAvg, lastWeekAvg, deltaKg: thisWeekAvg - lastWeekAvg }
+}
+
+// Ordnet die aktuelle Uhrzeit einem plausiblen Mahlzeit-Typ als Vorbelegung für neue
+// Ernährungslog-Einträge zu - kein festes Zeitfenster, jederzeit manuell änderbar.
+export function mealTypeForTime(date: Date = new Date()): MealType {
+  const hour = date.getHours() + date.getMinutes() / 60
+  if (hour < 10) return 'Frühstück'
+  if (hour < 11.5) return 'Snack 1'
+  if (hour < 14.5) return 'Mittagessen'
+  if (hour < 17) return 'Snack 2'
+  if (hour < 18.5) return 'Pre-Workout'
+  if (hour < 20) return 'Post-Workout'
+  return 'Abendessen'
 }
