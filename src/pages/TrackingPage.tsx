@@ -3,10 +3,18 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
-import { upsertDailyEntry, isoDate, getTrackingSeries, syncBodyFatToDailyEntry } from '../db/queries'
+import {
+  upsertDailyEntry,
+  isoDate,
+  getTrackingSeries,
+  syncBodyFatToDailyEntry,
+  exportProgress,
+  importProgress,
+} from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
 import { calculateBodyFatFromFfmi, calendarWeekWeightDelta, rollingAverage7, weeklyDelta } from '../lib/calculator'
-import { Card, DecimalInput, Field, Input } from '../components/ui'
+import { Card, DecimalInput, Field, Input, Button } from '../components/ui'
+import { shareOrDownloadFile } from '../lib/share'
 
 type Ctx = { athlete: Athlete }
 
@@ -14,6 +22,7 @@ export default function TrackingPage() {
   const { athlete } = useOutletContext<Ctx>()
   const photos = useLiveQuery(() => db.progressPhotos.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const series = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate]) ?? []
+  const importProgressInputRef = useRef<HTMLInputElement>(null)
 
   const chartData = series.map((entry, i) => ({
     date: entry.date.slice(5),
@@ -36,6 +45,23 @@ export default function TrackingPage() {
 
   const photosByDate = new Map<string, number>()
   for (const p of photos ?? []) photosByDate.set(p.date, (photosByDate.get(p.date) ?? 0) + 1)
+
+  async function handleExportProgress() {
+    const json = await exportProgress(athlete.id)
+    const file = new File([json], `Fortschritt-${athlete.name}-${isoDate(new Date())}.json`, { type: 'application/json' })
+    await shareOrDownloadFile(file)
+  }
+
+  async function handleImportProgress(fileList: FileList | null) {
+    const file = fileList?.[0]
+    if (!file) return
+    try {
+      await importProgress(await file.text(), athlete.id)
+      alert('Fortschritt importiert.')
+    } catch {
+      alert('Import fehlgeschlagen. Ist die Datei eine gültige Fortschritt-Exportdatei?')
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -91,6 +117,32 @@ export default function TrackingPage() {
         ) : (
           <p className="text-sm text-muted">📊 Noch nicht genug Daten für einen Kalenderwochen-Vergleich.</p>
         )}
+      </Card>
+
+      <Card className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Fortschritt teilen</h2>
+        <p className="text-xs text-muted">
+          Exportiert die letzten 7 Tage aus Tracking, Ernähr.-Log und Trainings-Log zum Versenden. Beim Importieren
+          werden diese Tage für {athlete.name} aktualisiert.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleExportProgress} className="flex-1">
+            Fortschritt exportieren
+          </Button>
+          <Button variant="secondary" onClick={() => importProgressInputRef.current?.click()} className="flex-1">
+            Fortschritt importieren
+          </Button>
+        </div>
+        <input
+          ref={importProgressInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            void handleImportProgress(e.target.files)
+            e.target.value = ''
+          }}
+        />
       </Card>
 
       <Card className="flex flex-col gap-3">

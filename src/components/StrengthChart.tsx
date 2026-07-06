@@ -2,7 +2,22 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
+import type { WorkoutSet } from '../models/types'
 import { Card, Select } from './ui'
+
+type ChartPoint = { date: string; weight: number; setsLabel: string }
+
+function StrengthTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: ChartPoint }[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  const point = payload[0].payload
+  return (
+    <div className="rounded-md border border-border bg-surface px-2 py-1 text-xs">
+      <div className="font-semibold text-fg">{label}</div>
+      <div className="text-fg">{point.weight} kg</div>
+      {point.setsLabel && <div className="text-muted">{point.setsLabel}</div>}
+    </div>
+  )
+}
 
 export default function StrengthChart({ athleteId }: { athleteId: string }) {
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athleteId).toArray(), [athleteId])
@@ -32,6 +47,13 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
     }
   }
 
+  const setsByLogExercise = new Map<string, WorkoutSet[]>()
+  for (const set of workoutSets ?? []) {
+    const list = setsByLogExercise.get(set.workoutLogExerciseId) ?? []
+    list.push(set)
+    setsByLogExercise.set(set.workoutLogExerciseId, list)
+  }
+
   const loggedExerciseIds = [
     ...new Set([...topWeightByLogExercise.keys()].map((leId) => logExerciseById.get(leId)?.exerciseId).filter((id): id is string => !!id)),
   ]
@@ -45,12 +67,17 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
 
   const chartData = [...topWeightByLogExercise.entries()]
     .filter(([logExerciseId]) => logExerciseById.get(logExerciseId)?.exerciseId === currentExerciseId)
-    .map(([logExerciseId, weight]) => ({
-      fullDate: dateByLogId.get(logExerciseById.get(logExerciseId)?.workoutLogId ?? '') ?? '',
-      weight,
-    }))
+    .map(([logExerciseId, weight]) => {
+      const sets = [...(setsByLogExercise.get(logExerciseId) ?? [])].sort((a, b) => a.setNumber - b.setNumber)
+      const setsLabel = sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'} kg`).join(' · ')
+      return {
+        fullDate: dateByLogId.get(logExerciseById.get(logExerciseId)?.workoutLogId ?? '') ?? '',
+        weight,
+        setsLabel,
+      }
+    })
     .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
-    .map((d) => ({ date: d.fullDate.slice(5), weight: d.weight }))
+    .map((d): ChartPoint => ({ date: d.fullDate.slice(5), weight: d.weight, setsLabel: d.setsLabel }))
 
   if (availableExercises.length === 0) {
     return (
@@ -77,7 +104,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
             <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
-            <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+            <Tooltip content={<StrengthTooltip />} />
             <Line type="monotone" dataKey="weight" stroke="#a3e635" strokeWidth={2} name="Gewicht (kg)" connectNulls />
           </LineChart>
         </ResponsiveContainer>

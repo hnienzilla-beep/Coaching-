@@ -1,5 +1,15 @@
 import { db } from './db'
-import type { Athlete, DailyEntry, NutritionLog, PlanMeal, WorkoutLog, WorkoutSet } from '../models/types'
+import type {
+  Athlete,
+  DailyEntry,
+  FoodItem,
+  MealType,
+  MuscleGroup,
+  NutritionLog,
+  PlanMeal,
+  WorkoutLog,
+  WorkoutSet,
+} from '../models/types'
 
 export const ACCENT_COLORS = [
   '#a3e635', // lime
@@ -248,4 +258,162 @@ export async function getLastExercisePerformance(
     }
   }
   return undefined
+}
+
+interface ProgressExport {
+  kind: 'progressExport'
+  version: 1
+  athleteName: string
+  exportedAt: string
+  dailyEntries: Omit<DailyEntry, 'id' | 'athleteId'>[]
+  workoutDays: {
+    date: string
+    notes?: string
+    exercises: {
+      exerciseName: string
+      exerciseFallback?: { muscleGroup: MuscleGroup }
+      notes?: string
+      sets: { setNumber: number; reps?: number; weightKg?: number; done?: boolean }[]
+    }[]
+  }[]
+  nutritionDays: {
+    date: string
+    notes?: string
+    items: {
+      mealType: MealType
+      foodName: string
+      foodMacros?: Omit<FoodItem, 'id' | 'name'>
+      grams: number
+      order: number
+      done?: boolean
+    }[]
+  }[]
+}
+
+// Exportiert die letzten 7 Tage aus Tracking, Trainingslog und Ernährungslog eines
+// Athleten, z.B. damit ein Athlet seinen Fortschritt kalenderwöchentlich an den Coach
+// schicken kann. Übungen/Lebensmittel werden über den Namen statt der ID referenziert
+// (mit Fallback-Werten), da Coach- und Athleten-Gerät getrennte Datenbanken mit
+// zufälligen IDs sind - analog zu importTrainingPlan/importNutritionPlan in db.ts.
+export async function exportProgress(athleteId: string): Promise<string> {
+  const athlete = await db.athletes.get(athleteId)
+  const since = addDays(isoDate(new Date()), -6)
+
+  const dailyEntries = (await db.dailyEntries.where('athleteId').equals(athleteId).toArray())
+    .filter((e) => e.date >= since)
+    .map(({ id: _id, athleteId: _athleteId, ...rest }) => rest)
+
+  const workoutLogsRaw = (await db.workoutLogs.where('athleteId').equals(athleteId).toArray()).filter((l) => l.date >= since)
+  const workoutDays: ProgressExport['workoutDays'] = []
+  for (const log of workoutLogsRaw) {
+    const logExercises = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+    const exercises: ProgressExport['workoutDays'][number]['exercises'] = []
+    for (const le of logExercises) {
+      const exercise = await db.exercises.get(le.exerciseId)
+      const sets = await db.workoutSets.where('workoutLogExerciseId').equals(le.id).sortBy('setNumber')
+      exercises.push({
+        exerciseName: exercise?.name ?? 'Unbekannte Übung',
+        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup } : undefined,
+        notes: le.notes,
+        sets: sets.map(({ setNumber, reps, weightKg, done }) => ({ setNumber, reps, weightKg, done })),
+      })
+    }
+    workoutDays.push({ date: log.date, notes: log.notes, exercises })
+  }
+
+  const nutritionLogsRaw = (await db.nutritionLogs.where('athleteId').equals(athleteId).toArray()).filter((l) => l.date >= since)
+  const nutritionDays: ProgressExport['nutritionDays'] = []
+  for (const log of nutritionLogsRaw) {
+    const logItems = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).sortBy('order')
+    const items: ProgressExport['nutritionDays'][number]['items'] = []
+    for (const it of logItems) {
+      const food = await db.foodItems.get(it.foodItemId)
+      items.push({
+        mealType: it.mealType,
+        foodName: food?.name ?? 'Unbekanntes Lebensmittel',
+        foodMacros: food ? { kcal: food.kcal, protein: food.protein, carbs: food.carbs, fat: food.fat } : undefined,
+        grams: it.grams,
+        order: it.order,
+        done: it.done,
+      })
+    }
+    nutritionDays.push({ date: log.date, notes: log.notes, items })
+  }
+
+  const result: ProgressExport = {
+    kind: 'progressExport',
+    version: 1,
+    athleteName: athlete?.name ?? '',
+    exportedAt: new Date().toISOString(),
+    dailyEntries,
+    workoutDays,
+    nutritionDays,
+  }
+  return JSON.stringify(result)
+}
+
+// Importiert eine per exportProgress erzeugte Datei für den angegebenen (bereits
+// bestehenden) Athleten. Tage werden über [athleteId+date] gemerged (upsertDailyEntry/
+// getOrCreateWorkoutLog/getOrCreateNutritionLog) statt per bulkPut dupliziert - Kind-Zeilen
+// (Übungen+Sätze, Lebensmittel-Einträge) werden je betroffenem Tag komplett ersetzt, daher
+// ist wiederholtes Importieren derselben Datei idempotent.
+export async function importProgress(json: string, athleteId: string): Promise<void> {
+  const template = JSON.parse(json) as ProgressExport
+  if (template.kind !== 'progressExport') throw new Error('Ungültige Datei (kein Fortschritt-Export)')
+
+  await db.transaction(
+    'rw',
+    [db.dailyEntries, db.workoutLogs, db.workoutLogExercises, db.workoutSets, db.exercises, db.nutritionLogs, db.nutritionLogItems, db.foodItems],
+    async () => {
+      for (const entry of template.dailyEntries) {
+        await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, ...entry })
+      }
+
+      for (const day of template.workoutDays) {
+        const log = await getOrCreateWorkoutLog(athleteId, day.date)
+        if (day.notes !== undefined) await db.workoutLogs.update(log.id, { notes: day.notes })
+        const oldExercises = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+        for (const oldEx of oldExercises) {
+          await db.workoutSets.where('workoutLogExerciseId').equals(oldEx.id).delete()
+        }
+        await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
+        for (const ex of day.exercises) {
+          let exercise = await db.exercises.where('name').equals(ex.exerciseName).first()
+          if (!exercise && ex.exerciseFallback) {
+            exercise = { id: crypto.randomUUID(), name: ex.exerciseName, ...ex.exerciseFallback }
+            await db.exercises.add(exercise)
+          }
+          if (!exercise) continue
+          const logExerciseId = crypto.randomUUID()
+          await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: exercise.id, notes: ex.notes })
+          for (const s of ex.sets) {
+            await db.workoutSets.add({ id: crypto.randomUUID(), workoutLogExerciseId: logExerciseId, ...s })
+          }
+        }
+      }
+
+      for (const day of template.nutritionDays) {
+        const log = await getOrCreateNutritionLog(athleteId, day.date)
+        if (day.notes !== undefined) await db.nutritionLogs.update(log.id, { notes: day.notes })
+        await db.nutritionLogItems.where('nutritionLogId').equals(log.id).delete()
+        for (const item of day.items) {
+          let food = await db.foodItems.where('name').equals(item.foodName).first()
+          if (!food && item.foodMacros) {
+            food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
+            await db.foodItems.add(food)
+          }
+          if (!food) continue
+          await db.nutritionLogItems.add({
+            id: crypto.randomUUID(),
+            nutritionLogId: log.id,
+            mealType: item.mealType,
+            foodItemId: food.id,
+            grams: item.grams,
+            order: item.order,
+            done: item.done,
+          })
+        }
+      }
+    },
+  )
 }
