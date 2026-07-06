@@ -157,6 +157,15 @@ export function calendarWeekWeightDelta(points: WeightPoint[], today: string): C
   return { thisWeekAvg, lastWeekAvg, deltaKg: thisWeekAvg - lastWeekAvg }
 }
 
+export function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 // Ordnet die aktuelle Uhrzeit einem plausiblen Mahlzeit-Typ als Vorbelegung für neue
 // Ernährungslog-Einträge zu - kein festes Zeitfenster, jederzeit manuell änderbar.
 export function mealTypeForTime(date: Date = new Date()): MealType {

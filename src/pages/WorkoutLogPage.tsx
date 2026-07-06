@@ -8,6 +8,8 @@ import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
+import WorkoutTimer from '../components/WorkoutTimer'
+import { formatDuration } from '../lib/calculator'
 
 type Ctx = { athlete: Athlete }
 
@@ -118,6 +120,8 @@ export default function WorkoutLogPage() {
     <div className="flex flex-col gap-4">
       <StrengthChart athleteId={athlete.id} />
 
+      <WorkoutTimer athleteId={athlete.id} date={selectedDate} startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
+
       <RestTimer />
 
       <Card className="flex flex-col gap-3">
@@ -183,6 +187,10 @@ export default function WorkoutLogPage() {
         {currentLog?.completedAt ? (
           <p className="text-center text-sm text-ok">
             ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+            {currentLog.startedAt &&
+              ` · Dauer: ${formatDuration(
+                Math.max(0, Math.floor((new Date(currentLog.completedAt).getTime() - new Date(currentLog.startedAt).getTime()) / 1000)),
+              )}`}
           </p>
         ) : (
           <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
@@ -206,6 +214,9 @@ export default function WorkoutLogPage() {
               <span className="text-muted">{log.date}</span>
               <span className="text-fg">
                 {log.completedAt ? '✓ ' : ''}
+                {log.startedAt && log.completedAt
+                  ? `${formatDuration(Math.max(0, Math.floor((new Date(log.completedAt).getTime() - new Date(log.startedAt).getTime()) / 1000)))} · `
+                  : ''}
                 {log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}
               </span>
             </button>
