@@ -98,12 +98,12 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
           </option>
         ))}
       </Select>
-      <div className="h-40">
+      <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ left: -20, right: 8, top: 8, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
-            <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+            <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
             <Tooltip content={<StrengthTooltip />} />
             <Line type="monotone" dataKey="weight" stroke="#a3e635" strokeWidth={2} name="Gewicht (kg)" connectNulls />
           </LineChart>
