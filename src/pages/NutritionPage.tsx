@@ -5,7 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
-import { calculate } from '../lib/calculator'
+import { calculate, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
@@ -86,7 +86,7 @@ export default function NutritionPage() {
   const sortedDraftMeals = sortDraftMeals(draftMeals ?? [])
 
   async function addPhase() {
-    const order = plans?.length ?? 0
+    const order = nextOrder(plans ?? [])
     const id = crypto.randomUUID()
     await db.nutritionPlans.add({ id, athleteId: athlete.id, phaseName: `Phase ${order + 1}`, order })
     setActivePlanId(id)
@@ -116,7 +116,7 @@ export default function NutritionPage() {
     if (!currentPlanId) return
     setDraftMeals((prev) => [
       ...(prev ?? []),
-      { id: crypto.randomUUID(), planId: currentPlanId, mealType: MEAL_TYPES[0], foodItemId: '', grams: 100, order: (prev ?? []).length },
+      { id: crypto.randomUUID(), planId: currentPlanId, mealType: MEAL_TYPES[0], foodItemId: '', grams: 100, order: nextOrder(prev ?? []) },
     ])
   }
 

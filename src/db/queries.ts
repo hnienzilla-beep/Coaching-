@@ -377,7 +377,7 @@ export async function importProgress(json: string, athleteId: string): Promise<v
           await db.workoutSets.where('workoutLogExerciseId').equals(oldEx.id).delete()
         }
         await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
-        for (const ex of day.exercises) {
+        for (const [i, ex] of day.exercises.entries()) {
           let exercise = await db.exercises.where('name').equals(ex.exerciseName).first()
           if (!exercise && ex.exerciseFallback) {
             exercise = { id: crypto.randomUUID(), name: ex.exerciseName, ...ex.exerciseFallback }
@@ -385,7 +385,7 @@ export async function importProgress(json: string, athleteId: string): Promise<v
           }
           if (!exercise) continue
           const logExerciseId = crypto.randomUUID()
-          await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: exercise.id, notes: ex.notes })
+          await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: exercise.id, order: i, notes: ex.notes })
           for (const s of ex.sets) {
             await db.workoutSets.add({ id: crypto.randomUUID(), workoutLogExerciseId: logExerciseId, ...s })
           }

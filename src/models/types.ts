@@ -158,6 +158,7 @@ export interface WorkoutLogExercise {
   id: string
   workoutLogId: string
   exerciseId: string
+  order: number
   notes?: string
 }
 

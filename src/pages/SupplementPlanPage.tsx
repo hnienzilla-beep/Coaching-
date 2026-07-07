@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, exportSupplementPlan, importSupplementPlan } from '../db/db'
 import { shareOrDownloadFile } from '../lib/share'
+import { nextOrder } from '../lib/calculator'
 import type { Athlete, Supplement, SupplementPlanItem, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
 import { Button, Card, Select } from '../components/ui'
@@ -37,7 +38,7 @@ export default function SupplementPlanPage() {
   const pickerItems = (supplements ?? []).map((s) => ({ id: s.id, label: s.name, sublabel: s.defaultDose }))
 
   async function addPhase() {
-    const order = plans?.length ?? 0
+    const order = nextOrder(plans ?? [])
     const id = crypto.randomUUID()
     await db.supplementPlans.add({ id, athleteId: athlete.id, phaseName: `Phase ${order + 1}`, order })
     setActivePlanId(id)

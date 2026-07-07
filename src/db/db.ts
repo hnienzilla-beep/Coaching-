@@ -167,6 +167,26 @@ export async function ensurePlanMealOrder(): Promise<void> {
   })
 }
 
+// Bestandsdaten (vor Einführung von order) bekommen eine Reihenfolge nach Einfüge-Position.
+export async function ensureWorkoutLogExerciseOrder(): Promise<void> {
+  await db.transaction('rw', db.workoutLogExercises, async () => {
+    const all = await db.workoutLogExercises.toArray()
+    const missingOrder = all.filter((r) => r.order === undefined)
+    if (missingOrder.length === 0) return
+    const byLog = new Map<string, typeof all>()
+    for (const row of missingOrder) {
+      const list = byLog.get(row.workoutLogId) ?? []
+      list.push(row)
+      byLog.set(row.workoutLogId, list)
+    }
+    for (const [, rows] of byLog) {
+      for (let i = 0; i < rows.length; i++) {
+        await db.workoutLogExercises.update(rows[i].id, { order: i })
+      }
+    }
+  })
+}
+
 // Bestandsathleten (vor Einführung von order) bekommen eine Reihenfolge nach aktueller Reihenfolge.
 export async function ensureAthleteOrder(): Promise<void> {
   await db.transaction('rw', db.athletes, async () => {

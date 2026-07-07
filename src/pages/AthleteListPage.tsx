@@ -14,6 +14,7 @@ import {
   ensurePlanMealOrder,
   ensureSupplementSeed,
   ensureTrainingPlanExerciseOrder,
+  ensureWorkoutLogExerciseOrder,
   ensureWorkoutSetMigration,
   exportAllData,
   exportAthletes,
@@ -112,6 +113,7 @@ export default function AthleteListPage() {
     ensureExerciseSeed()
     ensureTrainingPlanExerciseOrder()
     ensureWorkoutSetMigration()
+    ensureWorkoutLogExerciseOrder()
     ensurePlanMealOrder()
     ensureAthleteOrder()
   }, [])

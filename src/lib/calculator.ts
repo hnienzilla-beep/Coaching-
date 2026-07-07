@@ -178,3 +178,10 @@ export function mealTypeForTime(date: Date = new Date()): MealType {
   if (hour < 20) return 'Post-Workout'
   return 'Abendessen'
 }
+
+// Liefert den order-Wert für eine neu einzufügende Zeile: max(vorhandene order) + 1, nicht
+// die Anzahl der Zeilen - damit neue Zeilen auch nach Lücken (durch Löschen entstanden)
+// zuverlässig ans Ende sortieren, ohne mit einer bestehenden order zu kollidieren.
+export function nextOrder(rows: { order: number }[]): number {
+  return rows.length === 0 ? 0 : Math.max(...rows.map((r) => r.order)) + 1
+}

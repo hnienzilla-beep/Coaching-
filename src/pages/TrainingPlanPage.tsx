@@ -6,6 +6,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
 import { shareOrDownloadFile } from '../lib/share'
+import { nextOrder } from '../lib/calculator'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
@@ -52,7 +53,7 @@ export default function TrainingPlanPage() {
   const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup }))
 
   async function addPhase() {
-    const order = plans?.length ?? 0
+    const order = nextOrder(plans ?? [])
     const id = crypto.randomUUID()
     await db.trainingPlans.add({ id, athleteId: athlete.id, phaseName: `Tag ${String.fromCharCode(65 + order)}`, order })
     setActivePlanId(id)
@@ -74,7 +75,7 @@ export default function TrainingPlanPage() {
       id: crypto.randomUUID(),
       planId: currentPlanId,
       exerciseId: exercises[0].id,
-      order: rows?.length ?? 0,
+      order: nextOrder(rows ?? []),
       sets: 3,
       reps: '8-12',
     }

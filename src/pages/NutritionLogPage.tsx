@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, isoDate, syncNutritionTotalsToDailyEntry } from '../db/queries'
-import { calculate, mealTypeForTime } from '../lib/calculator'
+import { calculate, mealTypeForTime, nextOrder } from '../lib/calculator'
 import type { Athlete, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, Select } from '../components/ui'
@@ -97,7 +97,7 @@ export default function NutritionLogPage() {
       mealType: mealTypeForTime(),
       foodItemId: '',
       grams: 100,
-      order: items?.length ?? 0,
+      order: nextOrder(items ?? []),
     })
   }
 
@@ -133,7 +133,7 @@ export default function NutritionLogPage() {
     await db.transaction('rw', db.nutritionLogItems, async () => {
       const existingItems = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).toArray()
       const existingKeys = new Set(existingItems.map((i) => `${i.foodItemId}|${i.mealType}`))
-      let order = existingItems.length
+      let order = nextOrder(existingItems)
       for (const meal of planMeals) {
         const key = `${meal.foodItemId}|${meal.mealType}`
         if (existingKeys.has(key)) continue

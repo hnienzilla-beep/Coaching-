@@ -9,7 +9,7 @@ import SearchPicker from '../components/SearchPicker'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
 import WorkoutTimer from '../components/WorkoutTimer'
-import { formatDuration } from '../lib/calculator'
+import { formatDuration, nextOrder } from '../lib/calculator'
 
 type Ctx = { athlete: Athlete }
 
@@ -63,13 +63,18 @@ export default function WorkoutLogPage() {
     if (orderA !== undefined && orderB !== undefined) return orderA - orderB
     if (orderA !== undefined) return -1
     if (orderB !== undefined) return 1
-    return 0
+    return (a.order ?? 0) - (b.order ?? 0)
   })
 
   async function addExerciseRow() {
     if (!exercises?.length) return
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
-    await db.workoutLogExercises.add({ id: crypto.randomUUID(), workoutLogId: log.id, exerciseId: exercises[0].id })
+    await db.workoutLogExercises.add({
+      id: crypto.randomUUID(),
+      workoutLogId: log.id,
+      exerciseId: exercises[0].id,
+      order: nextOrder(rows ?? []),
+    })
   }
 
   async function deleteExerciseRow(rowId: string) {
@@ -86,10 +91,11 @@ export default function WorkoutLogPage() {
     await db.transaction('rw', db.workoutLogExercises, db.workoutSets, async () => {
       const existingRows = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
       const loggedExerciseIds = new Set(existingRows.map((r) => r.exerciseId))
+      let order = nextOrder(existingRows)
       for (const pe of planRows) {
         if (loggedExerciseIds.has(pe.exerciseId)) continue
         const logExerciseId = crypto.randomUUID()
-        await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: pe.exerciseId })
+        await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: pe.exerciseId, order: order++ })
         await createSetsFromPlanExercise(logExerciseId, pe)
       }
     })
