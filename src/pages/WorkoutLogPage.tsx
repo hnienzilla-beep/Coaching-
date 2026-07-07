@@ -5,11 +5,13 @@ import { db } from '../db/db'
 import { getLastExercisePerformance, getOrCreateWorkoutLog, isoDate } from '../db/queries'
 import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
+import CollapsibleCard from '../components/CollapsibleCard'
 import SearchPicker from '../components/SearchPicker'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
 import WorkoutTimer from '../components/WorkoutTimer'
 import { formatDuration, nextOrder } from '../lib/calculator'
+import { useCompactMode } from '../lib/compactMode'
 
 type Ctx = { athlete: Athlete }
 
@@ -30,6 +32,7 @@ async function createSetsFromPlanExercise(logExerciseId: string, pe: TrainingPla
 export default function WorkoutLogPage() {
   const { athlete } = useOutletContext<Ctx>()
   const navigate = useNavigate()
+  const [compactMode] = useCompactMode()
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -124,11 +127,11 @@ export default function WorkoutLogPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <StrengthChart athleteId={athlete.id} />
-
-      <WorkoutTimer athleteId={athlete.id} date={selectedDate} startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
-
-      <RestTimer />
+      <CollapsibleCard title="Werkzeuge" variant="plain" keepMounted defaultExpanded={!compactMode}>
+        <StrengthChart athleteId={athlete.id} />
+        <WorkoutTimer athleteId={athlete.id} date={selectedDate} startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
+        <RestTimer />
+      </CollapsibleCard>
 
       <Card className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

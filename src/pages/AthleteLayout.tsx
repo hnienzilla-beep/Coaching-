@@ -5,18 +5,14 @@ import { db } from '../db/db'
 import { ACCENT_COLORS } from '../db/queries'
 import type { Athlete } from '../models/types'
 
-// Gruppiert nach Themenbereich (Ernährung: Plan+Log nebeneinander, Training: Plan+Log
-// nebeneinander) und als 4-Spalten-Raster statt einer scrollenden Einzelzeile
-// dargestellt - dadurch sind auf einen Blick alle Bereiche sichtbar statt seitlich
-// abgeschnitten/durchgescrollt werden zu müssen.
+// Ernährung (Plan/Log/Supplements) und Training (Plan/Log) sind je ein Tab mit einem
+// internen Umschalter auf der jeweiligen Seite selbst - dadurch bleiben nur 4
+// Haupt-Tabs, die bequem in eine einzeilige Bottom-Navigation passen.
 const TABS = [
   { to: '', label: 'Dashboard', end: true },
   { to: 'tracking', label: 'Tracking', end: false },
-  { to: 'ernaehrung', label: 'Ernähr.-Plan', end: false },
-  { to: 'ernaehrungslog', label: 'Ernähr.-Log', end: false },
-  { to: 'supplemente', label: 'Supplements', end: false },
-  { to: 'trainingsplan', label: 'Trainings-Plan', end: false },
-  { to: 'trainingslog', label: 'Trainings-Log', end: false },
+  { to: 'ernaehrung', label: 'Ernährung', end: false },
+  { to: 'training', label: 'Training', end: false },
 ]
 
 export default function AthleteLayout() {
@@ -92,7 +88,11 @@ export default function AthleteLayout() {
         <h1 className="flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
       </header>
 
-      <nav className="grid grid-cols-4 gap-1.5 border-b border-border bg-surface-2 p-2">
+      <main className="flex-1 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+        <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
+      </main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto grid w-full max-w-md grid-cols-4 gap-1.5 border-t border-border bg-surface-2 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
@@ -108,10 +108,6 @@ export default function AthleteLayout() {
           </NavLink>
         ))}
       </nav>
-
-      <main className="flex-1 p-4 pb-10">
-        <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
-      </main>
     </div>
   )
 }

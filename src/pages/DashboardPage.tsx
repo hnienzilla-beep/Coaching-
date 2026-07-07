@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
+import CollapsibleCard from '../components/CollapsibleCard'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
 import { addDays, isoDate, syncBodyFatToDailyEntry } from '../db/queries'
@@ -10,6 +11,7 @@ import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
 import { useCoachMode } from '../lib/coachMode'
+import { useCompactMode } from '../lib/compactMode'
 
 type Ctx = { athlete: Athlete }
 
@@ -20,6 +22,8 @@ function update(athleteId: string, patch: Partial<Athlete>) {
 export default function DashboardPage() {
   const { athlete } = useOutletContext<Ctx>()
   const [coachMode] = useCoachMode()
+  const [compactMode] = useCompactMode()
+  const [showCoachDetails, setShowCoachDetails] = useState(false)
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
 
@@ -82,16 +86,6 @@ export default function DashboardPage() {
           <Field label="Gewicht (kg)">
             <DecimalInput value={athlete.weightKg} onChange={(n) => update(athlete.id, { weightKg: n ?? 0 })} />
           </Field>
-          {coachMode && (
-            <>
-              <Field label="Protein (g/kg)">
-                <DecimalInput value={athlete.proteinPerKg} onChange={(n) => update(athlete.id, { proteinPerKg: n ?? 0 })} />
-              </Field>
-              <Field label="Fett (g/kg)">
-                <DecimalInput value={athlete.fatPerKg} onChange={(n) => update(athlete.id, { fatPerKg: n ?? 0 })} />
-              </Field>
-            </>
-          )}
         </div>
         <Field label="Aktivitätslevel">
           <Select value={athlete.activityLevel} onChange={(e) => update(athlete.id, { activityLevel: e.target.value })}>
@@ -130,7 +124,24 @@ export default function DashboardPage() {
           </div>
         </Field>
         {coachMode && (
+          <button
+            type="button"
+            onClick={() => setShowCoachDetails((v) => !v)}
+            className="text-left text-xs text-accent underline"
+          >
+            {showCoachDetails ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}
+          </button>
+        )}
+        {coachMode && showCoachDetails && (
           <>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Protein (g/kg)">
+                <DecimalInput value={athlete.proteinPerKg} onChange={(n) => update(athlete.id, { proteinPerKg: n ?? 0 })} />
+              </Field>
+              <Field label="Fett (g/kg)">
+                <DecimalInput value={athlete.fatPerKg} onChange={(n) => update(athlete.id, { fatPerKg: n ?? 0 })} />
+              </Field>
+            </div>
             <Field label="Startdatum (Tag 1)">
               <Input
                 type="date"
@@ -155,11 +166,6 @@ export default function DashboardPage() {
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körperzusammensetzung</h2>
-        {coachMode && (
-          <Field label="FFMI (Fettfreie-Masse-Index, kg/m²)">
-            <DecimalInput value={athlete.ffmi} onChange={(n) => update(athlete.id, { ffmi: n })} placeholder="z.B. 22" />
-          </Field>
-        )}
         <div className={coachMode ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
           <StatBadge
             label="BMI"
@@ -170,12 +176,21 @@ export default function DashboardPage() {
             <StatBadge label="KFA (berechnet)" value={bodyFatFromFfmi !== undefined ? `${bodyFatFromFfmi.toFixed(1)}%` : '–'} />
           )}
         </div>
-        {coachMode && bodyFatFromFfmi !== undefined && (
+        {coachMode && showCoachDetails && (
+          <Field label="FFMI (Fettfreie-Masse-Index, kg/m²)">
+            <DecimalInput value={athlete.ffmi} onChange={(n) => update(athlete.id, { ffmi: n })} placeholder="z.B. 22" />
+          </Field>
+        )}
+        {coachMode && showCoachDetails && bodyFatFromFfmi !== undefined && (
           <p className="text-xs text-muted">Wird automatisch in den heutigen Tracking-Eintrag übernommen.</p>
         )}
       </Card>
 
-      {coachMode && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
+      {coachMode && athlete.targetWeightKg !== undefined && (
+        <CollapsibleCard title="Zielgewicht-Fortschritt" defaultExpanded={!compactMode}>
+          <WeightGoalProgress athlete={athlete} entries={entries ?? []} />
+        </CollapsibleCard>
+      )}
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kalorienrechner</h2>
@@ -203,12 +218,7 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
   const currentWeight = weighed[weighed.length - 1]?.weightKg
 
   if (startWeight === undefined || currentWeight === undefined) {
-    return (
-      <Card className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Zielgewicht</h2>
-        <p className="text-sm text-muted">📊 Noch keine Trackingdaten für den Fortschritt vorhanden.</p>
-      </Card>
-    )
+    return <p className="text-sm text-muted">📊 Noch keine Trackingdaten für den Fortschritt vorhanden.</p>
   }
 
   const totalDelta = athlete.targetWeightKg - startWeight
@@ -217,9 +227,8 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
   const remaining = Math.abs(athlete.targetWeightKg - currentWeight)
 
   return (
-    <Card className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Zielgewicht</h2>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-end">
         <span className="text-sm text-fg">{pct.toFixed(0)}%</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-surface-2">
@@ -229,6 +238,6 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
         {currentWeight} kg → {athlete.targetWeightKg} kg · noch {remaining.toFixed(1)} kg
         {athlete.targetDate ? ` · Ziel: ${athlete.targetDate}` : ''}
       </p>
-    </Card>
+    </div>
   )
 }

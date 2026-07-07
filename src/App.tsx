@@ -3,13 +3,10 @@ import AthleteListPage from './pages/AthleteListPage'
 import AthleteLayout from './pages/AthleteLayout'
 import DashboardPage from './pages/DashboardPage'
 import TrackingPage from './pages/TrackingPage'
-import NutritionPage from './pages/NutritionPage'
+import ErnaehrungPage from './pages/ErnaehrungPage'
+import TrainingPage from './pages/TrainingPage'
 import FoodDatabasePage from './pages/FoodDatabasePage'
-import SupplementPlanPage from './pages/SupplementPlanPage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
-import TrainingPlanPage from './pages/TrainingPlanPage'
-import WorkoutLogPage from './pages/WorkoutLogPage'
-import NutritionLogPage from './pages/NutritionLogPage'
 import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 
 function App() {
@@ -23,11 +20,8 @@ function App() {
         <Route path="/athlete/:athleteId" element={<AthleteLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="tracking" element={<TrackingPage />} />
-          <Route path="ernaehrung" element={<NutritionPage />} />
-          <Route path="supplemente" element={<SupplementPlanPage />} />
-          <Route path="trainingsplan" element={<TrainingPlanPage />} />
-          <Route path="trainingslog" element={<WorkoutLogPage />} />
-          <Route path="ernaehrungslog" element={<NutritionLogPage />} />
+          <Route path="ernaehrung" element={<ErnaehrungPage />} />
+          <Route path="training" element={<TrainingPage />} />
         </Route>
       </Routes>
     </HashRouter>

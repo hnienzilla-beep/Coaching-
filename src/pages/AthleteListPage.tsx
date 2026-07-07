@@ -27,6 +27,7 @@ import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
 import { useCoachMode } from '../lib/coachMode'
+import { useCompactMode } from '../lib/compactMode'
 
 export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
@@ -62,6 +63,7 @@ export default function AthleteListPage() {
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
   const [coachMode, setCoachMode] = useCoachMode()
+  const [compactMode, setCompactMode] = useCompactMode()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -157,6 +159,12 @@ export default function AthleteListPage() {
                 className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
               >
                 {coachMode ? '🧑‍🏫 Coach-Modus: An' : '🧑‍🏫 Coach-Modus: Aus'}
+              </button>
+              <button
+                onClick={() => setCompactMode(!compactMode)}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                {compactMode ? '📥 Karten einklappen: An' : '📥 Karten einklappen: Aus'}
               </button>
               <div className="my-1 border-t border-border" />
               <Link
