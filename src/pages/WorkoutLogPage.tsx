@@ -144,58 +144,64 @@ export default function WorkoutLogPage() {
           />
         </Field>
 
-        <Field label="Trainingstag (optional)">
-          <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
-            <option value="">– kein Plan zugeordnet –</option>
-            {trainingPlans?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.phaseName}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {currentLog ? (
+          <>
+            <Field label="Trainingstag (optional)">
+              <Select value={currentLog.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
+                <option value="">– kein Plan zugeordnet –</option>
+                {trainingPlans?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.phaseName}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
-        <div className="flex flex-col gap-2">
-          {sortedRows.map((row) => (
-            <WorkoutExerciseRow
-              key={row.id}
-              rowId={row.id}
-              exerciseId={row.exerciseId}
-              pickerItems={pickerItems}
-              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
-              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
-              athleteId={athlete.id}
-              date={selectedDate}
-              onDelete={() => deleteExerciseRow(row.id)}
-            />
-          ))}
-        </div>
+            <div className="flex flex-col gap-2">
+              {sortedRows.map((row) => (
+                <WorkoutExerciseRow
+                  key={row.id}
+                  rowId={row.id}
+                  exerciseId={row.exerciseId}
+                  pickerItems={pickerItems}
+                  muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+                  planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+                  athleteId={athlete.id}
+                  date={selectedDate}
+                  onDelete={() => deleteExerciseRow(row.id)}
+                />
+              ))}
+            </div>
 
-        <Button variant="secondary" onClick={addExerciseRow}>
-          + Übung hinzufügen
-        </Button>
+            <Button variant="secondary" onClick={addExerciseRow}>
+              + Übung hinzufügen
+            </Button>
 
-        <Field label="Notizen">
-          <textarea
-            value={currentLog?.notes ?? ''}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-          />
-        </Field>
+            <Field label="Notizen">
+              <textarea
+                value={currentLog.notes ?? ''}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+              />
+            </Field>
 
-        {currentLog?.completedAt ? (
-          <p className="text-center text-sm text-ok">
-            ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
-            {currentLog.startedAt &&
-              ` · Dauer: ${formatDuration(
-                Math.max(0, Math.floor((new Date(currentLog.completedAt).getTime() - new Date(currentLog.startedAt).getTime()) / 1000)),
-              )}`}
-          </p>
+            {currentLog.completedAt ? (
+              <p className="text-center text-sm text-ok">
+                ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+                {currentLog.startedAt &&
+                  ` · Dauer: ${formatDuration(
+                    Math.max(0, Math.floor((new Date(currentLog.completedAt).getTime() - new Date(currentLog.startedAt).getTime()) / 1000)),
+                  )}`}
+              </p>
+            ) : (
+              <Button variant="primary" onClick={completeWorkout}>
+                Training beenden
+              </Button>
+            )}
+          </>
         ) : (
-          <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
-            Training beenden
-          </Button>
+          <p className="text-sm text-muted">Starte das Training oben, um Trainingstag, Übungen und Notizen zu erfassen.</p>
         )}
       </Card>
 
