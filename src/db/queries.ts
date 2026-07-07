@@ -78,7 +78,6 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
       db.dailyEntries,
       db.nutritionPlans,
       db.planMeals,
-      db.progressPhotos,
       db.supplementPlans,
       db.supplementPlanItems,
       db.trainingPlans,
@@ -125,7 +124,6 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
       await db.nutritionLogs.where('athleteId').equals(athleteId).delete()
 
       await db.dailyEntries.where('athleteId').equals(athleteId).delete()
-      await db.progressPhotos.where('athleteId').equals(athleteId).delete()
       await db.athletes.delete(athleteId)
     },
   )

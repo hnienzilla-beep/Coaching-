@@ -75,13 +75,6 @@ export interface PlanMeal {
   order: number
 }
 
-export interface ProgressPhoto {
-  id: string
-  athleteId: string
-  date: string // ISO date
-  blob: Blob
-}
-
 export const SUPPLEMENT_TIMINGS = [
   'Morgens',
   'Mittags',

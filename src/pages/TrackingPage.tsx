@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { db } from '../db/db'
 import {
   upsertDailyEntry,
   isoDate,
@@ -20,7 +19,6 @@ type Ctx = { athlete: Athlete }
 
 export default function TrackingPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const photos = useLiveQuery(() => db.progressPhotos.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const series = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate]) ?? []
   const importProgressInputRef = useRef<HTMLInputElement>(null)
 
@@ -42,9 +40,6 @@ export default function TrackingPage() {
   const selectedEntry = selectedIndex >= 0 ? series[selectedIndex] : undefined
   const delta = selectedIndex >= 0 ? weeklyDelta(series, selectedIndex) : undefined
   const avg7 = selectedIndex >= 0 ? rollingAverage7(series, selectedIndex) : undefined
-
-  const photosByDate = new Map<string, number>()
-  for (const p of photos ?? []) photosByDate.set(p.date, (photosByDate.get(p.date) ?? 0) + 1)
 
   async function handleExportProgress() {
     const json = await exportProgress(athlete.id)
@@ -169,7 +164,6 @@ export default function TrackingPage() {
         entry={selectedEntry}
         avg7={avg7}
         delta={delta}
-        photoCount={photosByDate.get(selectedDate) ?? 0}
         ffmi={athlete.ffmi}
         heightCm={athlete.heightCm}
       />
@@ -187,7 +181,6 @@ export default function TrackingPage() {
             >
               <span className="text-muted">{e.date}</span>
               <span className="flex items-center gap-2 text-fg">
-                {photosByDate.get(e.date) ? '📷' : ''}
                 {e.weightKg !== undefined ? `${e.weightKg} kg` : '–'}
                 {e.bodyFatPct !== undefined ? ` · ${e.bodyFatPct}%` : ''}
               </span>
@@ -205,7 +198,6 @@ function DayEditor({
   entry,
   avg7,
   delta,
-  photoCount,
   ffmi,
   heightCm,
 }: {
@@ -214,7 +206,6 @@ function DayEditor({
   entry?: DailyEntry
   avg7?: number
   delta?: number
-  photoCount: number
   ffmi?: number
   heightCm: number
 }) {
@@ -274,12 +265,6 @@ function DayEditor({
     }
   }
 
-  async function addPhoto(fileList: FileList | null) {
-    const file = fileList?.[0]
-    if (!file) return
-    await db.progressPhotos.add({ id: crypto.randomUUID(), athleteId, date, blob: file })
-  }
-
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -334,12 +319,6 @@ function DayEditor({
           className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
         />
       </Field>
-      <div className="flex items-center gap-2">
-        <label className="flex-1 cursor-pointer rounded-lg border border-border px-3 py-2 text-center text-sm text-muted hover:border-accent">
-          📷 Foto hinzufügen {photoCount > 0 ? `(${photoCount})` : ''}
-          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addPhoto(e.target.files)} />
-        </label>
-      </div>
     </Card>
   )
 }

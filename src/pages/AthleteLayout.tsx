@@ -17,7 +17,6 @@ const TABS = [
   { to: 'supplemente', label: 'Supplements', end: false },
   { to: 'trainingsplan', label: 'Trainings-Plan', end: false },
   { to: 'trainingslog', label: 'Trainings-Log', end: false },
-  { to: 'fotos', label: 'Fotos', end: false },
 ]
 
 export default function AthleteLayout() {

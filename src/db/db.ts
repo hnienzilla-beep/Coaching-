@@ -10,7 +10,6 @@ import type {
   NutritionLogItem,
   NutritionPlan,
   PlanMeal,
-  ProgressPhoto,
   Supplement,
   SupplementPlan,
   SupplementPlanItem,
@@ -31,7 +30,6 @@ export class CoachDB extends Dexie {
   foodItems!: EntityTable<FoodItem, 'id'>
   nutritionPlans!: EntityTable<NutritionPlan, 'id'>
   planMeals!: EntityTable<PlanMeal, 'id'>
-  progressPhotos!: EntityTable<ProgressPhoto, 'id'>
   supplements!: EntityTable<Supplement, 'id'>
   supplementPlans!: EntityTable<SupplementPlan, 'id'>
   supplementPlanItems!: EntityTable<SupplementPlanItem, 'id'>
@@ -230,12 +228,7 @@ export async function ensureWorkoutSetMigration(): Promise<void> {
 export async function exportAllData(): Promise<string> {
   const data: Record<string, unknown[]> = {}
   for (const table of db.tables) {
-    if (table.name === 'progressPhotos') {
-      const rows = await table.toArray()
-      data[table.name] = await Promise.all(rows.map(async (r) => ({ ...r, blob: await blobToBase64(r.blob as Blob) })))
-    } else {
-      data[table.name] = await table.toArray()
-    }
+    data[table.name] = await table.toArray()
   }
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data })
 }
@@ -246,12 +239,7 @@ export async function importAllData(json: string): Promise<void> {
     for (const table of db.tables) {
       const rows = parsed.data[table.name]
       if (!rows) continue
-      if (table.name === 'progressPhotos') {
-        const converted = await Promise.all(rows.map(async (r) => ({ ...r, blob: await base64ToBlob(r.blob as string) })))
-        await table.bulkPut(converted)
-      } else {
-        await table.bulkPut(rows)
-      }
+      await table.bulkPut(rows)
     }
   })
 }
@@ -268,7 +256,6 @@ function filterDataToAthletes(data: Record<string, Record<string, unknown>[]>, a
 
   const athletes = (data.athletes ?? []).filter((a) => athleteIdSet.has(a.id as string))
   const dailyEntries = byAthlete(data.dailyEntries)
-  const progressPhotos = byAthlete(data.progressPhotos)
   const nutritionPlans = byAthlete(data.nutritionPlans)
   const supplementPlans = byAthlete(data.supplementPlans)
   const trainingPlans = byAthlete(data.trainingPlans)
@@ -296,7 +283,6 @@ function filterDataToAthletes(data: Record<string, Record<string, unknown>[]>, a
   return {
     athletes,
     dailyEntries,
-    progressPhotos,
     nutritionPlans,
     planMeals,
     supplementPlans,
@@ -327,12 +313,7 @@ export async function importSelectedAthletes(json: string, athleteIds: string[])
     for (const table of db.tables) {
       const rows = filtered[table.name]
       if (!rows) continue
-      if (table.name === 'progressPhotos') {
-        const converted = await Promise.all(rows.map(async (r) => ({ ...r, blob: await base64ToBlob(r.blob as string) })))
-        await table.bulkPut(converted)
-      } else {
-        await table.bulkPut(rows)
-      }
+      await table.bulkPut(rows)
     }
   })
 }
@@ -530,18 +511,4 @@ export async function importTrainingPlan(json: string, athleteId: string): Promi
     }
   })
   return planId
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
-}
-
-async function base64ToBlob(dataUrl: string): Promise<Blob> {
-  const res = await fetch(dataUrl)
-  return res.blob()
 }

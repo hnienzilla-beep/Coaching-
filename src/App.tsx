@@ -4,7 +4,6 @@ import AthleteLayout from './pages/AthleteLayout'
 import DashboardPage from './pages/DashboardPage'
 import TrackingPage from './pages/TrackingPage'
 import NutritionPage from './pages/NutritionPage'
-import PhotosPage from './pages/PhotosPage'
 import FoodDatabasePage from './pages/FoodDatabasePage'
 import SupplementPlanPage from './pages/SupplementPlanPage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
@@ -29,7 +28,6 @@ function App() {
           <Route path="trainingsplan" element={<TrainingPlanPage />} />
           <Route path="trainingslog" element={<WorkoutLogPage />} />
           <Route path="ernaehrungslog" element={<NutritionLogPage />} />
-          <Route path="fotos" element={<PhotosPage />} />
         </Route>
       </Routes>
     </HashRouter>
