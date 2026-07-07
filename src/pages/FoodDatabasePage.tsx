@@ -13,7 +13,8 @@ export default function FoodDatabasePage() {
   const filtered = useMemo(() => {
     if (!foods) return []
     const q = query.trim().toLowerCase()
-    return q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
+    const matched = q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
+    return [...matched].sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false))
   }, [foods, query])
 
   return (
@@ -60,9 +61,19 @@ function FoodRow({ food }: { food: FoodItem }) {
             {food.kcal} kcal · P {food.protein}g · C {food.carbs}g · F {food.fat}g
           </div>
         </div>
-        <Button variant="ghost" onClick={() => setEditing(true)}>
-          Bearbeiten
-        </Button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => db.foodItems.update(food.id, { favorite: !food.favorite })}
+            aria-label={food.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+            className="px-1 text-lg"
+          >
+            {food.favorite ? '⭐' : '☆'}
+          </button>
+          <Button variant="ghost" onClick={() => setEditing(true)}>
+            Bearbeiten
+          </Button>
+        </div>
       </Card>
     )
   }

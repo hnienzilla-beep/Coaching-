@@ -41,7 +41,7 @@ export default function NutritionPage() {
   )
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g` }))
+  const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g`, favorite: f.favorite }))
   const target = calculate({
     gender: athlete.gender,
     age: athlete.age,

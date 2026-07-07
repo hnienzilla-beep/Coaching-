@@ -51,7 +51,7 @@ export default function WorkoutLogPage() {
   )
 
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
-  const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup }))
+  const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup, favorite: e.favorite }))
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
   const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
@@ -268,15 +268,17 @@ function WorkoutExerciseRow({
     const last = sets[sets.length - 1]
     let reps: number | undefined
     let weightKg: number | undefined
+    let rpe: number | undefined
     if (last) {
       reps = last.reps
       weightKg = last.weightKg
+      rpe = last.rpe
     } else if (planExercise) {
       const repsNum = Number.parseInt(planExercise.reps, 10)
       reps = Number.isFinite(repsNum) ? repsNum : undefined
       weightKg = planExercise.targetWeightKg
     }
-    const set: WorkoutSet = { id: crypto.randomUUID(), workoutLogExerciseId: rowId, setNumber: sets.length + 1, reps, weightKg }
+    const set: WorkoutSet = { id: crypto.randomUUID(), workoutLogExerciseId: rowId, setNumber: sets.length + 1, reps, weightKg, rpe }
     await db.workoutSets.add(set)
   }
 
@@ -325,13 +327,13 @@ function WorkoutExerciseRow({
             >
               ✓
             </button>
-            <span className="w-14 shrink-0 text-xs text-muted">Satz {set.setNumber}</span>
+            <span className="w-5 shrink-0 text-xs text-muted">{set.setNumber}.</span>
             <input
               type="number"
               value={set.reps ?? ''}
               onChange={(e) => db.workoutSets.update(set.id, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
               placeholder="Wdh."
-              className="w-16 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+              className="w-14 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
             />
             <div className="flex-1">
               <DecimalInput
@@ -339,6 +341,9 @@ function WorkoutExerciseRow({
                 onChange={(n) => db.workoutSets.update(set.id, { weightKg: n })}
                 placeholder="Gewicht (kg)"
               />
+            </div>
+            <div className="w-14 shrink-0">
+              <DecimalInput value={set.rpe} onChange={(n) => db.workoutSets.update(set.id, { rpe: n })} placeholder="RPE" />
             </div>
             <Button variant="ghost" onClick={() => deleteSet(set.id)}>
               ✕

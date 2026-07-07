@@ -14,7 +14,8 @@ export default function ExerciseDatabasePage() {
   const filtered = useMemo(() => {
     if (!exercises) return []
     const q = query.trim().toLowerCase()
-    return q ? exercises.filter((e) => e.name.toLowerCase().includes(q)) : exercises
+    const matched = q ? exercises.filter((e) => e.name.toLowerCase().includes(q)) : exercises
+    return [...matched].sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false))
   }, [exercises, query])
 
   return (
@@ -59,9 +60,19 @@ function ExerciseRow({ exercise }: { exercise: Exercise }) {
           <div className="text-sm font-medium text-fg">{exercise.name}</div>
           <div className="text-xs text-muted">{exercise.muscleGroup}</div>
         </div>
-        <Button variant="ghost" onClick={() => setEditing(true)}>
-          Bearbeiten
-        </Button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => db.exercises.update(exercise.id, { favorite: !exercise.favorite })}
+            aria-label={exercise.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+            className="px-1 text-lg"
+          >
+            {exercise.favorite ? '⭐' : '☆'}
+          </button>
+          <Button variant="ghost" onClick={() => setEditing(true)}>
+            Bearbeiten
+          </Button>
+        </div>
       </Card>
     )
   }

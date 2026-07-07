@@ -5,6 +5,7 @@ export interface SearchPickerItem {
   id: string
   label: string
   sublabel?: string
+  favorite?: boolean
 }
 
 export default function SearchPicker({
@@ -24,8 +25,8 @@ export default function SearchPicker({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return items.slice(0, 30)
-    return items.filter((i) => i.label.toLowerCase().includes(q)).slice(0, 30)
+    const matched = q ? items.filter((i) => i.label.toLowerCase().includes(q)) : items
+    return [...matched].sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false)).slice(0, 30)
   }, [items, query])
 
   return (
@@ -54,6 +55,7 @@ export default function SearchPicker({
               }}
               className="block w-full px-3 py-2 text-left text-sm text-fg hover:bg-accent/10"
             >
+              {i.favorite && '⭐ '}
               {i.label} {i.sublabel && <span className="text-xs text-muted">({i.sublabel})</span>}
             </button>
           ))}

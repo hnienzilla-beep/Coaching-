@@ -44,6 +44,7 @@ export interface FoodItem {
   protein: number
   carbs: number
   fat: number
+  favorite?: boolean
 }
 
 export interface NutritionPlan {
@@ -124,6 +125,7 @@ export interface Exercise {
   id: string
   name: string
   muscleGroup: MuscleGroup
+  favorite?: boolean
 }
 
 export interface TrainingPlan {
@@ -168,6 +170,7 @@ export interface WorkoutSet {
   setNumber: number
   reps?: number
   weightKg?: number
+  rpe?: number // gefühlte Anstrengung (RPE), 1-10
   done?: boolean // während des Trainings per Häkchen als erledigt markiert
 }
 

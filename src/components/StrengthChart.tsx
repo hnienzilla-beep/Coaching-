@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
 import type { WorkoutSet } from '../models/types'
+import { estimateOneRepMax } from '../lib/calculator'
 import { Card, Select } from './ui'
 
-type ChartPoint = { date: string; weight: number; setsLabel: string }
+type ChartPoint = { date: string; weight: number; setsLabel: string; oneRm?: number }
 
 function StrengthTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: ChartPoint }[]; label?: string }) {
   if (!active || !payload?.length) return null
@@ -15,6 +16,7 @@ function StrengthTooltip({ active, payload, label }: { active?: boolean; payload
       <div className="font-semibold text-fg">{label}</div>
       <div className="text-fg">{point.weight} kg</div>
       {point.setsLabel && <div className="text-muted">{point.setsLabel}</div>}
+      {point.oneRm !== undefined && <div className="text-muted">Geschätztes 1RM: {point.oneRm.toFixed(1)} kg</div>}
     </div>
   )
 }
@@ -37,13 +39,15 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
   const logExerciseById = new Map((logExercises ?? []).map((r) => [r.id, r]))
 
-  // Bestes (schwerstes) Satzgewicht je Trainings-Einheit und Übung als Verlaufswert.
-  const topWeightByLogExercise = new Map<string, number>()
+  // Bester (schwerster) Satz je Trainings-Einheit und Übung als Verlaufswert - der ganze Satz
+  // (nicht nur das Gewicht) wird behalten, damit das 1RM über dieselben Reps/Gewicht-Werte
+  // geschätzt werden kann statt Gewicht und Wiederholungen aus unterschiedlichen Sätzen zu mischen.
+  const topSetByLogExercise = new Map<string, WorkoutSet>()
   for (const set of workoutSets ?? []) {
     if (set.weightKg === undefined) continue
-    const current = topWeightByLogExercise.get(set.workoutLogExerciseId)
-    if (current === undefined || set.weightKg > current) {
-      topWeightByLogExercise.set(set.workoutLogExerciseId, set.weightKg)
+    const current = topSetByLogExercise.get(set.workoutLogExerciseId)
+    if (current === undefined || set.weightKg > (current.weightKg ?? 0)) {
+      topSetByLogExercise.set(set.workoutLogExerciseId, set)
     }
   }
 
@@ -55,7 +59,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   }
 
   const loggedExerciseIds = [
-    ...new Set([...topWeightByLogExercise.keys()].map((leId) => logExerciseById.get(leId)?.exerciseId).filter((id): id is string => !!id)),
+    ...new Set([...topSetByLogExercise.keys()].map((leId) => logExerciseById.get(leId)?.exerciseId).filter((id): id is string => !!id)),
   ]
   const availableExercises = loggedExerciseIds
     .map((id) => exerciseMap.get(id))
@@ -65,19 +69,21 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null)
   const currentExerciseId = selectedExerciseId ?? availableExercises[0]?.id ?? null
 
-  const chartData = [...topWeightByLogExercise.entries()]
+  const chartData = [...topSetByLogExercise.entries()]
     .filter(([logExerciseId]) => logExerciseById.get(logExerciseId)?.exerciseId === currentExerciseId)
-    .map(([logExerciseId, weight]) => {
+    .map(([logExerciseId, topSet]) => {
       const sets = [...(setsByLogExercise.get(logExerciseId) ?? [])].sort((a, b) => a.setNumber - b.setNumber)
       const setsLabel = sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'} kg`).join(' · ')
+      const oneRm = topSet.weightKg !== undefined && topSet.reps ? estimateOneRepMax(topSet.weightKg, topSet.reps) : undefined
       return {
         fullDate: dateByLogId.get(logExerciseById.get(logExerciseId)?.workoutLogId ?? '') ?? '',
-        weight,
+        weight: topSet.weightKg ?? 0,
         setsLabel,
+        oneRm,
       }
     })
     .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
-    .map((d): ChartPoint => ({ date: d.fullDate.slice(5), weight: d.weight, setsLabel: d.setsLabel }))
+    .map((d): ChartPoint => ({ date: d.fullDate.slice(5), weight: d.weight, setsLabel: d.setsLabel, oneRm: d.oneRm }))
 
   if (availableExercises.length === 0) {
     return (

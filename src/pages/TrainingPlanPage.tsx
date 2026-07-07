@@ -6,7 +6,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
 import { shareOrDownloadFile } from '../lib/share'
-import { nextOrder } from '../lib/calculator'
+import { estimateWorkoutDurationMinutes, nextOrder } from '../lib/calculator'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, Card, DecimalInput } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
@@ -50,7 +50,7 @@ export default function TrainingPlanPage() {
   }
 
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
-  const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup }))
+  const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup, favorite: e.favorite }))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -279,6 +279,10 @@ function TrainingPlanOverview({
           </Button>
         )}
       </div>
+
+      {rows.length > 0 && (
+        <p className="text-xs text-muted">Geschätzte Dauer: ~{estimateWorkoutDurationMinutes(rows)} Min.</p>
+      )}
 
       {rows.length === 0 && <p className="text-sm text-muted">🏋️ Noch keine Übungen an diesem Tag.</p>}
 

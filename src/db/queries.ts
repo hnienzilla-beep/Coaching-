@@ -273,7 +273,7 @@ interface ProgressExport {
       exerciseName: string
       exerciseFallback?: { muscleGroup: MuscleGroup }
       notes?: string
-      sets: { setNumber: number; reps?: number; weightKg?: number; done?: boolean }[]
+      sets: { setNumber: number; reps?: number; weightKg?: number; rpe?: number; done?: boolean }[]
     }[]
   }[]
   nutritionDays: {
@@ -315,7 +315,7 @@ export async function exportProgress(athleteId: string): Promise<string> {
         exerciseName: exercise?.name ?? 'Unbekannte Übung',
         exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup } : undefined,
         notes: le.notes,
-        sets: sets.map(({ setNumber, reps, weightKg, done }) => ({ setNumber, reps, weightKg, done })),
+        sets: sets.map(({ setNumber, reps, weightKg, rpe, done }) => ({ setNumber, reps, weightKg, rpe, done })),
       })
     }
     workoutDays.push({ date: log.date, notes: log.notes, exercises })

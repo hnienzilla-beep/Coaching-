@@ -21,7 +21,7 @@ import {
   importAllData,
   importSelectedAthletes,
 } from '../db/db'
-import { ACCENT_COLORS, createAthlete, deleteAthlete, isoDate } from '../db/queries'
+import { ACCENT_COLORS, addDays, createAthlete, deleteAthlete, isoDate } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
@@ -192,7 +192,12 @@ export default function AthleteListPage() {
           <SortableContext items={sortedAthletes.map((a) => a.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-3">
               {sortedAthletes.map((a) => (
-                <SortableAthleteCard key={a.id} athlete={a} weightKg={latestWeightByAthlete.get(a.id)?.weightKg} />
+                <SortableAthleteCard
+                  key={a.id}
+                  athlete={a}
+                  weightKg={latestWeightByAthlete.get(a.id)?.weightKg}
+                  lastTrackedDate={latestWeightByAthlete.get(a.id)?.date}
+                />
               ))}
             </div>
           </SortableContext>
@@ -404,8 +409,19 @@ function ExportAthleteSelector({
   )
 }
 
-function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weightKg: number | undefined }) {
+const TRACKING_REMINDER_DAYS = 3
+
+function SortableAthleteCard({
+  athlete: a,
+  weightKg,
+  lastTrackedDate,
+}: {
+  athlete: Athlete
+  weightKg: number | undefined
+  lastTrackedDate: string | undefined
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: a.id })
+  const isStale = !lastTrackedDate || lastTrackedDate < addDays(isoDate(new Date()), -TRACKING_REMINDER_DAYS)
 
   return (
     <div
@@ -425,7 +441,14 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
       <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
         <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
         <div>
-          <div className="font-semibold text-fg">{a.name}</div>
+          <div className="flex items-center gap-1.5 font-semibold text-fg">
+            {a.name}
+            {isStale && (
+              <span title={`Seit ${TRACKING_REMINDER_DAYS}+ Tagen nicht getrackt`} aria-label="Nicht aktuell getrackt">
+                ⚠️
+              </span>
+            )}
+          </div>
           <div className="text-xs text-muted">
             {weightKg ?? a.weightKg} kg · {a.goal}
           </div>

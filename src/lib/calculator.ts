@@ -185,3 +185,18 @@ export function mealTypeForTime(date: Date = new Date()): MealType {
 export function nextOrder(rows: { order: number }[]): number {
   return rows.length === 0 ? 0 : Math.max(...rows.map((r) => r.order)) + 1
 }
+
+// Schätzt das Einer-Maximum (1RM) aus Gewicht und Wiederholungen einer Übung (Epley-Formel).
+export function estimateOneRepMax(weightKg: number, reps: number): number {
+  return reps <= 1 ? weightKg : weightKg * (1 + reps / 30)
+}
+
+const ASSUMED_SECONDS_PER_SET = 45 // angenommene Ausführungszeit
+const ASSUMED_REST_SECONDS_PER_SET = 90 // entspricht dem Pausen-Timer-Standardwert
+
+// Schätzt die Trainingsdauer eines Trainingsplan-Tages in Minuten aus der Satzanzahl aller
+// Übungen - reine Vorschau vor dem Training, keine gemessene Ist-Dauer.
+export function estimateWorkoutDurationMinutes(rows: { sets: number }[]): number {
+  const totalSets = rows.reduce((sum, r) => sum + r.sets, 0)
+  return Math.round((totalSets * (ASSUMED_SECONDS_PER_SET + ASSUMED_REST_SECONDS_PER_SET)) / 60)
+}
