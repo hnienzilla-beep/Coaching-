@@ -58,9 +58,9 @@ textarea {
 }
 
 .bg-photo {
-  --color-surface: transparent;
-  --color-surface-2: transparent;
-  --color-border: transparent;
+  --color-surface: rgba(255, 255, 255, 0.55);
+  --color-surface-2: rgba(255, 255, 255, 0.4);
+  --color-border: rgba(0, 0, 0, 0.12);
   --color-fg: #000000;
   --color-muted: #000000;
 }
@@ -69,9 +69,9 @@ textarea {
   background: var(--bg-photo-url) center / cover no-repeat fixed;
 }
 
-.bg-photo .shadow-lg,
-.bg-photo .shadow-xl {
-  box-shadow: none;
+.bg-photo .bg-surface,
+.bg-photo .bg-surface-2 {
+  backdrop-filter: blur(12px);
 }
 
 ::-webkit-scrollbar {
