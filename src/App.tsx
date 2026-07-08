@@ -1,4 +1,5 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
+import { BackgroundPhotoEffect } from './lib/backgroundPhoto'
 import AthleteListPage from './pages/AthleteListPage'
 import AthleteLayout from './pages/AthleteLayout'
 import DashboardPage from './pages/DashboardPage'
@@ -12,6 +13,7 @@ import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 function App() {
   return (
     <HashRouter>
+      <BackgroundPhotoEffect />
       <Routes>
         <Route path="/" element={<AthleteListPage />} />
         <Route path="/lebensmittel" element={<FoodDatabasePage />} />

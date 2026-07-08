@@ -21,7 +21,7 @@ import {
   importAllData,
   importSelectedAthletes,
 } from '../db/db'
-import { ACCENT_COLORS, createAthlete, deleteAthlete, isoDate } from '../db/queries'
+import { ACCENT_COLORS, clearBackgroundPhoto, createAthlete, deleteAthlete, isoDate, setBackgroundPhoto } from '../db/queries'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
@@ -67,6 +67,8 @@ export default function AthleteListPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const backgroundPhotoInputRef = useRef<HTMLInputElement>(null)
+  const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
   const [pendingImport, setPendingImport] = useState<{ text: string; athletes: Athlete[] } | null>(null)
   const [exportSelectorOpen, setExportSelectorOpen] = useState(false)
 
@@ -166,6 +168,35 @@ export default function AthleteListPage() {
               >
                 {compactMode ? '📥 Karten einklappen: An' : '📥 Karten einklappen: Aus'}
               </button>
+              <button
+                onClick={() => backgroundPhotoInputRef.current?.click()}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                🖼️ Hintergrundbild wählen
+              </button>
+              {!!backgroundPhotoCount && (
+                <button
+                  onClick={async () => {
+                    await clearBackgroundPhoto()
+                    setSettingsOpen(false)
+                  }}
+                  className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+                >
+                  🗑️ Hintergrundbild entfernen
+                </button>
+              )}
+              <input
+                ref={backgroundPhotoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (file) await setBackgroundPhoto(file)
+                  e.target.value = ''
+                  setSettingsOpen(false)
+                }}
+              />
               <div className="my-1 border-t border-border" />
               <Link
                 to="/lebensmittel"

@@ -57,6 +57,23 @@ textarea {
   color-scheme: light;
 }
 
+.bg-photo {
+  --color-surface: transparent;
+  --color-surface-2: transparent;
+  --color-border: transparent;
+  --color-fg: #000000;
+  --color-muted: #000000;
+}
+
+.bg-photo body {
+  background: var(--bg-photo-url) center / cover no-repeat fixed;
+}
+
+.bg-photo .shadow-lg,
+.bg-photo .shadow-xl {
+  box-shadow: none;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

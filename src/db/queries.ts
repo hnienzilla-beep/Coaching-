@@ -1,6 +1,7 @@
 import { db } from './db'
 import type {
   Athlete,
+  BackgroundPhoto,
   DailyEntry,
   FoodItem,
   MealType,
@@ -414,4 +415,18 @@ export async function importProgress(json: string, athleteId: string): Promise<v
       }
     },
   )
+}
+
+const BACKGROUND_PHOTO_ID = 'app'
+
+export async function setBackgroundPhoto(file: Blob): Promise<void> {
+  await db.backgroundPhoto.put({ id: BACKGROUND_PHOTO_ID, photo: file })
+}
+
+export async function clearBackgroundPhoto(): Promise<void> {
+  await db.backgroundPhoto.delete(BACKGROUND_PHOTO_ID)
+}
+
+export async function getBackgroundPhoto(): Promise<BackgroundPhoto | undefined> {
+  return db.backgroundPhoto.get(BACKGROUND_PHOTO_ID)
 }

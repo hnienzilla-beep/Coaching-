@@ -20,6 +20,11 @@ export interface Athlete {
   ffmi?: number // Fettfreie-Masse-Index (kg/m²), manuell erfasst - dient zur Rückrechnung des KFA
 }
 
+export interface BackgroundPhoto {
+  id: string
+  photo: Blob
+}
+
 export interface DailyEntry {
   id: string
   athleteId: string

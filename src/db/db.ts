@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   Athlete,
+  BackgroundPhoto,
   DailyEntry,
   Exercise,
   FoodItem,
@@ -26,6 +27,7 @@ import { EXERCISE_SEED } from '../data/exerciseSeed'
 
 export class CoachDB extends Dexie {
   athletes!: EntityTable<Athlete, 'id'>
+  backgroundPhoto!: EntityTable<BackgroundPhoto, 'id'>
   dailyEntries!: EntityTable<DailyEntry, 'id'>
   foodItems!: EntityTable<FoodItem, 'id'>
   nutritionPlans!: EntityTable<NutritionPlan, 'id'>
@@ -71,6 +73,9 @@ export class CoachDB extends Dexie {
     this.version(5).stores({
       nutritionLogs: 'id, athleteId, date, [athleteId+date]',
       nutritionLogItems: 'id, nutritionLogId',
+    })
+    this.version(6).stores({
+      backgroundPhoto: 'id',
     })
   }
 }
