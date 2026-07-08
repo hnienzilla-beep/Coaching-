@@ -66,7 +66,15 @@ textarea {
 }
 
 .bg-photo body {
-  background: var(--bg-photo-url) center / cover no-repeat fixed;
+  background: transparent;
+}
+
+.bg-photo-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg-photo-url) center / cover no-repeat;
+  pointer-events: none;
 }
 
 .bg-photo .bg-surface,

@@ -34,5 +34,5 @@ export function BackgroundPhotoEffect() {
     }
   }, [url])
 
-  return null
+  return url ? <div className="bg-photo-layer" aria-hidden="true" /> : null
 }
