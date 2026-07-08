@@ -58,9 +58,9 @@ textarea {
 }
 
 .bg-photo {
-  --color-surface: rgba(255, 255, 255, 0.55);
-  --color-surface-2: rgba(255, 255, 255, 0.4);
-  --color-border: rgba(0, 0, 0, 0.12);
+  --color-surface: rgba(255, 255, 255, 0.22);
+  --color-surface-2: rgba(255, 255, 255, 0.14);
+  --color-border: rgba(0, 0, 0, 0.1);
   --color-fg: #000000;
   --color-muted: #000000;
 }
@@ -71,7 +71,7 @@ textarea {
 
 .bg-photo .bg-surface,
 .bg-photo .bg-surface-2 {
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(3px);
 }
 
 ::-webkit-scrollbar {
