@@ -69,6 +69,11 @@ textarea {
   background: transparent;
 }
 
+.bg-photo,
+.bg-photo body {
+  overscroll-behavior-y: none;
+}
+
 .bg-photo-layer {
   position: fixed;
   inset: 0;
@@ -80,6 +85,18 @@ textarea {
 .bg-photo .bg-surface,
 .bg-photo .bg-surface-2 {
   backdrop-filter: blur(3px);
+}
+
+.bg-photo input,
+.bg-photo select,
+.bg-photo textarea {
+  background-color: rgba(255, 255, 255, 0.78);
+  border-color: rgba(0, 0, 0, 0.32);
+}
+
+.bg-photo .text-fg,
+.bg-photo .text-muted {
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.6);
 }
 
 ::-webkit-scrollbar {
