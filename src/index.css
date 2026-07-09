@@ -76,10 +76,19 @@ textarea {
 
 .bg-photo-layer {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: -1;
   background: var(--bg-photo-url) center / cover no-repeat;
   pointer-events: none;
+}
+
+@supports (height: 100dvh) {
+  .bg-photo-layer {
+    height: 100dvh;
+  }
 }
 
 .bg-photo .bg-surface,
