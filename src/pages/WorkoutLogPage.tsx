@@ -15,16 +15,22 @@ import { useCompactMode } from '../lib/compactMode'
 
 type Ctx = { athlete: Athlete }
 
-async function createSetsFromPlanExercise(logExerciseId: string, pe: TrainingPlanExercise): Promise<void> {
+async function createSetsFromPlanExercise(
+  logExerciseId: string,
+  pe: TrainingPlanExercise,
+  lastSets: WorkoutSet[] | undefined,
+): Promise<void> {
   const repsNum = Number.parseInt(pe.reps, 10)
+  const planReps = Number.isFinite(repsNum) ? repsNum : undefined
   const setsToCreate = Math.max(1, pe.sets)
   for (let i = 0; i < setsToCreate; i++) {
+    const lastSet = lastSets?.[i]
     await db.workoutSets.add({
       id: crypto.randomUUID(),
       workoutLogExerciseId: logExerciseId,
       setNumber: i + 1,
-      reps: Number.isFinite(repsNum) ? repsNum : undefined,
-      weightKg: pe.targetWeightKg,
+      reps: lastSet?.reps ?? planReps,
+      weightKg: lastSet?.weightKg ?? pe.targetWeightKg,
     })
   }
 }
@@ -91,15 +97,20 @@ export default function WorkoutLogPage() {
     if (!planId) return
 
     const planRows = await db.trainingPlanExercises.where('planId').equals(planId).sortBy('order')
+    const existingRows = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+    const loggedExerciseIds = new Set(existingRows.map((r) => r.exerciseId))
+    const newPlanRows = planRows.filter((pe) => !loggedExerciseIds.has(pe.exerciseId))
+    const lastPerformances = await Promise.all(
+      newPlanRows.map((pe) => getLastExercisePerformance(athlete.id, pe.exerciseId, selectedDate)),
+    )
+
     await db.transaction('rw', db.workoutLogExercises, db.workoutSets, async () => {
-      const existingRows = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
-      const loggedExerciseIds = new Set(existingRows.map((r) => r.exerciseId))
       let order = nextOrder(existingRows)
-      for (const pe of planRows) {
-        if (loggedExerciseIds.has(pe.exerciseId)) continue
+      for (let i = 0; i < newPlanRows.length; i++) {
+        const pe = newPlanRows[i]
         const logExerciseId = crypto.randomUUID()
         await db.workoutLogExercises.add({ id: logExerciseId, workoutLogId: log.id, exerciseId: pe.exerciseId, order: order++ })
-        await createSetsFromPlanExercise(logExerciseId, pe)
+        await createSetsFromPlanExercise(logExerciseId, pe, lastPerformances[i]?.sets)
       }
     })
   }
@@ -269,6 +280,7 @@ function WorkoutExerciseRow({
 
   async function addSet() {
     const last = sets[sets.length - 1]
+    const lastPerformanceSet = lastPerformance?.sets[sets.length]
     let reps: number | undefined
     let weightKg: number | undefined
     let rpe: number | undefined
@@ -276,6 +288,9 @@ function WorkoutExerciseRow({
       reps = last.reps
       weightKg = last.weightKg
       rpe = last.rpe
+    } else if (lastPerformanceSet) {
+      reps = lastPerformanceSet.reps
+      weightKg = lastPerformanceSet.weightKg
     } else if (planExercise) {
       const repsNum = Number.parseInt(planExercise.reps, 10)
       reps = Number.isFinite(repsNum) ? repsNum : undefined
