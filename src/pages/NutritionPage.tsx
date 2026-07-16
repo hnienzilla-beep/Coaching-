@@ -5,7 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
-import { calculate, nextOrder } from '../lib/calculator'
+import { calculate, caloriesFromMacros, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
@@ -41,7 +41,12 @@ export default function NutritionPage() {
   )
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g`, favorite: f.favorite }))
+  const foodPickerItems = (foods ?? []).map((f) => ({
+    id: f.id,
+    label: f.name,
+    sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
+    favorite: f.favorite,
+  }))
   const target = calculate({
     gender: athlete.gender,
     age: athlete.age,
@@ -58,13 +63,10 @@ export default function NutritionPage() {
     return list.map((m) => {
       const food = foodMap.get(m.foodItemId)
       const factor = m.grams / 100
-      return {
-        meal: m,
-        kcal: food ? food.kcal * factor : 0,
-        protein: food ? food.protein * factor : 0,
-        carbs: food ? food.carbs * factor : 0,
-        fat: food ? food.fat * factor : 0,
-      }
+      const protein = food ? food.protein * factor : 0
+      const carbs = food ? food.carbs * factor : 0
+      const fat = food ? food.fat * factor : 0
+      return { meal: m, kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
     })
   }
 

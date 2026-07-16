@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
 import { Button, Card, DecimalInput, Field, Input } from '../components/ui'
+import { caloriesFromMacros } from '../lib/calculator'
 import type { FoodItem } from '../models/types'
 
 export default function FoodDatabasePage() {
@@ -58,7 +59,8 @@ function FoodRow({ food }: { food: FoodItem }) {
         <div>
           <div className="text-sm font-medium text-fg">{food.name}</div>
           <div className="text-xs text-muted">
-            {food.kcal} kcal · P {food.protein}g · C {food.carbs}g · F {food.fat}g
+            {Math.round(caloriesFromMacros(food.protein, food.carbs, food.fat))} kcal · P {food.protein}g · C {food.carbs}g · F{' '}
+            {food.fat}g
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -81,10 +83,7 @@ function FoodRow({ food }: { food: FoodItem }) {
   return (
     <Card className="flex flex-col gap-2">
       <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      <div className="grid grid-cols-4 gap-2">
-        <Field label="kcal">
-          <DecimalInput value={form.kcal} onChange={(n) => setForm({ ...form, kcal: n ?? 0 })} />
-        </Field>
+      <div className="grid grid-cols-3 gap-2">
         <Field label="Protein">
           <DecimalInput value={form.protein} onChange={(n) => setForm({ ...form, protein: n ?? 0 })} />
         </Field>
@@ -95,12 +94,13 @@ function FoodRow({ food }: { food: FoodItem }) {
           <DecimalInput value={form.fat} onChange={(n) => setForm({ ...form, fat: n ?? 0 })} />
         </Field>
       </div>
+      <p className="text-xs text-muted">{Math.round(caloriesFromMacros(form.protein, form.carbs, form.fat))} kcal (aus Makros berechnet)</p>
       <div className="flex gap-2">
         <Button
           variant="primary"
           className="flex-1"
           onClick={async () => {
-            await db.foodItems.update(food.id, form)
+            await db.foodItems.update(food.id, { ...form, kcal: caloriesFromMacros(form.protein, form.carbs, form.fat) })
             setEditing(false)
           }}
         >
@@ -122,21 +122,23 @@ function FoodRow({ food }: { food: FoodItem }) {
 }
 
 function NewFoodForm({ onDone }: { onDone: () => void }) {
-  const [form, setForm] = useState({ name: '', kcal: 0, protein: 0, carbs: 0, fat: 0 })
+  const [form, setForm] = useState({ name: '', protein: 0, carbs: 0, fat: 0 })
 
   async function submit() {
     if (!form.name.trim()) return
-    await db.foodItems.add({ id: crypto.randomUUID(), ...form, name: form.name.trim() })
+    await db.foodItems.add({
+      id: crypto.randomUUID(),
+      ...form,
+      name: form.name.trim(),
+      kcal: caloriesFromMacros(form.protein, form.carbs, form.fat),
+    })
     onDone()
   }
 
   return (
     <Card className="flex flex-col gap-2">
       <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
-      <div className="grid grid-cols-4 gap-2">
-        <Field label="kcal">
-          <DecimalInput value={form.kcal} onChange={(n) => setForm({ ...form, kcal: n ?? 0 })} />
-        </Field>
+      <div className="grid grid-cols-3 gap-2">
         <Field label="Protein">
           <DecimalInput value={form.protein} onChange={(n) => setForm({ ...form, protein: n ?? 0 })} />
         </Field>
@@ -147,6 +149,7 @@ function NewFoodForm({ onDone }: { onDone: () => void }) {
           <DecimalInput value={form.fat} onChange={(n) => setForm({ ...form, fat: n ?? 0 })} />
         </Field>
       </div>
+      <p className="text-xs text-muted">{Math.round(caloriesFromMacros(form.protein, form.carbs, form.fat))} kcal (aus Makros berechnet)</p>
       <div className="flex gap-2">
         <Button variant="primary" className="flex-1" onClick={submit}>
           Hinzufügen

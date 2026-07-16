@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, isoDate, syncNutritionTotalsToDailyEntry } from '../db/queries'
-import { calculate, mealTypeForTime, nextOrder } from '../lib/calculator'
+import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import type { Athlete, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, Select } from '../components/ui'
@@ -42,7 +42,12 @@ export default function NutritionLogPage() {
   )
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems = (foods ?? []).map((f) => ({ id: f.id, label: f.name, sublabel: `${f.kcal} kcal/100g`, favorite: f.favorite }))
+  const foodPickerItems = (foods ?? []).map((f) => ({
+    id: f.id,
+    label: f.name,
+    sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
+    favorite: f.favorite,
+  }))
   const planMap = new Map((nutritionPlans ?? []).map((p) => [p.id, p]))
 
   const target = calculate({
@@ -60,13 +65,10 @@ export default function NutritionLogPage() {
   const rows: Row[] = (items ?? []).map((item) => {
     const food = foodMap.get(item.foodItemId)
     const factor = item.grams / 100
-    return {
-      item,
-      kcal: food ? food.kcal * factor : 0,
-      protein: food ? food.protein * factor : 0,
-      carbs: food ? food.carbs * factor : 0,
-      fat: food ? food.fat * factor : 0,
-    }
+    const protein = food ? food.protein * factor : 0
+    const carbs = food ? food.carbs * factor : 0
+    const fat = food ? food.fat * factor : 0
+    return { item, kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
   })
 
   const sums = sumRows(rows)

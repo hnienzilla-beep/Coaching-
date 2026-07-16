@@ -49,6 +49,11 @@ function round0(n: number): number {
   return Math.round(n)
 }
 
+// Standard-Atwater-Faktoren: Protein/Kohlenhydrate 4 kcal/g, Fett 9 kcal/g.
+export function caloriesFromMacros(proteinG: number, carbsG: number, fatG: number): number {
+  return proteinG * 4 + carbsG * 4 + fatG * 9
+}
+
 // Mifflin-St-Jeor-Formel, identisch zur Excel-Formel in G4
 export function calculate(input: CalculatorInput): CalculatorResult {
   const { gender, age, heightCm, weightKg, activityLevel, goal, proteinPerKg, fatPerKg, calorieAdjustmentKcal } = input
@@ -68,7 +73,7 @@ export function calculate(input: CalculatorInput): CalculatorResult {
   const proteinG = round0(weightKg * proteinPerKg)
   const fatG = round0(weightKg * fatPerKg)
   const carbsG = round0((targetCalories - proteinG * 4 - fatG * 9) / 4)
-  const controlCalories = proteinG * 4 + carbsG * 4 + fatG * 9
+  const controlCalories = caloriesFromMacros(proteinG, carbsG, fatG)
 
   return {
     bmr: round0(bmr),
