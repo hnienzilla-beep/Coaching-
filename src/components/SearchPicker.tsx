@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Input } from './ui'
 
 export interface SearchPickerItem {
@@ -13,15 +13,38 @@ export default function SearchPicker({
   value,
   onChange,
   placeholder = 'Suchen...',
+  noResultsAction,
 }: {
   items: SearchPickerItem[]
   value: string | undefined
   onChange: (id: string) => void
   placeholder?: string
+  noResultsAction?: (query: string) => ReactNode // ersetzt den "Keine Treffer"-Text, z.B. für ein Inline-Anlegen-Formular
 }) {
   const selected = items.find((i) => i.id === value)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Klick-außerhalb schließt das Dropdown (statt Blur+Timeout) - dadurch können auch
+  // interaktive Inhalte in noResultsAction (z.B. Eingabefelder) fokussiert werden, ohne
+  // dass das Dropdown vorher wegen des Fokuswechsels schließt.
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  // Schließt das Dropdown auch dann, wenn value von außen gesetzt wird (z.B. über
+  // noResultsAction) statt über einen Klick auf eine der eigenen Options-Zeilen.
+  useEffect(() => {
+    setOpen(false)
+  }, [value])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -30,7 +53,7 @@ export default function SearchPicker({
   }, [items, query])
 
   return (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
       <Input
         placeholder={placeholder}
         value={open ? query : (selected?.label ?? '')}
@@ -38,17 +61,16 @@ export default function SearchPicker({
           setQuery('')
           setOpen(true)
         }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onChange={(e) => setQuery(e.target.value)}
       />
       {open && (
         <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-surface-2 shadow-xl">
-          {filtered.length === 0 && <div className="px-3 py-2 text-sm text-muted">Keine Treffer</div>}
+          {filtered.length === 0 &&
+            (noResultsAction ? noResultsAction(query) : <div className="px-3 py-2 text-sm text-muted">Keine Treffer</div>)}
           {filtered.map((i) => (
             <button
               key={i.id}
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 onChange(i.id)
                 setOpen(false)

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
@@ -9,21 +9,25 @@ import { calculate, caloriesFromMacros, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Select } from '../components/ui'
+import { Button, Card, DecimalInput, Input, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
+import CollapsibleCard from '../components/CollapsibleCard'
 import { useCoachMode } from '../lib/coachMode'
+import { useCompactMode } from '../lib/compactMode'
 import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
 const CAL_TOLERANCE = 100
 const MACRO_TOLERANCE = 15
+const GRAM_PRESETS = [50, 100, 150, 200]
 
 type Row = { meal: PlanMeal; kcal: number; protein: number; carbs: number; fat: number }
 
 export default function NutritionPage() {
   const { athlete } = useOutletContext<Ctx>()
   const [coachMode] = useCoachMode()
+  const [compactMode] = useCompactMode()
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -86,6 +90,10 @@ export default function NutritionPage() {
   const draftRows: Row[] = toRows(draftMeals ?? [])
   const draftSums = sumRows(draftRows)
   const sortedDraftMeals = sortDraftMeals(draftMeals ?? [])
+  const draftGroups = MEAL_TYPES.map((mealType) => ({
+    mealType,
+    meals: sortedDraftMeals.filter((m) => m.mealType === mealType),
+  })).filter((g) => g.meals.length > 0)
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -130,15 +138,19 @@ export default function NutritionPage() {
     setDraftMeals((prev) => (prev ?? []).filter((m) => m.id !== id))
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  // Drag & Drop wirkt nur innerhalb einer Mahlzeit-Typ-Gruppe (mealType ändert sich nie
+  // durchs Ziehen, nur über das Dropdown der Zeile) - jede Gruppe bekommt daher ihren
+  // eigenen DndContext, dieser Handler reordnet nur die order-Werte innerhalb der
+  // übergebenen Gruppen-Teilmenge.
+  function handleDragEndInGroup(groupMeals: PlanMeal[], event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = sortedDraftMeals.findIndex((m) => m.id === active.id)
-    const newIndex = sortedDraftMeals.findIndex((m) => m.id === over.id)
+    const oldIndex = groupMeals.findIndex((m) => m.id === active.id)
+    const newIndex = groupMeals.findIndex((m) => m.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(sortedDraftMeals, oldIndex, newIndex)
+    const reordered = arrayMove(groupMeals, oldIndex, newIndex)
     const orderById = new Map(reordered.map((m, i) => [m.id, i]))
-    setDraftMeals((prev) => (prev ?? []).map((m) => ({ ...m, order: orderById.get(m.id) ?? m.order })))
+    setDraftMeals((prev) => (prev ?? []).map((m) => (orderById.has(m.id) ? { ...m, order: orderById.get(m.id)! } : m)))
   }
 
   async function saveDraft() {
@@ -205,6 +217,7 @@ export default function NutritionPage() {
           sums={sums}
           target={target}
           onEdit={coachMode ? startEdit : undefined}
+          compactMode={compactMode}
         />
       )}
 
@@ -223,21 +236,33 @@ export default function NutritionPage() {
             )}
           </div>
 
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sortedDraftMeals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-col gap-2">
-                {sortedDraftMeals.map((meal) => (
-                  <SortableMealRow
-                    key={meal.id}
-                    meal={meal}
-                    foodPickerItems={foodPickerItems}
-                    onChange={(patch) => updateDraftMeal(meal.id, patch)}
-                    onRemove={() => removeDraftMeal(meal.id)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+          {draftGroups.length === 0 && <p className="text-sm text-muted">🍽️ Noch keine Mahlzeiten in dieser Phase.</p>}
+
+          <div className="flex flex-col gap-3">
+            {draftGroups.map((group) => (
+              <CollapsibleCard key={group.mealType} title={group.mealType} variant="plain">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => handleDragEndInGroup(group.meals, e)}
+                >
+                  <SortableContext items={group.meals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+                    <div className="flex flex-col gap-2">
+                      {group.meals.map((meal) => (
+                        <SortableMealRow
+                          key={meal.id}
+                          meal={meal}
+                          foodPickerItems={foodPickerItems}
+                          onChange={(patch) => updateDraftMeal(meal.id, patch)}
+                          onRemove={() => removeDraftMeal(meal.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </CollapsibleCard>
+            ))}
+          </div>
 
           <Button variant="secondary" onClick={addDraftRow}>
             + Zeile hinzufügen
@@ -287,11 +312,12 @@ function SortableMealRow({
   onRemove,
 }: {
   meal: PlanMeal
-  foodPickerItems: { id: string; label: string; sublabel?: string }[]
+  foodPickerItems: { id: string; label: string; sublabel?: string; favorite?: boolean }[]
   onChange: (patch: Partial<PlanMeal>) => void
   onRemove: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
+  const favorites = foodPickerItems.filter((f) => f.favorite)
 
   return (
     <div
@@ -315,9 +341,26 @@ function SortableMealRow({
             value={meal.foodItemId || undefined}
             onChange={(id) => onChange({ foodItemId: id })}
             placeholder="Lebensmittel suchen..."
+            noResultsAction={(query) => <QuickAddFood query={query} onCreated={(id) => onChange({ foodItemId: id })} />}
           />
         </div>
       </div>
+
+      {!meal.foodItemId && favorites.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {favorites.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onChange({ foodItemId: f.id })}
+              className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs text-accent"
+            >
+              ⭐ {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <Select value={meal.mealType} onChange={(e) => onChange({ mealType: e.target.value as MealType })} className="flex-1">
           {MEAL_TYPES.map((mt) => (
@@ -326,6 +369,12 @@ function SortableMealRow({
             </option>
           ))}
         </Select>
+        <Button variant="ghost" onClick={onRemove}>
+          ✕
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
         <input
           type="number"
           value={meal.grams}
@@ -333,10 +382,66 @@ function SortableMealRow({
           placeholder="Gramm"
           className="w-20 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
         />
-        <Button variant="ghost" onClick={onRemove}>
-          ✕
-        </Button>
+        <span className="text-xs text-muted">g</span>
+        <div className="flex flex-1 gap-1">
+          {GRAM_PRESETS.map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => onChange({ grams: g })}
+              className={`flex-1 rounded-lg border px-1 py-1.5 text-xs ${
+                meal.grams === g ? 'border-accent bg-accent/10 text-accent' : 'border-border text-muted'
+              }`}
+            >
+              {g}g
+            </button>
+          ))}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function QuickAddFood({ query, onCreated }: { query: string; onCreated: (id: string) => void }) {
+  const [name, setName] = useState(query)
+  const [nameTouched, setNameTouched] = useState(false)
+  const [protein, setProtein] = useState(0)
+  const [carbs, setCarbs] = useState(0)
+  const [fat, setFat] = useState(0)
+
+  // Solange der Nutzer den Namen nicht selbst bearbeitet hat, folgt er weiterhin dem
+  // Suchtext - sonst würde beim Weitertippen nach dem ersten "Keine Treffer"-Moment nur
+  // das bis dahin eingegebene Präfix als Name übernommen.
+  useEffect(() => {
+    if (!nameTouched) setName(query)
+  }, [query, nameTouched])
+
+  async function create() {
+    if (!name.trim()) return
+    const id = crypto.randomUUID()
+    await db.foodItems.add({ id, name: name.trim(), protein, carbs, fat, kcal: caloriesFromMacros(protein, carbs, fat) })
+    onCreated(id)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 p-2">
+      <p className="text-xs text-muted">Keine Treffer – neues Lebensmittel anlegen:</p>
+      <Input
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value)
+          setNameTouched(true)
+        }}
+        placeholder="Name"
+      />
+      <div className="grid grid-cols-3 gap-1.5">
+        <DecimalInput value={protein} onChange={(n) => setProtein(n ?? 0)} placeholder="Protein" />
+        <DecimalInput value={carbs} onChange={(n) => setCarbs(n ?? 0)} placeholder="Carbs" />
+        <DecimalInput value={fat} onChange={(n) => setFat(n ?? 0)} placeholder="Fett" />
+      </div>
+      <Button type="button" variant="primary" onClick={create}>
+        + Anlegen &amp; auswählen
+      </Button>
     </div>
   )
 }
@@ -348,6 +453,7 @@ function NutritionOverview({
   sums,
   target,
   onEdit,
+  compactMode,
 }: {
   phaseName: string
   rows: Row[]
@@ -355,6 +461,7 @@ function NutritionOverview({
   sums: { kcal: number; protein: number; carbs: number; fat: number }
   target: ReturnType<typeof calculate>
   onEdit?: () => void
+  compactMode: boolean
 }) {
   const groups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
@@ -380,20 +487,24 @@ function NutritionOverview({
 
       <div className="flex flex-col gap-3">
         {groups.map((group) => (
-          <div key={group.mealType}>
-            <div className="flex items-center justify-between pb-1">
-              <div className="text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
-              <div className="text-xs text-muted">
+          <CollapsibleCard
+            key={group.mealType}
+            title={group.mealType}
+            variant="plain"
+            defaultExpanded={!compactMode}
+            headerExtra={
+              <span className="text-xs text-muted">
                 {group.sum.kcal.toFixed(0)} kcal · P {group.sum.protein.toFixed(1)} g · C {group.sum.carbs.toFixed(1)} g · F{' '}
                 {group.sum.fat.toFixed(1)} g
-              </div>
-            </div>
+              </span>
+            }
+          >
             <div className="flex flex-col gap-1">
               {group.rows.map(({ meal }) => (
                 <FoodRow key={meal.id} meal={meal} foodName={foodMap.get(meal.foodItemId)?.name} />
               ))}
             </div>
-          </div>
+          </CollapsibleCard>
         ))}
       </div>
 
