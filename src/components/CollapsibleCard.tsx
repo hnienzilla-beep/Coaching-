@@ -3,14 +3,12 @@ import { Card } from './ui'
 
 export default function CollapsibleCard({
   title,
-  headerExtra,
   defaultExpanded = true,
   keepMounted = false,
   variant = 'card',
   children,
 }: {
   title: string
-  headerExtra?: ReactNode // zusätzlicher Inhalt rechts neben dem Titel, vor dem Chevron (z.B. eine Summenzeile)
   defaultExpanded?: boolean
   keepMounted?: boolean // true: Kinder bleiben gemountet (nur per CSS versteckt) - erhält Timer-State beim Einklappen
   variant?: 'card' | 'plain' // 'plain': schmale Kopfzeile ohne eigene Card, für bereits Card-gewrappte Kinder
@@ -19,12 +17,14 @@ export default function CollapsibleCard({
   const [expanded, setExpanded] = useState(defaultExpanded)
 
   const header = (
-    <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className="flex w-full flex-col gap-0.5 text-left">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
-        <span className={`text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>▾</span>
-      </div>
-      {headerExtra}
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+      className="flex w-full items-center justify-between text-left"
+    >
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
+      <span className={`text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>▾</span>
     </button>
   )
 

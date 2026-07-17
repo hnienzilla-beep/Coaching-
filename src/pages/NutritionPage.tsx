@@ -13,7 +13,6 @@ import { Button, Card, DecimalInput, Input, Select } from '../components/ui'
 import SearchPicker from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
 import { useCoachMode } from '../lib/coachMode'
-import { useCompactMode } from '../lib/compactMode'
 import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
@@ -27,7 +26,6 @@ type Row = { meal: PlanMeal; kcal: number; protein: number; carbs: number; fat: 
 export default function NutritionPage() {
   const { athlete } = useOutletContext<Ctx>()
   const [coachMode] = useCoachMode()
-  const [compactMode] = useCompactMode()
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -217,7 +215,6 @@ export default function NutritionPage() {
           sums={sums}
           target={target}
           onEdit={coachMode ? startEdit : undefined}
-          compactMode={compactMode}
         />
       )}
 
@@ -453,7 +450,6 @@ function NutritionOverview({
   sums,
   target,
   onEdit,
-  compactMode,
 }: {
   phaseName: string
   rows: Row[]
@@ -461,7 +457,6 @@ function NutritionOverview({
   sums: { kcal: number; protein: number; carbs: number; fat: number }
   target: ReturnType<typeof calculate>
   onEdit?: () => void
-  compactMode: boolean
 }) {
   const groups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
@@ -487,24 +482,20 @@ function NutritionOverview({
 
       <div className="flex flex-col gap-3">
         {groups.map((group) => (
-          <CollapsibleCard
-            key={group.mealType}
-            title={group.mealType}
-            variant="plain"
-            defaultExpanded={!compactMode}
-            headerExtra={
-              <span className="text-xs text-muted">
+          <div key={group.mealType}>
+            <div className="flex items-center justify-between pb-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
+              <div className="text-xs text-muted">
                 {group.sum.kcal.toFixed(0)} kcal · P {group.sum.protein.toFixed(1)} g · C {group.sum.carbs.toFixed(1)} g · F{' '}
                 {group.sum.fat.toFixed(1)} g
-              </span>
-            }
-          >
+              </div>
+            </div>
             <div className="flex flex-col gap-1">
               {group.rows.map(({ meal }) => (
                 <FoodRow key={meal.id} meal={meal} foodName={foodMap.get(meal.foodItemId)?.name} />
               ))}
             </div>
-          </CollapsibleCard>
+          </div>
         ))}
       </div>
 
