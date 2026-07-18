@@ -2,6 +2,7 @@ import { db } from '../../db/db'
 import { isoDate } from '../../db/queries'
 import { getSyncSettings } from './settings'
 import { upsertFile } from './githubApi'
+import { syncErnaehrungAlles } from './nutritionExport'
 
 function fmtNum(n: number | undefined): string {
   return n === undefined ? '' : String(n)
@@ -116,9 +117,10 @@ export async function syncSupplemente(): Promise<void> {
   await upsertFile('20-Fitness/Supplemente.md', lines.join('\n'), 'Sync: Supplementplan')
 }
 
-/** Führt alle drei Fitness-Exports nacheinander aus. */
+/** Führt alle Fitness- und Ernährungs-Exports nacheinander aus. */
 export async function syncFitnessHeute(): Promise<void> {
   await syncGewicht()
   await syncTrainingHeute()
   await syncSupplemente()
+  await syncErnaehrungAlles()
 }
