@@ -28,6 +28,7 @@ import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
 import { useCoachMode } from '../lib/coachMode'
 import { useCompactMode } from '../lib/compactMode'
+import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
 
 export default function AthleteListPage() {
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
@@ -71,6 +72,7 @@ export default function AthleteListPage() {
   const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
   const [pendingImport, setPendingImport] = useState<{ text: string; athletes: Athlete[] } | null>(null)
   const [exportSelectorOpen, setExportSelectorOpen] = useState(false)
+  const [obsidianSyncOpen, setObsidianSyncOpen] = useState(false)
 
   async function handleExport() {
     const json = await exportAllData()
@@ -219,6 +221,16 @@ export default function AthleteListPage() {
               >
                 Trainings-DB
               </Link>
+              <div className="my-1 border-t border-border" />
+              <button
+                onClick={() => {
+                  setObsidianSyncOpen(true)
+                  setSettingsOpen(false)
+                }}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                🔗 Obsidian-Sync
+              </button>
             </div>
           )}
         </div>
@@ -282,6 +294,8 @@ export default function AthleteListPage() {
           }}
         />
       )}
+
+      {obsidianSyncOpen && <ObsidianSyncModal onClose={() => setObsidianSyncOpen(false)} />}
 
       {exportSelectorOpen && (
         <ExportAthleteSelector

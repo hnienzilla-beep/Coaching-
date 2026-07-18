@@ -12,6 +12,7 @@ import StrengthChart from '../components/StrengthChart'
 import WorkoutTimer from '../components/WorkoutTimer'
 import { formatDuration, nextOrder } from '../lib/calculator'
 import { useCompactMode } from '../lib/compactMode'
+import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 
 type Ctx = { athlete: Athlete }
 
@@ -123,6 +124,7 @@ export default function WorkoutLogPage() {
   async function completeWorkout() {
     if (!currentLog) return
     await db.workoutLogs.update(currentLog.id, { completedAt: new Date().toISOString() })
+    triggerAutoSync()
     navigate(`/athlete/${athlete.id}`)
   }
 

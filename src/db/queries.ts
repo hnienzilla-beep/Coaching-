@@ -1,4 +1,5 @@
 import { db } from './db'
+import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 import type {
   Athlete,
   BackgroundPhoto,
@@ -173,6 +174,7 @@ export async function upsertDailyEntry(entry: DailyEntry): Promise<void> {
       await db.dailyEntries.add(entry)
     }
   })
+  triggerAutoSync()
 }
 
 // Übernimmt die Tagessumme aus dem Ernährungslog (abgehakte Einträge) in die
