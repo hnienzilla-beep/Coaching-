@@ -455,7 +455,7 @@ interface TrainingPlanTemplate {
   phaseName: string
   items: {
     exerciseName: string
-    exerciseFallback?: { muscleGroup: MuscleGroup }
+    exerciseFallback?: { muscleGroup: MuscleGroup; imageDataUrl?: string }
     order: number
     sets: number
     reps: string
@@ -477,7 +477,7 @@ export async function exportTrainingPlan(planId: string): Promise<string> {
       const exercise = exercises[i]
       return {
         exerciseName: exercise?.name ?? '?',
-        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup } : undefined,
+        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup, imageDataUrl: exercise.imageDataUrl } : undefined,
         order: r.order,
         sets: r.sets,
         reps: r.reps,
