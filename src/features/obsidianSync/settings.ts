@@ -7,6 +7,8 @@ export interface ObsidianSyncSettings {
   autoSync: boolean
   /** Abstand zwischen zwei automatischen Syncs in Minuten. */
   intervalMinutes: number
+  /** Im Vault geänderte Dateien zurück in die App übernehmen (Zwei-Wege-Sync). */
+  importFromVault: boolean
 }
 
 const STORAGE_KEY = 'obsidian-sync-settings'
@@ -41,9 +43,11 @@ export function getSyncSettings(): ObsidianSyncSettings | null {
       repo: parsed.repo,
       token: parsed.token,
       athleteId: parsed.athleteId,
-      // Bestandsnutzer haben diese Felder noch nicht gespeichert - dort ist Auto-Sync an.
+      // Bestandsnutzer haben diese Felder noch nicht gespeichert - dort sind Auto-Sync und
+      // Zwei-Wege-Sync an.
       autoSync: parsed.autoSync ?? true,
       intervalMinutes: normalizeInterval(parsed.intervalMinutes),
+      importFromVault: parsed.importFromVault ?? true,
     }
   } catch {
     return null

@@ -1,7 +1,7 @@
 import { getSyncSettings } from './settings'
 import { syncFitnessHeute } from './fitnessExport'
-import { clearFileCache } from './githubApi'
-import { getSyncState, setSyncState } from './syncState'
+import { getSyncState, isImportingFromVault, setSyncState } from './syncState'
+import { getImportLog, resetImportLog, summarizeImports } from './vaultImport'
 
 /**
  * Automatischer Vault-Sync.
@@ -58,13 +58,20 @@ async function performSync(): Promise<void> {
   running = true
   setSyncState({ running: true })
   try {
+    resetImportLog()
     do {
       rerunRequested = false
       await syncFitnessHeute()
     } while (rerunRequested)
     failureCount = 0
     nextAttemptAt = 0
-    setSyncState({ running: false, lastSyncAt: new Date().toISOString(), lastError: null, pendingChanges: false })
+    setSyncState({
+      running: false,
+      lastSyncAt: new Date().toISOString(),
+      lastError: null,
+      pendingChanges: false,
+      lastImport: summarizeImports(getImportLog()),
+    })
   } catch (err) {
     failureCount++
     nextAttemptAt = Date.now() + BACKOFF_MS[Math.min(failureCount - 1, BACKOFF_MS.length - 1)]
@@ -75,11 +82,7 @@ async function performSync(): Promise<void> {
   }
 }
 
-/**
- * Sync auf Knopfdruck: ignoriert Intervall und Backoff, schreibt alle Dateien neu (damit
- * ein manueller Sync auch im Vault gelöschte oder verbogene Dateien repariert) und meldet
- * Fehler an den Aufrufer.
- */
+/** Sync auf Knopfdruck: ignoriert Intervall und Backoff und meldet Fehler an den Aufrufer. */
 export async function syncNow(): Promise<void> {
   if (debounceTimer) {
     clearTimeout(debounceTimer)
@@ -87,7 +90,6 @@ export async function syncNow(): Promise<void> {
   }
   failureCount = 0
   nextAttemptAt = 0
-  clearFileCache()
   await performSync()
 }
 
@@ -126,6 +128,9 @@ function tick(): void {
  * schnell aufeinanderfolgende Eingaben zu einem Upload zusammengefasst werden.
  */
 export function triggerAutoSync(): void {
+  // Schreibvorgänge eines laufenden Vault-Imports sind keine Nutzeränderungen - sonst
+  // würde jeder Import direkt den nächsten Sync anstoßen.
+  if (isImportingFromVault()) return
   const settings = getSyncSettings()
   if (!settings) return
   setSyncState({ pendingChanges: true })

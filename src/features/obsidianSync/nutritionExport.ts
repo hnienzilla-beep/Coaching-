@@ -1,16 +1,19 @@
 import { db } from '../../db/db'
-import { isoDate } from '../../db/queries'
 import { caloriesFromMacros } from '../../lib/calculator'
 import { MEAL_TYPES } from '../../models/types'
 import { getSyncSettings } from './settings'
-import { upsertFile } from './githubApi'
+import { syncFile } from './githubApi'
+import { importErnaehrungLog, importErnaehrungsplan } from './vaultImport'
 
 function round(n: number): number {
   return Math.round(n)
 }
 
-/** Schreibt den aktuellen Ernährungsplan (erste Phase) des gewählten Athleten. */
-export async function syncErnaehrungsplan(): Promise<void> {
+export const ERNAEHRUNGSPLAN_PATH = '40-Ernaehrung/Ernaehrungsplan.md'
+export const ERNAEHRUNG_LOG_DIR = '40-Ernaehrung/Log'
+
+/** Baut den aktuellen Ernährungsplan (erste Phase) des gewählten Athleten. */
+async function buildErnaehrungsplan(): Promise<string> {
   const settings = getSyncSettings()
   if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
 
@@ -63,20 +66,28 @@ export async function syncErnaehrungsplan(): Promise<void> {
     }
   }
 
-  await upsertFile('40-Ernaehrung/Ernaehrungsplan.md', lines.join('\n'), 'Sync: Ernaehrungsplan')
+  return lines.join('\n')
 }
 
-/** Exportiert das heutige Ernährungslog (falls vorhanden) nach 40-Ernaehrung/Log/JJJJ-MM-TT.md. */
-export async function syncErnaehrungHeute(): Promise<void> {
+/** Gleicht den Ernährungsplan in beide Richtungen ab. */
+export async function syncErnaehrungsplan(): Promise<void> {
+  await syncFile({
+    path: ERNAEHRUNGSPLAN_PATH,
+    build: buildErnaehrungsplan,
+    commitMessage: 'Sync: Ernaehrungsplan',
+    importRemote: async (content) => {
+      await importErnaehrungsplan(content)
+    },
+  })
+}
+
+/** Baut das Ernährungslog eines Tages - `null`, wenn an dem Tag nichts erfasst wurde. */
+async function buildErnaehrungLog(date: string): Promise<string | null> {
   const settings = getSyncSettings()
   if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
 
-  const today = isoDate(new Date())
-  const log = await db.nutritionLogs
-    .where('[athleteId+date]')
-    .equals([settings.athleteId, today])
-    .first()
-  if (!log) return // kein Ernährungslog heute - nichts zu exportieren
+  const log = await db.nutritionLogs.where('[athleteId+date]').equals([settings.athleteId, date]).first()
+  if (!log) return null
 
   const items = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).sortBy('order')
   const foods = await db.foodItems.bulkGet(items.map((i) => i.foodItemId))
@@ -113,7 +124,7 @@ export async function syncErnaehrungHeute(): Promise<void> {
   const frontmatter = [
     '---',
     'typ: ernaehrung',
-    `datum: ${today}`,
+    `datum: ${date}`,
     `kalorien: ${round(totalKcal)}`,
     `protein_g: ${round(totalProtein)}`,
     `kohlenhydrate_g: ${round(totalCarbs)}`,
@@ -123,12 +134,17 @@ export async function syncErnaehrungHeute(): Promise<void> {
   ].join('\n')
 
   const body = bodyLines.length > 0 ? bodyLines.join('\n') : '_Keine Mahlzeiten erfasst._\n'
-
-  await upsertFile(`40-Ernaehrung/Log/${today}.md`, frontmatter + body, `Sync ${today}: Ernaehrung`)
+  return frontmatter + body
 }
 
-/** Führt beide Ernährungs-Exporte nacheinander aus. */
-export async function syncErnaehrungAlles(): Promise<void> {
-  await syncErnaehrungsplan()
-  await syncErnaehrungHeute()
+/** Gleicht das Ernährungslog eines Tages in beide Richtungen ab. */
+export async function syncErnaehrungLog(date: string): Promise<void> {
+  await syncFile({
+    path: `${ERNAEHRUNG_LOG_DIR}/${date}.md`,
+    build: () => buildErnaehrungLog(date),
+    commitMessage: `Sync ${date}: Ernaehrung`,
+    importRemote: async (content) => {
+      await importErnaehrungLog(date, content)
+    },
+  })
 }

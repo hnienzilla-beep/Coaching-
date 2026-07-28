@@ -15,6 +15,8 @@ export interface SyncState {
   lastError: string | null
   /** Es gab Datenänderungen, die noch nicht hochgeladen wurden. */
   pendingChanges: boolean
+  /** Kurzfassung dessen, was zuletzt aus dem Vault übernommen wurde (null = nichts). */
+  lastImport: string | null
 }
 
 const STORAGE_KEY = 'obsidian-sync-state'
@@ -23,20 +25,24 @@ interface PersistedState {
   lastSyncAt: string | null
   lastError: string | null
   pendingChanges: boolean
+  lastImport: string | null
 }
+
+const EMPTY: PersistedState = { lastSyncAt: null, lastError: null, pendingChanges: false, lastImport: null }
 
 function loadPersisted(): PersistedState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { lastSyncAt: null, lastError: null, pendingChanges: false }
+    if (!raw) return EMPTY
     const parsed = JSON.parse(raw) as Partial<PersistedState>
     return {
       lastSyncAt: typeof parsed.lastSyncAt === 'string' ? parsed.lastSyncAt : null,
       lastError: typeof parsed.lastError === 'string' ? parsed.lastError : null,
       pendingChanges: parsed.pendingChanges === true,
+      lastImport: typeof parsed.lastImport === 'string' ? parsed.lastImport : null,
     }
   } catch {
-    return { lastSyncAt: null, lastError: null, pendingChanges: false }
+    return EMPTY
   }
 }
 
@@ -56,13 +62,31 @@ export function subscribeSyncState(listener: () => void): () => void {
   }
 }
 
+// Während ein Vault-Import läuft, schreiben wir in dieselben Tabellen, die der Auto-Sync
+// überwacht. Ohne diese Sperre würde jeder Import sofort einen weiteren Sync auslösen.
+let importDepth = 0
+
+export function isImportingFromVault(): boolean {
+  return importDepth > 0
+}
+
+export async function withVaultImport<T>(fn: () => Promise<T>): Promise<T> {
+  importDepth++
+  try {
+    return await fn()
+  } finally {
+    importDepth--
+  }
+}
+
 export function setSyncState(patch: Partial<SyncState>): void {
   const next = { ...state, ...patch }
   if (
     next.running === state.running &&
     next.lastSyncAt === state.lastSyncAt &&
     next.lastError === state.lastError &&
-    next.pendingChanges === state.pendingChanges
+    next.pendingChanges === state.pendingChanges &&
+    next.lastImport === state.lastImport
   ) {
     return
   }
@@ -72,6 +96,7 @@ export function setSyncState(patch: Partial<SyncState>): void {
       lastSyncAt: state.lastSyncAt,
       lastError: state.lastError,
       pendingChanges: state.pendingChanges,
+      lastImport: state.lastImport,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted))
   } catch {

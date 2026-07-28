@@ -1,15 +1,20 @@
 import { db } from '../../db/db'
-import { isoDate } from '../../db/queries'
+import { addDays, isoDate } from '../../db/queries'
 import { getSyncSettings } from './settings'
-import { upsertFile } from './githubApi'
-import { syncErnaehrungAlles } from './nutritionExport'
+import { syncFile } from './githubApi'
+import { syncErnaehrungLog, syncErnaehrungsplan } from './nutritionExport'
+import { importGewicht, importSupplemente, importTraining } from './vaultImport'
 
 function fmtNum(n: number | undefined): string {
   return n === undefined ? '' : String(n)
 }
 
+export const GEWICHT_PATH = '20-Fitness/Gewicht.md'
+export const SUPPLEMENTE_PATH = '20-Fitness/Supplemente.md'
+export const TRAINING_DIR = '20-Fitness/Training'
+
 /** Baut Gewicht.md komplett neu aus allen gespeicherten Gewichtsdaten des gewählten Athleten. */
-export async function syncGewicht(): Promise<void> {
+async function buildGewicht(): Promise<string> {
   const settings = getSyncSettings()
   if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
 
@@ -29,20 +34,28 @@ export async function syncGewicht(): Promise<void> {
     '',
   ]
 
-  await upsertFile('20-Fitness/Gewicht.md', lines.join('\n'), 'Sync: Gewichtsverlauf')
+  return lines.join('\n')
 }
 
-/** Exportiert das heutige Training (falls vorhanden) nach 20-Fitness/Training/JJJJ-MM-TT.md. */
-export async function syncTrainingHeute(): Promise<void> {
+/** Gleicht Gewicht.md in beide Richtungen ab. */
+export async function syncGewicht(): Promise<void> {
+  await syncFile({
+    path: GEWICHT_PATH,
+    build: buildGewicht,
+    commitMessage: 'Sync: Gewichtsverlauf',
+    importRemote: async (content) => {
+      await importGewicht(content)
+    },
+  })
+}
+
+/** Baut die Trainingsdatei eines Tages - `null`, wenn an dem Tag nichts trainiert wurde. */
+async function buildTraining(date: string): Promise<string | null> {
   const settings = getSyncSettings()
   if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
 
-  const today = isoDate(new Date())
-  const log = await db.workoutLogs
-    .where('[athleteId+date]')
-    .equals([settings.athleteId, today])
-    .first()
-  if (!log) return // kein Training heute - nichts zu exportieren
+  const log = await db.workoutLogs.where('[athleteId+date]').equals([settings.athleteId, date]).first()
+  if (!log) return null
 
   const plan = log.trainingPlanId ? await db.trainingPlans.get(log.trainingPlanId) : undefined
   const logExercises = await db.workoutLogExercises.where('workoutLogId').equals(log.id).sortBy('order')
@@ -71,7 +84,7 @@ export async function syncTrainingHeute(): Promise<void> {
   const frontmatter = [
     '---',
     'typ: training',
-    `datum: ${today}`,
+    `datum: ${date}`,
     `plan: ${plan?.phaseName ?? 'ohne Plan'}`,
     `dauer_min: ${
       log.startedAt && log.completedAt
@@ -83,12 +96,27 @@ export async function syncTrainingHeute(): Promise<void> {
   ].join('\n')
 
   const body = exerciseLines.length > 0 ? exerciseLines.join('\n') : '_Keine Übungen erfasst._\n'
-
-  await upsertFile(`20-Fitness/Training/${today}.md`, frontmatter + body, `Sync ${today}: Training`)
+  return frontmatter + body
 }
 
-/** Schreibt den aktuellen Supplementplan (erste Phase) des gewählten Athleten. */
-export async function syncSupplemente(): Promise<void> {
+/** Gleicht die Trainingsdatei eines Tages in beide Richtungen ab (Standard: heute). */
+export async function syncTraining(date: string): Promise<void> {
+  await syncFile({
+    path: `${TRAINING_DIR}/${date}.md`,
+    build: () => buildTraining(date),
+    commitMessage: `Sync ${date}: Training`,
+    importRemote: async (content) => {
+      await importTraining(date, content)
+    },
+  })
+}
+
+export async function syncTrainingHeute(): Promise<void> {
+  await syncTraining(isoDate(new Date()))
+}
+
+/** Baut den aktuellen Supplementplan (erste Phase) des gewählten Athleten. */
+async function buildSupplemente(): Promise<string> {
   const settings = getSyncSettings()
   if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
 
@@ -114,13 +142,38 @@ export async function syncSupplemente(): Promise<void> {
     }
   }
 
-  await upsertFile('20-Fitness/Supplemente.md', lines.join('\n'), 'Sync: Supplementplan')
+  return lines.join('\n')
 }
 
-/** Führt alle Fitness- und Ernährungs-Exports nacheinander aus. */
+/** Gleicht Supplemente.md in beide Richtungen ab. */
+export async function syncSupplemente(): Promise<void> {
+  await syncFile({
+    path: SUPPLEMENTE_PATH,
+    build: buildSupplemente,
+    commitMessage: 'Sync: Supplementplan',
+    importRemote: async (content) => {
+      await importSupplemente(content)
+    },
+  })
+}
+
+/**
+ * Tage, deren Tagesdateien der laufende Sync abgleicht. Mehr als heute, damit ein gestern
+ * Abend in Obsidian nachgetragenes Training nicht bis zum "Kompletten Vault einlesen" wartet.
+ */
+const SYNCED_DAYS = 3
+
+export function recentDates(today = isoDate(new Date())): string[] {
+  return Array.from({ length: SYNCED_DAYS }, (_, i) => addDays(today, -i))
+}
+
+/** Führt alle Fitness- und Ernährungs-Abgleiche nacheinander aus. */
 export async function syncFitnessHeute(): Promise<void> {
   await syncGewicht()
-  await syncTrainingHeute()
   await syncSupplemente()
-  await syncErnaehrungAlles()
+  await syncErnaehrungsplan()
+  for (const date of recentDates()) {
+    await syncTraining(date)
+    await syncErnaehrungLog(date)
+  }
 }
