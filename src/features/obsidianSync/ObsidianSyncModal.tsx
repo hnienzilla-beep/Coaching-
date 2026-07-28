@@ -1,12 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/db'
 import { Button, Card, Field, Input, Select } from '../../components/ui'
-import { getSyncSettings, saveSyncSettings } from './settings'
+import { DEFAULT_INTERVAL_MINUTES, INTERVAL_OPTIONS, getSyncSettings, saveSyncSettings } from './settings'
 import { testConnection } from './githubApi'
-import { syncFitnessHeute } from './fitnessExport'
+import { notifySyncSettingsChanged, syncNow } from './autoSync'
+import { getSyncState, subscribeSyncState } from './syncState'
 
 type StatusType = 'idle' | 'busy' | 'success' | 'error'
+
+function formatLastSync(iso: string | null): string {
+  if (!iso) return 'noch nie'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return 'unbekannt'
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60_000)
+  if (minutes < 1) return 'gerade eben'
+  if (minutes < 60) return `vor ${minutes} Min.`
+  const time = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  if (date.toDateString() === new Date().toDateString()) return `heute ${time} Uhr`
+  return `${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} ${time} Uhr`
+}
 
 export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) {
   const athletes = useLiveQuery(() => db.athletes.toArray(), []) ?? []
@@ -16,7 +29,11 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
   const [repo, setRepo] = useState('obsidian-vault')
   const [token, setToken] = useState('')
   const [athleteId, setAthleteId] = useState('')
+  const [autoSync, setAutoSync] = useState(true)
+  const [intervalMinutes, setIntervalMinutes] = useState(DEFAULT_INTERVAL_MINUTES)
   const [status, setStatus] = useState<{ type: StatusType; message: string }>({ type: 'idle', message: '' })
+
+  const syncState = useSyncExternalStore(subscribeSyncState, getSyncState)
 
   useEffect(() => {
     const existing = getSyncSettings()
@@ -25,19 +42,25 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
       setRepo(existing.repo || 'obsidian-vault')
       setToken(existing.token)
       setAthleteId(existing.athleteId)
+      setAutoSync(existing.autoSync)
+      setIntervalMinutes(existing.intervalMinutes)
     } else if (sortedAthletes[0]) {
       setAthleteId(sortedAthletes[0].id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athletes.length])
 
-  function persist() {
+  function persist(overrides: Partial<{ autoSync: boolean; intervalMinutes: number }> = {}) {
     saveSyncSettings({
       username: username.trim(),
       repo: repo.trim() || 'obsidian-vault',
       token: token.trim(),
       athleteId,
+      autoSync,
+      intervalMinutes,
+      ...overrides,
     })
+    notifySyncSettingsChanged()
   }
 
   async function handleTest() {
@@ -51,14 +74,14 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
     persist()
     setStatus({ type: 'busy', message: 'Synchronisiere…' })
     try {
-      await syncFitnessHeute()
+      await syncNow()
       setStatus({ type: 'success', message: 'Synchronisiert ✅' })
     } catch (err) {
       setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Unbekannter Fehler beim Sync.' })
     }
   }
 
-  const busy = status.type === 'busy'
+  const busy = status.type === 'busy' || syncState.running
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -83,6 +106,54 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
         <Field label="Personal Access Token">
           <Input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_..." />
         </Field>
+
+        <label className="flex items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            checked={autoSync}
+            onChange={(e) => {
+              setAutoSync(e.target.checked)
+              persist({ autoSync: e.target.checked })
+            }}
+            className="h-4 w-4 accent-accent"
+          />
+          Automatisch synchronisieren
+        </label>
+
+        <Field label="Sync-Intervall">
+          <Select
+            value={intervalMinutes}
+            disabled={!autoSync}
+            onChange={(e) => {
+              const minutes = Number(e.target.value)
+              setIntervalMinutes(minutes)
+              persist({ intervalMinutes: minutes })
+            }}
+          >
+            {INTERVAL_OPTIONS.map((option) => (
+              <option key={option.minutes} value={option.minutes}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <p className="text-xs text-muted">
+          Automatisch wird synchronisiert, solange die App geöffnet ist: nach jeder Änderung, im eingestellten
+          Intervall und beim Zurückkehren in die App. Ist die App geschlossen, ruht der Sync und wird beim nächsten
+          Start nachgeholt.
+        </p>
+
+        <div className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
+          <div>
+            Zuletzt synchronisiert: <span className="text-fg">{formatLastSync(syncState.lastSyncAt)}</span>
+          </div>
+          {syncState.running && <div className="text-muted">Sync läuft…</div>}
+          {!syncState.running && syncState.pendingChanges && <div>Änderungen warten auf den nächsten Sync.</div>}
+          {!syncState.running && syncState.lastError && (
+            <div className="text-danger">Letzter Versuch fehlgeschlagen: {syncState.lastError}</div>
+          )}
+        </div>
 
         <div className="flex gap-2">
           <Button variant="secondary" className="flex-1" onClick={handleTest} disabled={busy || !athleteId}>

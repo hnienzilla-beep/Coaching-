@@ -42,6 +42,60 @@ export async function testConnection(): Promise<ConnectionTestResult> {
   }
 }
 
+// Cache der zuletzt hochgeladenen Dateiinhalte: Bei einem automatischen Sync alle paar
+// Minuten sind die meisten Dateien unverändert - dann sparen wir uns den PUT (und damit
+// einen leeren Commit im Vault-Repo). Der Cache merkt sich zusätzlich den SHA, den GitHub
+// nach dem Upload gemeldet hat: Wurde die Datei zwischenzeitlich anderswo geändert,
+// stimmt der SHA nicht mehr überein und wir schreiben auf jeden Fall neu.
+const FILE_CACHE_KEY = 'obsidian-sync-file-cache'
+
+interface CachedFile {
+  sha: string
+  hash: string
+}
+
+function contentHash(content: string): string {
+  // FNV-1a - reicht als Änderungserkennung und ist synchron (crypto.subtle wäre async).
+  let hash = 0x811c9dc5
+  for (let i = 0; i < content.length; i++) {
+    hash ^= content.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16) + ':' + content.length
+}
+
+function fileCacheKey(settings: { username: string; repo: string }, path: string): string {
+  return `${settings.username}/${settings.repo}:${path}`
+}
+
+function readFileCache(): Record<string, CachedFile> {
+  try {
+    const raw = localStorage.getItem(FILE_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, CachedFile>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeFileCache(key: string, entry: CachedFile): void {
+  try {
+    const cache = readFileCache()
+    cache[key] = entry
+    localStorage.setItem(FILE_CACHE_KEY, JSON.stringify(cache))
+  } catch {
+    // Ohne Cache wird nur öfter hochgeladen - kein Grund, den Sync scheitern zu lassen.
+  }
+}
+
+/** Verwirft den Datei-Cache, damit der nächste Sync alle Dateien neu schreibt. */
+export function clearFileCache(): void {
+  try {
+    localStorage.removeItem(FILE_CACHE_KEY)
+  } catch {
+    // ignorieren
+  }
+}
+
 async function getFileSha(path: string, settings: { username: string; repo: string; token: string }): Promise<string | null> {
   const res = await fetch(`${apiBase(settings)}/contents/${encodeURIComponent(path)}`, {
     headers: authHeaders(settings.token),
@@ -54,8 +108,12 @@ async function getFileSha(path: string, settings: { username: string; repo: stri
   return data.sha
 }
 
-/** Legt eine Datei im Vault-Repo an oder aktualisiert sie (holt vorher den aktuellen SHA). */
-export async function upsertFile(path: string, content: string, commitMessage: string): Promise<void> {
+/**
+ * Legt eine Datei im Vault-Repo an oder aktualisiert sie (holt vorher den aktuellen SHA).
+ * Gibt `true` zurück, wenn tatsächlich geschrieben wurde, und `false`, wenn der Inhalt
+ * bereits unverändert im Repo liegt.
+ */
+export async function upsertFile(path: string, content: string, commitMessage: string): Promise<boolean> {
   const settings = getSyncSettings()
   if (!settings) {
     throw new ObsidianSyncError('Obsidian-Sync ist noch nicht eingerichtet. Bitte in den Einstellungen ausfüllen.')
@@ -67,6 +125,13 @@ export async function upsertFile(path: string, content: string, commitMessage: s
   } catch (err) {
     if (err instanceof ObsidianSyncError) throw err
     throw new ObsidianSyncError('Keine Verbindung zu GitHub möglich (kein Internet?).')
+  }
+
+  const cacheKey = fileCacheKey(settings, path)
+  const hash = contentHash(content)
+  const cached = readFileCache()[cacheKey]
+  if (sha && cached && cached.sha === sha && cached.hash === hash) {
+    return false // unverändert - kein Upload nötig
   }
 
   let res: Response
@@ -93,4 +158,12 @@ export async function upsertFile(path: string, content: string, commitMessage: s
   if (!res.ok) {
     throw new ObsidianSyncError(`GitHub-Fehler beim Speichern von "${path}" (${res.status}).`)
   }
+
+  try {
+    const data = (await res.json()) as { content?: { sha?: string } }
+    if (data.content?.sha) writeFileCache(cacheKey, { sha: data.content.sha, hash })
+  } catch {
+    // Antwort nicht lesbar: Datei ist geschrieben, nur der Cache bleibt leer.
+  }
+  return true
 }
