@@ -124,6 +124,7 @@ export interface Exercise {
   name: string
   muscleGroup: MuscleGroup
   favorite?: boolean
+  imageDataUrl?: string // herunterskaliertes Übungsbild als Base64-Data-URL
 }
 
 export interface TrainingPlan {

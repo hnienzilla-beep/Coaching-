@@ -253,7 +253,12 @@ function SortableRow({
           />
         </div>
       </div>
-      {exercise?.muscleGroup && <div className="pl-1 text-xs text-muted">{exercise.muscleGroup}</div>}
+      <div className="flex items-center gap-2 pl-1">
+        {exercise?.imageDataUrl && (
+          <img src={exercise.imageDataUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+        )}
+        {exercise?.muscleGroup && <div className="text-xs text-muted">{exercise.muscleGroup}</div>}
+      </div>
     </div>
   )
 }
@@ -291,9 +296,14 @@ function TrainingPlanOverview({
           const exercise = exerciseMap.get(row.exerciseId)
           return (
             <div key={row.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
-              <div>
-                <div className="text-fg">{exercise?.name ?? '–'}</div>
-                {exercise?.muscleGroup && <div className="text-xs text-muted">{exercise.muscleGroup}</div>}
+              <div className="flex items-center gap-3">
+                {exercise?.imageDataUrl && (
+                  <img src={exercise.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                )}
+                <div>
+                  <div className="text-fg">{exercise?.name ?? '–'}</div>
+                  {exercise?.muscleGroup && <div className="text-xs text-muted">{exercise.muscleGroup}</div>}
+                </div>
               </div>
               <span className="text-muted">
                 {row.sets} x {row.reps}

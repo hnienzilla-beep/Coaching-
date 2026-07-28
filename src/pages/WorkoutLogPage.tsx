@@ -187,6 +187,7 @@ export default function WorkoutLogPage() {
                   exerciseId={row.exerciseId}
                   pickerItems={pickerItems}
                   muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+                  imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
                   planExercise={planExerciseByExerciseId.get(row.exerciseId)}
                   athleteId={athlete.id}
                   date={selectedDate}
@@ -260,6 +261,7 @@ function WorkoutExerciseRow({
   exerciseId,
   pickerItems,
   muscleGroup,
+  imageDataUrl,
   planExercise,
   athleteId,
   date,
@@ -269,6 +271,7 @@ function WorkoutExerciseRow({
   exerciseId: string
   pickerItems: { id: string; label: string; sublabel?: string }[]
   muscleGroup?: string
+  imageDataUrl?: string
   planExercise?: TrainingPlanExercise
   athleteId: string
   date: string
@@ -327,7 +330,10 @@ function WorkoutExerciseRow({
           ✕
         </Button>
       </div>
-      {muscleGroup && <div className="pl-1 text-xs text-muted">{muscleGroup}</div>}
+      <div className="flex items-center gap-2 pl-1">
+        {imageDataUrl && <img src={imageDataUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />}
+        {muscleGroup && <div className="text-xs text-muted">{muscleGroup}</div>}
+      </div>
       {lastPerformance && (
         <div className="pl-1 text-xs text-muted">
           Letztes Mal ({lastPerformance.date}): {lastPerformance.sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'} kg`).join(' · ')}

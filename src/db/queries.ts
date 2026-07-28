@@ -272,7 +272,7 @@ interface ProgressExport {
     notes?: string
     exercises: {
       exerciseName: string
-      exerciseFallback?: { muscleGroup: MuscleGroup }
+      exerciseFallback?: { muscleGroup: MuscleGroup; imageDataUrl?: string }
       notes?: string
       sets: { setNumber: number; reps?: number; weightKg?: number; rpe?: number; done?: boolean }[]
     }[]
@@ -314,7 +314,7 @@ export async function exportProgress(athleteId: string): Promise<string> {
       const sets = await db.workoutSets.where('workoutLogExerciseId').equals(le.id).sortBy('setNumber')
       exercises.push({
         exerciseName: exercise?.name ?? 'Unbekannte Übung',
-        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup } : undefined,
+        exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup, imageDataUrl: exercise.imageDataUrl } : undefined,
         notes: le.notes,
         sets: sets.map(({ setNumber, reps, weightKg, rpe, done }) => ({ setNumber, reps, weightKg, rpe, done })),
       })

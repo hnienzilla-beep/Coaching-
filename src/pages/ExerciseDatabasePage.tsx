@@ -1,10 +1,52 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
 import { Button, Card, Field, Input, Select } from '../components/ui'
+import { fileToResizedDataUrl } from '../lib/image'
 import type { Exercise, MuscleGroup } from '../models/types'
 import { MUSCLE_GROUPS } from '../models/types'
+
+// Bild-Auswahl mit Vorschau für eine Übung. Skaliert das gewählte Bild herunter und
+// gibt die Data-URL über onChange zurück; undefined entfernt das Bild wieder.
+function ImageField({ value, onChange }: { value?: string; onChange: (dataUrl: string | undefined) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return
+    try {
+      onChange(await fileToResizedDataUrl(file))
+    } catch {
+      alert('Bild konnte nicht verarbeitet werden.')
+    }
+  }
+
+  return (
+    <Field label="Bild">
+      <div className="flex items-center gap-3">
+        {value && <img src={value} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            void handleFile(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        <Button variant="secondary" onClick={() => inputRef.current?.click()}>
+          {value ? 'Ändern' : 'Bild wählen'}
+        </Button>
+        {value && (
+          <Button variant="ghost" onClick={() => onChange(undefined)}>
+            Entfernen
+          </Button>
+        )}
+      </div>
+    </Field>
+  )
+}
 
 export default function ExerciseDatabasePage() {
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -56,9 +98,14 @@ function ExerciseRow({ exercise }: { exercise: Exercise }) {
   if (!editing) {
     return (
       <Card className="flex items-center justify-between py-2">
-        <div>
-          <div className="text-sm font-medium text-fg">{exercise.name}</div>
-          <div className="text-xs text-muted">{exercise.muscleGroup}</div>
+        <div className="flex items-center gap-3">
+          {exercise.imageDataUrl && (
+            <img src={exercise.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+          )}
+          <div>
+            <div className="text-sm font-medium text-fg">{exercise.name}</div>
+            <div className="text-xs text-muted">{exercise.muscleGroup}</div>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -89,6 +136,7 @@ function ExerciseRow({ exercise }: { exercise: Exercise }) {
           ))}
         </Select>
       </Field>
+      <ImageField value={form.imageDataUrl} onChange={(imageDataUrl) => setForm({ ...form, imageDataUrl })} />
       <div className="flex gap-2">
         <Button
           variant="primary"
@@ -116,14 +164,19 @@ function ExerciseRow({ exercise }: { exercise: Exercise }) {
 }
 
 function NewExerciseForm({ onDone }: { onDone: () => void }) {
-  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup }>({
+  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string }>({
     name: '',
     muscleGroup: MUSCLE_GROUPS[0],
   })
 
   async function submit() {
     if (!form.name.trim()) return
-    await db.exercises.add({ id: crypto.randomUUID(), name: form.name.trim(), muscleGroup: form.muscleGroup })
+    await db.exercises.add({
+      id: crypto.randomUUID(),
+      name: form.name.trim(),
+      muscleGroup: form.muscleGroup,
+      imageDataUrl: form.imageDataUrl,
+    })
     onDone()
   }
 
@@ -139,6 +192,7 @@ function NewExerciseForm({ onDone }: { onDone: () => void }) {
           ))}
         </Select>
       </Field>
+      <ImageField value={form.imageDataUrl} onChange={(imageDataUrl) => setForm({ ...form, imageDataUrl })} />
       <div className="flex gap-2">
         <Button variant="primary" className="flex-1" onClick={submit}>
           Hinzufügen
