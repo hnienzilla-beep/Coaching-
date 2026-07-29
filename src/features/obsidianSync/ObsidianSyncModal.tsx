@@ -183,6 +183,13 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
           „80g (300 kcal)" lassen sich keine Makros zurückrechnen). Alles unterhalb einer Überschrift
           „## Notizen" gehört dir und bleibt beim Zurückschreiben unangetastet.
         </p>
+        <p className="text-xs text-muted">
+          Die Lebensmittel-Datenbank landet als Tabelle in „40-Ernaehrung/Lebensmittel.md" (wird bei jedem Sync
+          komplett neu geschrieben). Neue Lebensmittel kommen umgekehrt über
+          „40-Ernaehrung/Lebensmittel-Neu.md" in die App: Jede Zeile dort wird angelegt und als „unbestätigt"
+          markiert, Namen aus der Datenbank bleiben unangetastet. Danach wird die Tabelle geleert – fehlerhafte
+          Zeilen bleiben zur Korrektur stehen.
+        </p>
 
         <div className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
           <div>

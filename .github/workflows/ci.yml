@@ -1,0 +1,29 @@
+name: CI
+
+# Prüft Pull Requests, bevor sie gemerged werden. Deployt bewusst nicht - das macht
+# deploy.yml, sobald der Ziel-Branch gepusht wurde.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Bei mehreren Pushes hintereinander reicht der Lauf für den neuesten Stand.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Baut mit tsc -b, deckt also auch Typfehler ab.
+      - run: npm run build

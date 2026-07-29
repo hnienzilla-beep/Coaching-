@@ -183,6 +183,21 @@ async function putFile(path: string, content: string, commitMessage: string, sha
   }
 }
 
+/**
+ * Schreibt eine Datei ins Vault-Repo und merkt sich den neuen SHA - für Dateien, deren Inhalt
+ * nicht allein aus der App-Datenbank entsteht (z.B. Lebensmittel-Neu.md, die nach dem Import
+ * geleert wird und deren fehlerhafte Zeilen stehen bleiben) und die deshalb nicht über
+ * `syncFile` laufen können.
+ */
+export async function writeFile(path: string, content: string, commitMessage: string, sha: string | null): Promise<void> {
+  const settings = getSyncSettings()
+  if (!settings) {
+    throw new ObsidianSyncError('Obsidian-Sync ist noch nicht eingerichtet. Bitte in den Einstellungen ausfüllen.')
+  }
+  const newSha = await putFile(path, content, commitMessage, sha)
+  if (newSha) writeCachedSha(fileCacheKey(settings, path), newSha)
+}
+
 export interface SyncFileOptions {
   path: string
   /**
@@ -194,6 +209,11 @@ export interface SyncFileOptions {
   commitMessage: string
   /** Übernimmt eine im Vault geänderte Datei in die App. Ohne diese Funktion wird nur geschrieben. */
   importRemote?: (content: string) => Promise<void>
+  /**
+   * Einen "## Notizen"-Block aus dem Vault beim Zurückschreiben erhalten (Standard: ja).
+   * Für reine Datenbank-Abzüge (Lebensmittel.md) aus, sie werden komplett überschrieben.
+   */
+  preserveNotes?: boolean
 }
 
 /**
@@ -233,7 +253,7 @@ export async function syncFile(options: SyncFileOptions): Promise<SyncFileResult
 
   const cacheKey = fileCacheKey(settings, options.path)
   const remote = await readFile(options.path)
-  const notes = remote ? extractNotes(remote.content) : null
+  const notes = remote && options.preserveNotes !== false ? extractNotes(remote.content) : null
   const withNotes = (built: string | null): string | null =>
     built === null || notes === null ? built : `${built.trimEnd()}\n\n${notes}\n`
 

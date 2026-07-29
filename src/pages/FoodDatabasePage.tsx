@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
-import { Button, Card, DecimalInput, Field, Input } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Input, UnconfirmedBadge } from '../components/ui'
 import { caloriesFromMacros } from '../lib/calculator'
 import type { FoodItem } from '../models/types'
 
@@ -57,7 +57,10 @@ function FoodRow({ food }: { food: FoodItem }) {
     return (
       <Card className="flex items-center justify-between py-2">
         <div>
-          <div className="text-sm font-medium text-fg">{food.name}</div>
+          <div className="text-sm font-medium text-fg">
+            {food.name}
+            {food.unconfirmed && <UnconfirmedBadge />}
+          </div>
           <div className="text-xs text-muted">
             {Math.round(caloriesFromMacros(food.protein, food.carbs, food.fat))} kcal · P {food.protein}g · C {food.carbs}g · F{' '}
             {food.fat}g
@@ -95,12 +98,23 @@ function FoodRow({ food }: { food: FoodItem }) {
         </Field>
       </div>
       <p className="text-xs text-muted">{Math.round(caloriesFromMacros(form.protein, form.carbs, form.fat))} kcal (aus Makros berechnet)</p>
+      {food.unconfirmed && (
+        <p className="text-xs text-muted">
+          Geschätzte Werte aus dem Vault – beim Speichern gelten sie als geprüft und die Markierung „unbestätigt"
+          verschwindet.
+        </p>
+      )}
       <div className="flex gap-2">
         <Button
           variant="primary"
           className="flex-1"
           onClick={async () => {
-            await db.foodItems.update(food.id, { ...form, kcal: caloriesFromMacros(form.protein, form.carbs, form.fat) })
+            await db.foodItems.update(food.id, {
+              ...form,
+              kcal: caloriesFromMacros(form.protein, form.carbs, form.fat),
+              // Der Nutzer hat die Werte gesehen und bestätigt - der Schätzwert-Hinweis kann weg.
+              unconfirmed: undefined,
+            })
             setEditing(false)
           }}
         >

@@ -2,6 +2,7 @@ import { db } from '../../db/db'
 import { addDays, isoDate } from '../../db/queries'
 import { getSyncSettings } from './settings'
 import { syncFile } from './githubApi'
+import { syncLebensmittel } from './foodExport'
 import { syncErnaehrungLog, syncErnaehrungsplan } from './nutritionExport'
 import { importGewicht, importSupplemente, importTraining } from './vaultImport'
 
@@ -171,6 +172,9 @@ export function recentDates(today = isoDate(new Date())): string[] {
 export async function syncFitnessHeute(): Promise<void> {
   await syncGewicht()
   await syncSupplemente()
+  // Vor Plan und Tageslogs: aus dem Vault neu übernommene Lebensmittel lassen sich dort dann
+  // schon im selben Durchlauf zuordnen, statt als "unbekannt" übersprungen zu werden.
+  await syncLebensmittel()
   await syncErnaehrungsplan()
   for (const date of recentDates()) {
     await syncTraining(date)

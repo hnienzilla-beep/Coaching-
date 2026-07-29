@@ -14,6 +14,14 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   )
 }
 
+/**
+ * Markiert Lebensmittel, deren Nährwerte geschätzt sind (aus dem Vault übernommen) und nicht
+ * aus einer Nährwertquelle stammen.
+ */
+export function UnconfirmedBadge() {
+  return <span className="ml-1 rounded border border-border px-1 py-px align-middle text-[10px] text-muted">unbestätigt</span>
+}
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   // iOS zeigt bei type="number" ohne inputMode manchmal keine Komma-/Punkt-Taste an -
   // "decimal" erzwingt die Zifferntastatur mit Dezimaltrennzeichen.

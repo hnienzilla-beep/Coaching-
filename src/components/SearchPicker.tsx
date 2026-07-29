@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Input } from './ui'
+import { Input, UnconfirmedBadge } from './ui'
 
 export interface SearchPickerItem {
   id: string
   label: string
   sublabel?: string
   favorite?: boolean
+  /** Geschätzte Werte (aus dem Vault übernommen) - wird als Hinweis neben dem Namen gezeigt. */
+  unconfirmed?: boolean
 }
 
 export default function SearchPicker({
@@ -79,6 +81,7 @@ export default function SearchPicker({
             >
               {i.favorite && '⭐ '}
               {i.label} {i.sublabel && <span className="text-xs text-muted">({i.sublabel})</span>}
+              {i.unconfirmed && <UnconfirmedBadge />}
             </button>
           ))}
         </div>
