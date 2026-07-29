@@ -106,6 +106,20 @@ und Ernährungstage) - gedacht für ein neues Gerät oder zum Wiederherstellen.
 Wichtig: Die App hat keinen Server - läuft sie nicht (App geschlossen bzw. von
 iOS beendet), ruht auch der Sync.
 
+## Design
+
+Die App ist in Schwarz gehalten: reines Schwarz (`#000000`) als Grundfläche, nur
+minimal aufgehellte Karten- und Steuerflächen darüber und ein monochromer, weißer
+Akzent. Farbe kommt bewusst nur an zwei Stellen dazu - über die frei wählbare
+Akzentfarbe je Athlet und über die Semantikfarben für "ok" und "Fehler".
+
+Alle Farben liegen als Tokens in `src/index.css` (`@theme` für das Schwarz-Design,
+`.light` für den Hell-Modus als Umkehrung). Flächen, die den Akzent als Hintergrund
+nutzen, verwenden `text-accent-fg` - dieser Wert wird für Athleten-Akzentfarben zur
+Laufzeit anhand der Helligkeit auf Schwarz oder Weiß gesetzt
+(`accentForeground` in `src/lib/theme.ts`), damit die Schrift bei jeder Farbe lesbar
+bleibt.
+
 ## Tech-Stack
 
 Vite, React, TypeScript, Tailwind CSS, Dexie (IndexedDB), Recharts, jsPDF,

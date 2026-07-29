@@ -3,6 +3,7 @@ import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ACCENT_COLORS } from '../db/queries'
+import { accentForeground } from '../lib/theme'
 import type { Athlete } from '../models/types'
 
 // Ernährung (Plan/Log/Supplements) und Training (Plan/Log) sind je ein Tab mit einem
@@ -24,8 +25,10 @@ export default function AthleteLayout() {
   useEffect(() => {
     if (!athlete?.accentColor) return
     document.documentElement.style.setProperty('--color-accent', athlete.accentColor)
+    document.documentElement.style.setProperty('--color-accent-fg', accentForeground(athlete.accentColor))
     return () => {
       document.documentElement.style.removeProperty('--color-accent')
+      document.documentElement.style.removeProperty('--color-accent-fg')
     }
   }, [athlete?.accentColor])
 
@@ -61,7 +64,7 @@ export default function AthleteLayout() {
             type="button"
             onClick={() => setColorPickerOpen((v) => !v)}
             aria-label="Akzentfarbe ändern"
-            className="h-3 w-3 rounded-full"
+            className="h-3 w-3 rounded-full border border-border"
             style={{ background: athlete.accentColor }}
           />
           {colorPickerOpen && (
@@ -75,7 +78,7 @@ export default function AthleteLayout() {
                     setColorPickerOpen(false)
                   }}
                   aria-label={`Akzentfarbe ${color}`}
-                  className="h-6 w-6 shrink-0 rounded-full"
+                  className="h-6 w-6 shrink-0 rounded-full border border-border"
                   style={{
                     background: color,
                     boxShadow: athlete.accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none',
@@ -92,7 +95,7 @@ export default function AthleteLayout() {
         <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto grid w-full max-w-md grid-cols-4 gap-1.5 border-t border-border bg-surface-2 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto grid w-full max-w-md grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
@@ -100,7 +103,7 @@ export default function AthleteLayout() {
             end={tab.end}
             className={({ isActive }) =>
               `truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition active:scale-95 ${
-                isActive ? 'bg-accent text-black shadow-sm shadow-black/20' : 'text-muted hover:text-fg'
+                isActive ? 'bg-accent text-accent-fg shadow-sm shadow-black/20' : 'text-muted hover:text-fg'
               }`
             }
           >

@@ -111,7 +111,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
             <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
             <Tooltip content={<StrengthTooltip />} />
-            <Line type="monotone" dataKey="weight" stroke="#a3e635" strokeWidth={2} name="Gewicht (kg)" connectNulls />
+            <Line type="monotone" dataKey="weight" stroke="var(--color-accent)" strokeWidth={2} name="Gewicht (kg)" connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>

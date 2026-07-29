@@ -348,7 +348,7 @@ function WorkoutExerciseRow({
               onClick={() => db.workoutSets.update(set.id, { done: !set.done })}
               aria-label={set.done ? 'Satz als offen markieren' : 'Satz als erledigt markieren'}
               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
-                set.done ? 'border-accent bg-accent text-black' : 'border-border text-muted'
+                set.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
               }`}
             >
               ✓

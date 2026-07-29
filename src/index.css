@@ -1,16 +1,22 @@
 @import 'tailwindcss';
 
+/* Schwarz-Design: reines Schwarz als Grundfläche, die Ebenen darüber nur minimal
+   aufgehellt. Der Akzent ist bewusst monochrom (Weiß) - Farbe kommt in der App
+   ausschließlich über die Athleten-Akzentfarbe und die Semantik-Töne (ok/danger) dazu. */
 @theme {
-  --color-bg: #0d0d0d;
-  --color-surface: #17181c;
-  --color-surface-2: #202126;
-  --color-border: #2c2d33;
-  --color-accent: #a3e635;
-  --color-accent-dim: #4d5c1a;
+  --color-bg: #000000;
+  --color-surface: #0b0b0c;
+  --color-surface-2: #141416;
+  --color-border: #26262a;
+  --color-accent: #ffffff;
+  /* Vordergrund auf Akzentflächen - wird für Athleten-Akzentfarben zur Laufzeit
+     anhand der Helligkeit gesetzt (siehe accentForeground in lib/theme.ts). */
+  --color-accent-fg: #000000;
+  --color-accent-dim: #52525b;
   --color-danger: #f87171;
   --color-ok: #4ade80;
-  --color-muted: #9ca3af;
-  --color-fg: #f4f4f5;
+  --color-muted: #8b8b93;
+  --color-fg: #fafafa;
 }
 
 html,
@@ -41,13 +47,17 @@ textarea {
   color-scheme: dark;
 }
 
+/* Hell-Modus ist die Umkehrung des Schwarz-Designs: schwarzer Akzent auf weißer Fläche. */
 .light {
-  --color-bg: #f4f4f5;
+  --color-bg: #fafafa;
   --color-surface: #ffffff;
-  --color-surface-2: #eeeef0;
-  --color-border: #d4d4d8;
-  --color-muted: #6b7280;
-  --color-fg: #18181b;
+  --color-surface-2: #f1f1f2;
+  --color-border: #d9d9de;
+  --color-accent: #111113;
+  --color-accent-fg: #ffffff;
+  --color-accent-dim: #a1a1aa;
+  --color-muted: #62626b;
+  --color-fg: #0b0b0c;
   color-scheme: light;
 }
 
@@ -58,6 +68,9 @@ textarea {
 }
 
 .bg-photo {
+  /* Im Foto-Modus darf die Grundfläche nicht schwarz bleiben - Flächen, die --color-bg
+     nutzen (z.B. die Bottom-Navigation), lägen sonst schwarz auf schwarzer Schrift. */
+  --color-bg: rgba(255, 255, 255, 0.22);
   --color-surface: rgba(255, 255, 255, 0.22);
   --color-surface-2: rgba(255, 255, 255, 0.14);
   --color-border: rgba(0, 0, 0, 0.1);
@@ -106,6 +119,11 @@ textarea {
 .bg-photo .text-fg,
 .bg-photo .text-muted {
   text-shadow: 0 0 3px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
 }
 
 ::-webkit-scrollbar {

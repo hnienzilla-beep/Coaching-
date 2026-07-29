@@ -195,7 +195,7 @@ export default function NutritionPage() {
             key={p.id}
             onClick={() => setActivePlanId(p.id)}
             className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${
-              p.id === currentPlanId ? 'bg-accent text-black font-medium' : 'bg-surface-2 text-muted'
+              p.id === currentPlanId ? 'bg-accent text-accent-fg font-medium' : 'bg-surface-2 text-muted'
             }`}
           >
             {p.phaseName}
