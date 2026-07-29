@@ -69,8 +69,9 @@ export default function TrackingPage() {
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
               <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
               <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
-              <Line type="monotone" dataKey="weight" stroke="#60a5fa" dot={false} name="Gewicht (kg)" connectNulls />
-              <Line type="monotone" dataKey="weightAvg7" stroke="#a3e635" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
+              {/* Rohgewicht bewusst gedimmt, der geglättete 7-Tage-Schnitt trägt den Akzent. */}
+              <Line type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name="Gewicht (kg)" connectNulls />
+              <Line type="monotone" dataKey="weightAvg7" stroke="var(--color-accent)" dot={false} strokeWidth={2} name="Ø 7 Tage" connectNulls />
               {athlete.targetWeightKg !== undefined && (
                 <ReferenceLine
                   y={athlete.targetWeightKg}
@@ -151,7 +152,7 @@ export default function TrackingPage() {
               <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
               <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
               <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
-              <Line type="monotone" dataKey="chest" stroke="#a3e635" dot={false} name="Brust (cm)" connectNulls />
+              <Line type="monotone" dataKey="chest" stroke="#e4e4e7" dot={false} name="Brust (cm)" connectNulls />
               <Line type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
             </LineChart>
           </ResponsiveContainer>

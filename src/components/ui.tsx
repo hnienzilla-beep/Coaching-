@@ -86,11 +86,13 @@ export function DecimalInput({
   )
 }
 
+// Der Akzentrand hebt Auswahlfelder von reinen Eingabefeldern ab - im Schwarz-Design reicht
+// dafür eine gedimmte Variante, der volle Akzent bleibt dem Fokus vorbehalten.
 export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`min-w-0 rounded-lg border border-accent bg-surface-2 px-3 py-2 text-sm text-fg outline-none ${props.className ?? ''}`}
+      className={`min-w-0 rounded-lg border border-accent/40 bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${props.className ?? ''}`}
     >
       {children}
     </select>
@@ -110,7 +112,9 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
   const base = 'rounded-lg px-3 py-2 text-sm font-medium transition active:scale-95 disabled:opacity-40 disabled:active:scale-100'
   const variants: Record<ButtonVariant, string> = {
-    primary: 'bg-accent text-black hover:brightness-110',
+    // brightness-110 hat auf dem weißen Akzent des Schwarz-Designs keinen Effekt mehr,
+    // deshalb wird der Hover über die Deckkraft angedeutet.
+    primary: 'bg-accent text-accent-fg hover:opacity-90',
     secondary: 'bg-surface-2 text-fg border border-border hover:border-accent',
     ghost: 'text-muted hover:text-fg',
     danger: 'bg-danger/10 text-danger border border-danger/40 hover:bg-danger/20',

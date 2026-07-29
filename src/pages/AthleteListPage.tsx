@@ -339,7 +339,7 @@ function AthleteTileList({
             background: selected.has(a.id) ? `${a.accentColor}1a` : 'var(--color-surface-2)',
           }}
         >
-          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
+          <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: a.accentColor }} />
           <div className="flex-1">
             <div className="font-semibold text-fg">{a.name}</div>
             <div className="text-xs text-muted">
@@ -476,7 +476,7 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
         ⠿
       </button>
       <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
-        <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: a.accentColor }} />
+        <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: a.accentColor }} />
         <div>
           <div className="font-semibold text-fg">{a.name}</div>
           <div className="text-xs text-muted">
@@ -575,7 +575,7 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
               type="button"
               onClick={() => setAccentColor(color)}
               aria-label={`Akzentfarbe ${color}`}
-              className="h-7 w-7 rounded-full"
+              className="h-7 w-7 rounded-full border border-border"
               style={{ background: color, boxShadow: accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none' }}
             />
           ))}

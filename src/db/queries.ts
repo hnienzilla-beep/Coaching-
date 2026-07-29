@@ -13,7 +13,13 @@ import type {
   WorkoutSet,
 } from '../models/types'
 
+// Die monochromen Töne stehen vorn, damit neu angelegte Athleten zum Schwarz-Design passen;
+// die bunten Farben bleiben erhalten, um mehrere Athleten auf einen Blick unterscheiden zu
+// können. Alle Werte sind hell genug für schwarze Schrift auf Akzentflächen.
 export const ACCENT_COLORS = [
+  '#ffffff', // weiß
+  '#d4d4d8', // silber
+  '#a1a1aa', // graphit
   '#a3e635', // lime
   '#22d3ee', // cyan
   '#f472b6', // pink

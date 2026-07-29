@@ -301,7 +301,7 @@ function LoggedFoodRow({
           onClick={() => db.nutritionLogItems.update(item.id, { done: !item.done })}
           aria-label={item.done ? 'Als nicht gegessen markieren' : 'Als gegessen markieren'}
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
-            item.done ? 'border-accent bg-accent text-black' : 'border-border text-muted'
+            item.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
           }`}
         >
           ✓

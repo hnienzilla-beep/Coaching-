@@ -21,7 +21,7 @@ export default function ErnaehrungPage() {
             key={v.key}
             onClick={() => setView(v.key)}
             className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-              view === v.key ? 'bg-accent text-black' : 'text-muted hover:text-fg'
+              view === v.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
             }`}
           >
             {v.label}
