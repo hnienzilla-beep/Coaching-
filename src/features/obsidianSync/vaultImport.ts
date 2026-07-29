@@ -1,10 +1,19 @@
 import { db } from '../../db/db'
+import { isoDate } from '../../db/queries'
 import { caloriesFromMacros } from '../../lib/calculator'
-import type { MuscleGroup, SupplementTiming } from '../../models/types'
+import type { FoodItem, MuscleGroup, SupplementTiming } from '../../models/types'
 import { getSyncSettings } from './settings'
-import { listMarkdownFiles, readFile } from './githubApi'
+import { listMarkdownFiles, readFile, writeFile } from './githubApi'
 import { withVaultImport } from './syncState'
-import { parseGewicht, parseMeals, parseSupplemente, parseTraining } from './markdownParse'
+import {
+  parseGewicht,
+  parseLebensmittelNeu,
+  parseMeals,
+  parseSupplemente,
+  parseTraining,
+  rebuildLebensmittelNeu,
+  splitTableRow,
+} from './markdownParse'
 
 /**
  * Übernimmt Änderungen aus dem Vault (Obsidian oder ein zweites Gerät) zurück in die App.
@@ -25,7 +34,7 @@ export interface ImportResult {
   label: string
   /** Anzahl übernommener Einträge. */
   changed: number
-  /** Nicht zuordenbare Namen (unbekannte Lebensmittel). */
+  /** Übersprungenes: unbekannte Lebensmittel bzw. fehlerhafte Zeilen. */
   skipped: string[]
 }
 
@@ -46,7 +55,7 @@ export function summarizeImports(results: ImportResult[]): string | null {
   if (relevant.length === 0) return null
   return relevant
     .map((r) => {
-      const skipped = r.skipped.length > 0 ? `, ${r.skipped.length} unbekannt` : ''
+      const skipped = r.skipped.length > 0 ? `, ${r.skipped.length} übersprungen` : ''
       return `${r.label} (${r.changed}${skipped})`
     })
     .join(', ')
@@ -360,6 +369,70 @@ export async function importErnaehrungLog(date: string, content: string): Promis
   return record({ label: `Ernährung ${date}`, changed, skipped })
 }
 
+// ------------------------------------------------------- Lebensmittel-Neu.md
+
+export const LEBENSMITTEL_NEU_PATH = '40-Ernaehrung/Lebensmittel-Neu.md'
+
+/**
+ * Legt die in Lebensmittel-Neu.md vorgeschlagenen Lebensmittel in der Datenbank an und leert
+ * anschließend die Tabelle in der Datei.
+ *
+ * - Namen, die es in der Datenbank schon gibt, werden verworfen: die Datenbank hat Vorrang,
+ *   Schätzwerte dürfen gemessene Nährwerte nie überschreiben.
+ * - Neue Einträge werden als `unconfirmed` markiert, damit in der App erkennbar bleibt, was
+ *   geschätzt und nicht aus einer Nährwertquelle übernommen ist.
+ * - Fehlerhafte Zeilen (falsche Spaltenzahl, nicht-numerische Werte) werden übersprungen und
+ *   bleiben in der Datei stehen, statt den ganzen Import abzubrechen.
+ *
+ * `null`, wenn es die Datei im Vault nicht gibt oder ihre Tabelle leer ist.
+ */
+export async function importLebensmittelNeu(): Promise<ImportResult | null> {
+  requireSettings()
+  const remote = await readFile(LEBENSMITTEL_NEU_PATH)
+  if (!remote) return null
+
+  const rows = parseLebensmittelNeu(remote.content)
+  if (rows.length === 0) return null
+
+  const keptLines: string[] = []
+  const skipped: string[] = []
+  let changed = 0
+
+  await withVaultImport(async () => {
+    await db.transaction('rw', db.foodItems, async () => {
+      const existing = byName(await db.foodItems.toArray())
+      for (const row of rows) {
+        if (!row.food) {
+          keptLines.push(row.line)
+          skipped.push(splitTableRow(row.line)[0] || row.line.trim())
+          continue
+        }
+        const key = row.food.name.toLowerCase()
+        if (existing.has(key)) continue // schon in der Datenbank - Zeile verwerfen
+        const item: FoodItem = {
+          id: crypto.randomUUID(),
+          name: row.food.name,
+          kcal: row.food.kcal,
+          protein: row.food.protein,
+          carbs: row.food.carbs,
+          fat: row.food.fat,
+          unconfirmed: true,
+        }
+        await db.foodItems.add(item)
+        existing.set(key, item)
+        changed++
+      }
+    })
+  })
+
+  const emptied = rebuildLebensmittelNeu(remote.content, keptLines)
+  if (emptied !== null) {
+    await writeFile(LEBENSMITTEL_NEU_PATH, emptied, `Sync ${isoDate(new Date())}: Lebensmittel-Neu`, remote.sha)
+  }
+
+  return record({ label: 'Neue Lebensmittel', changed, skipped })
+}
+
 // ------------------------------------------------------------- Voll-Import
 
 /**
@@ -375,6 +448,9 @@ export async function importAllFromVault(): Promise<ImportResult[]> {
 
   const supplemente = await readFile('20-Fitness/Supplemente.md')
   if (supplemente) await importSupplemente(supplemente.content)
+
+  // Vor Plan und Tageslogs: dort vorkommende Lebensmittel sind danach zuordenbar.
+  await importLebensmittelNeu()
 
   const plan = await readFile('40-Ernaehrung/Ernaehrungsplan.md')
   if (plan) await importErnaehrungsplan(plan.content)

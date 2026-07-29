@@ -7,7 +7,7 @@ import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../li
 import type { Athlete, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, Select } from '../components/ui'
-import SearchPicker from '../components/SearchPicker'
+import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
 import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
@@ -47,6 +47,7 @@ export default function NutritionLogPage() {
     label: f.name,
     sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
     favorite: f.favorite,
+    unconfirmed: f.unconfirmed,
   }))
   const planMap = new Map((nutritionPlans ?? []).map((p) => [p.id, p]))
 
@@ -284,7 +285,7 @@ function LoggedFoodRow({
   pickerItems,
 }: {
   item: NutritionLogItem
-  pickerItems: { id: string; label: string; sublabel?: string }[]
+  pickerItems: SearchPickerItem[]
 }) {
   return (
     <div className={`flex flex-col gap-2 rounded-lg border border-border p-2 ${item.done ? 'opacity-60' : ''}`}>

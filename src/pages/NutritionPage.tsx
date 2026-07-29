@@ -10,7 +10,7 @@ import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, DecimalInput, Input, Select } from '../components/ui'
-import SearchPicker from '../components/SearchPicker'
+import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
 import { useCoachMode } from '../lib/coachMode'
 import { useDragSensors } from '../lib/dragSensors'
@@ -48,6 +48,7 @@ export default function NutritionPage() {
     label: f.name,
     sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
     favorite: f.favorite,
+    unconfirmed: f.unconfirmed,
   }))
   const target = calculate({
     gender: athlete.gender,
@@ -309,7 +310,7 @@ function SortableMealRow({
   onRemove,
 }: {
   meal: PlanMeal
-  foodPickerItems: { id: string; label: string; sublabel?: string; favorite?: boolean }[]
+  foodPickerItems: SearchPickerItem[]
   onChange: (patch: Partial<PlanMeal>) => void
   onRemove: () => void
 }) {

@@ -67,9 +67,37 @@ Vault ab.
 - Bei gleichzeitiger Änderung derselben Datei **gewinnt der Vault**.
 - Unbekannte **Übungen und Supplemente** werden automatisch angelegt,
   unbekannte **Lebensmittel** übersprungen und gemeldet - aus "80g (300 kcal)"
-  lassen sich die Makros nicht zurückrechnen.
+  lassen sich die Makros nicht zurückrechnen. Nachtragen lassen sie sich über
+  `Lebensmittel-Neu.md` (siehe unten).
 - Zeilen, die nicht ins Format passen, werden ignoriert. Alles unter einer
   Überschrift `## Notizen` bleibt beim Zurückschreiben erhalten.
+
+### Lebensmittel-Datenbank
+
+Die komplette Lebensmitteltabelle liegt als `40-Ernaehrung/Lebensmittel.md` im Vault
+(Nährwerte je 100 g, nach Namen sortiert) und wird bei jedem Sync neu geschrieben.
+Die Namen stehen dort zeichengleich so wie in den Tageslogs - daran hängt die
+Zuordnung beim Zurücklesen.
+
+Umgekehrt liest der Sync `40-Ernaehrung/Lebensmittel-Neu.md`, falls vorhanden. Dort
+lassen sich neue Lebensmittel vormerken, z.B. von Claude geschätzte Werte:
+
+```markdown
+| Name | kcal | Protein | KH | Fett | Herkunft |
+|---|---|---|---|---|---|
+| Popcorn (Kino, süß) | 450 | 5.5 | 72.0 | 12.5 | Claude 2026-07-29, geschätzt |
+```
+
+- Jede Zeile wird als neues Lebensmittel angelegt und als **unbestätigt** markiert -
+  in der App ist so bei der Auswahl erkennbar, was nur geschätzt ist. Die Markierung
+  verschwindet, sobald der Eintrag in der Lebensmittel-Datenbank gespeichert wird.
+- Namen, die es in der Datenbank schon gibt, werden verworfen: die Datenbank hat
+  Vorrang, geschätzte Werte überschreiben nie bestehende.
+- Danach wird die Tabelle geleert (Datei und Tabellenkopf bleiben stehen).
+  Fehlerhafte Zeilen (falsche Spaltenzahl, keine Zahlen) bleiben zur Korrektur stehen,
+  der Rest wird trotzdem importiert.
+- Der Import läuft vor dem Export, neue Einträge stehen also im selben Durchlauf schon
+  in `Lebensmittel.md`.
 
 Der laufende Sync gleicht die Tagesdateien der letzten drei Tage ab.
 "Kompletten Vault einlesen" im Dialog liest den gesamten Vault (alle Trainings-

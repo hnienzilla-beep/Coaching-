@@ -50,6 +50,9 @@ export interface FoodItem {
   carbs: number
   fat: number
   favorite?: boolean
+  // Aus dem Vault übernommener Schätzwert (Lebensmittel-Neu.md), nicht aus einer
+  // Nährwertquelle. Bleibt gesetzt, bis die Werte in der App bestätigt wurden.
+  unconfirmed?: boolean
 }
 
 export interface NutritionPlan {
