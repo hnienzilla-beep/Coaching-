@@ -76,6 +76,11 @@ textarea {
   --color-border: rgba(0, 0, 0, 0.1);
   --color-fg: #000000;
   --color-muted: #000000;
+  /* Zusätzlich zum festen Layer trägt auch die Grundfläche selbst das Foto. Sie deckt
+     die Bereiche ab, die kein Element erreicht - etwa das Überscrollen am oberen Rand
+     oder der Moment, in dem iOS seine Leisten ein-/ausblendet. Sonst blitzt dort
+     Schwarz auf. */
+  background: var(--bg-photo-url) center / cover no-repeat;
 }
 
 .bg-photo body {
@@ -87,20 +92,25 @@ textarea {
   overscroll-behavior-y: none;
 }
 
+/* Der Layer liegt hinter der gesamten App (fest im Viewport) und deckt in jeder Ansicht
+   den ganzen Screen ab - inklusive der Safe-Areas, weil das Viewport-Meta mit
+   viewport-fit=cover arbeitet. `inset: 0` statt 100vw/100vh: 100vw zählt am Desktop die
+   Scrollbar mit (horizontales Überlaufen), und eine feste Höhe braucht es nicht. */
 .bg-photo-layer {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   z-index: -1;
+  /* Mindesthöhe auf die *größte* Viewport-Höhe: Blendet iOS Safari seine Adress- und
+     Toolbar aus, wächst der sichtbare Bereich - mit der dynamischen Höhe (dvh) bliebe
+     unten ein schwarzer Streifen stehen. */
+  min-height: 100vh;
   background: var(--bg-photo-url) center / cover no-repeat;
   pointer-events: none;
 }
 
-@supports (height: 100dvh) {
+@supports (height: 100lvh) {
   .bg-photo-layer {
-    height: 100dvh;
+    min-height: 100lvh;
   }
 }
 

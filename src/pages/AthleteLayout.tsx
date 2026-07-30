@@ -3,7 +3,8 @@ import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ACCENT_COLORS } from '../db/queries'
-import { accentForeground } from '../lib/theme'
+import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
+import { AccentSwatch } from '../components/ui'
 import type { Athlete } from '../models/types'
 
 // Ernährung (Plan/Log/Supplements) und Training (Plan/Log) sind je ein Tab mit einem
@@ -22,14 +23,12 @@ export default function AthleteLayout() {
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const colorPickerRef = useRef<HTMLDivElement>(null)
 
+  // Beim Verlassen des Athleten zurück auf die Akzentfarbe der Übersicht - nicht einfach
+  // entfernen, sonst ginge eine dort eingestellte Farbe verloren.
   useEffect(() => {
     if (!athlete?.accentColor) return
-    document.documentElement.style.setProperty('--color-accent', athlete.accentColor)
-    document.documentElement.style.setProperty('--color-accent-fg', accentForeground(athlete.accentColor))
-    return () => {
-      document.documentElement.style.removeProperty('--color-accent')
-      document.documentElement.style.removeProperty('--color-accent-fg')
-    }
+    applyAccentColor(athlete.accentColor)
+    return () => applyAccentColor(getStoredOverviewAccent())
   }, [athlete?.accentColor])
 
   useEffect(() => {
@@ -70,18 +69,13 @@ export default function AthleteLayout() {
           {colorPickerOpen && (
             <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
               {ACCENT_COLORS.map((color) => (
-                <button
+                <AccentSwatch
                   key={color}
-                  type="button"
-                  onClick={() => {
-                    void db.athletes.update(athlete.id, { accentColor: color })
+                  color={color}
+                  selected={athlete.accentColor === color}
+                  onSelect={(picked) => {
+                    void db.athletes.update(athlete.id, { accentColor: picked })
                     setColorPickerOpen(false)
-                  }}
-                  aria-label={`Akzentfarbe ${color}`}
-                  className="h-6 w-6 shrink-0 rounded-full border border-border"
-                  style={{
-                    background: color,
-                    boxShadow: athlete.accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none',
                   }}
                 />
               ))}
