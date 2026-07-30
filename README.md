@@ -187,6 +187,14 @@ des Themes). Die Übersichtsfarbe liegt in `localStorage`
 (`src/lib/accentColor.ts`), innerhalb eines Athleten überschreibt dessen eigene
 Farbe sie und beim Verlassen wird sie wiederhergestellt.
 
+Statt der schwarzen Grundfläche lässt sich ein eigenes Hintergrundbild setzen
+(Zahnrad-Menü → "Hintergrundbild wählen"). Es liegt als fester Layer hinter der
+gesamten App und füllt in jeder Ansicht den ganzen Screen inklusive der
+Safe-Areas; Karten und Leisten werden dann durchscheinend. Wichtig für iOS: Der
+Layer wird auf die *größte* Viewport-Höhe (`100lvh`) gezogen - mit der
+dynamischen Höhe (`100dvh`) bliebe unten ein schwarzer Streifen, sobald Safari
+seine Leisten ausblendet.
+
 Alle Farben liegen als Tokens in `src/index.css` (`@theme` für das Schwarz-Design,
 `.light` für den Hell-Modus als Umkehrung). Flächen, die den Akzent als Hintergrund
 nutzen, verwenden `text-accent-fg` - dieser Wert wird für eingestellte Akzentfarben zur
