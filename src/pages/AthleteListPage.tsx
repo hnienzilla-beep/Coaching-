@@ -22,12 +22,13 @@ import {
   importSelectedAthletes,
 } from '../db/db'
 import { ACCENT_COLORS, clearBackgroundPhoto, createAthlete, deleteAthlete, isoDate, setBackgroundPhoto } from '../db/queries'
-import { Button, Card, Field, Input, Select } from '../components/ui'
+import { AccentSwatch, Button, Card, Field, Input, Select } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
 import { useCoachMode } from '../lib/coachMode'
 import { useCompactMode } from '../lib/compactMode'
+import { useOverviewAccent } from '../lib/accentColor'
 import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
 
 export default function AthleteListPage() {
@@ -65,6 +66,8 @@ export default function AthleteListPage() {
   const [theme, setTheme] = useTheme()
   const [coachMode, setCoachMode] = useCoachMode()
   const [compactMode, setCompactMode] = useCompactMode()
+  const [overviewAccent, setOverviewAccent] = useOverviewAccent()
+  const [accentPickerOpen, setAccentPickerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
@@ -129,6 +132,7 @@ export default function AthleteListPage() {
     function handleClickOutside(e: MouseEvent) {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
         setSettingsOpen(false)
+        setAccentPickerOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -144,7 +148,10 @@ export default function AthleteListPage() {
         </div>
         <div ref={settingsRef} className="relative">
           <button
-            onClick={() => setSettingsOpen((v) => !v)}
+            onClick={() => {
+              setSettingsOpen((v) => !v)
+              setAccentPickerOpen(false)
+            }}
             aria-label="Einstellungen"
             className="rounded-lg border border-border bg-surface-2 p-2 text-lg leading-none text-fg"
           >
@@ -170,6 +177,39 @@ export default function AthleteListPage() {
               >
                 {compactMode ? '📥 Karten einklappen: An' : '📥 Karten einklappen: Aus'}
               </button>
+              <button
+                onClick={() => setAccentPickerOpen((v) => !v)}
+                aria-expanded={accentPickerOpen}
+                className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                <span>🎨 Akzentfarbe</span>
+                <span
+                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
+                  style={{ background: overviewAccent ?? 'var(--color-accent)' }}
+                />
+              </button>
+              {accentPickerOpen && (
+                <div className="flex flex-wrap gap-2 px-2 pb-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOverviewAccent(null)}
+                    aria-pressed={overviewAccent === null}
+                    className={`rounded-lg border px-2 py-1 text-xs ${
+                      overviewAccent === null ? 'border-accent text-fg' : 'border-border text-muted'
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  {ACCENT_COLORS.map((color) => (
+                    <AccentSwatch
+                      key={color}
+                      color={color}
+                      selected={overviewAccent === color}
+                      onSelect={setOverviewAccent}
+                    />
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => backgroundPhotoInputRef.current?.click()}
                 className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
@@ -570,13 +610,12 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
       <Field label="Akzentfarbe">
         <div className="flex flex-wrap gap-2">
           {ACCENT_COLORS.map((color) => (
-            <button
+            <AccentSwatch
               key={color}
-              type="button"
-              onClick={() => setAccentColor(color)}
-              aria-label={`Akzentfarbe ${color}`}
-              className="h-7 w-7 rounded-full border border-border"
-              style={{ background: color, boxShadow: accentColor === color ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none' }}
+              color={color}
+              selected={accentColor === color}
+              onSelect={setAccentColor}
+              className="h-7 w-7"
             />
           ))}
         </div>

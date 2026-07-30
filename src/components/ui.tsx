@@ -22,6 +22,30 @@ export function UnconfirmedBadge() {
   return <span className="ml-1 rounded border border-border px-1 py-px align-middle text-[10px] text-muted">unbestätigt</span>
 }
 
+/** Farbkreis zur Auswahl einer Akzentfarbe - der Ring markiert die aktive Farbe. */
+export function AccentSwatch({
+  color,
+  selected,
+  onSelect,
+  className = 'h-6 w-6',
+}: {
+  color: string
+  selected: boolean
+  onSelect: (color: string) => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(color)}
+      aria-label={`Akzentfarbe ${color}`}
+      aria-pressed={selected}
+      className={`shrink-0 rounded-full border border-border ${className}`}
+      style={{ background: color, boxShadow: selected ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${color}` : 'none' }}
+    />
+  )
+}
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   // iOS zeigt bei type="number" ohne inputMode manchmal keine Komma-/Punkt-Taste an -
   // "decimal" erzwingt die Zifferntastatur mit Dezimaltrennzeichen.

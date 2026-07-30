@@ -178,11 +178,18 @@ iOS beendet), ruht auch der Sync.
 Die App ist in Schwarz gehalten: reines Schwarz (`#000000`) als Grundfläche, nur
 minimal aufgehellte Karten- und Steuerflächen darüber und ein monochromer, weißer
 Akzent. Farbe kommt bewusst nur an zwei Stellen dazu - über die frei wählbare
-Akzentfarbe je Athlet und über die Semantikfarben für "ok" und "Fehler".
+Akzentfarbe und über die Semantikfarben für "ok" und "Fehler".
+
+Die Akzentfarbe ist an zwei Stellen einstellbar: je Athlet (Farbkreis in der
+Kopfzeile des Athleten) und für die Athletenübersicht samt aller Seiten außerhalb
+eines Athleten (Zahnrad-Menü → "Akzentfarbe", "Standard" nimmt wieder den Akzent
+des Themes). Die Übersichtsfarbe liegt in `localStorage`
+(`src/lib/accentColor.ts`), innerhalb eines Athleten überschreibt dessen eigene
+Farbe sie und beim Verlassen wird sie wiederhergestellt.
 
 Alle Farben liegen als Tokens in `src/index.css` (`@theme` für das Schwarz-Design,
 `.light` für den Hell-Modus als Umkehrung). Flächen, die den Akzent als Hintergrund
-nutzen, verwenden `text-accent-fg` - dieser Wert wird für Athleten-Akzentfarben zur
+nutzen, verwenden `text-accent-fg` - dieser Wert wird für eingestellte Akzentfarben zur
 Laufzeit anhand der Helligkeit auf Schwarz oder Weiß gesetzt
 (`accentForeground` in `src/lib/theme.ts`), damit die Schrift bei jeder Farbe lesbar
 bleibt.
