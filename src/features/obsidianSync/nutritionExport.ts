@@ -1,8 +1,10 @@
 import { db } from '../../db/db'
 import { caloriesFromMacros } from '../../lib/calculator'
 import { MEAL_TYPES } from '../../models/types'
-import { getSyncSettings } from './settings'
+import { requireSettings } from './importLog'
+import { buildFrontmatter } from './markdownBuild'
 import { syncFile } from './githubApi'
+import type { VaultTree } from './githubApi'
 import { importErnaehrungLog, importErnaehrungsplan } from './vaultImport'
 
 function round(n: number): number {
@@ -12,24 +14,24 @@ function round(n: number): number {
 export const ERNAEHRUNGSPLAN_PATH = '40-Ernaehrung/Ernaehrungsplan.md'
 export const ERNAEHRUNG_LOG_DIR = '40-Ernaehrung/Log'
 
-/** Baut den aktuellen Ernährungsplan (erste Phase) des gewählten Athleten. */
+/** Baut alle Ernährungsplan-Phasen des gewählten Athleten. */
 async function buildErnaehrungsplan(): Promise<string> {
-  const settings = getSyncSettings()
-  if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
-
+  const settings = requireSettings()
   const plans = await db.nutritionPlans.where('athleteId').equals(settings.athleteId).sortBy('order')
-  const currentPlan = plans[0]
 
-  const lines = ['---', 'typ: ernaehrungsplan', '---', '']
+  const lines = [...buildFrontmatter({ typ: 'ernaehrungsplan' })]
 
-  if (!currentPlan) {
+  if (plans.length === 0) {
     lines.push('_Noch kein Ernährungsplan angelegt._', '')
-  } else {
-    const allMeals = await db.planMeals.where('planId').equals(currentPlan.id).sortBy('order')
+    return lines.join('\n')
+  }
+
+  for (const plan of plans) {
+    const allMeals = await db.planMeals.where('planId').equals(plan.id).sortBy('order')
     const foods = await db.foodItems.bulkGet(allMeals.map((m) => m.foodItemId))
     const foodMap = new Map(allMeals.map((m, i) => [m.id, foods[i]]))
 
-    lines.push(`## Aktueller Plan: ${currentPlan.phaseName}`, '')
+    lines.push(`## Plan: ${plan.phaseName}`, '')
 
     let totalKcal = 0
     let totalProtein = 0
@@ -70,7 +72,7 @@ async function buildErnaehrungsplan(): Promise<string> {
 }
 
 /** Gleicht den Ernährungsplan in beide Richtungen ab. */
-export async function syncErnaehrungsplan(): Promise<void> {
+export async function syncErnaehrungsplan(tree?: VaultTree | null): Promise<void> {
   await syncFile({
     path: ERNAEHRUNGSPLAN_PATH,
     build: buildErnaehrungsplan,
@@ -78,17 +80,18 @@ export async function syncErnaehrungsplan(): Promise<void> {
     importRemote: async (content) => {
       await importErnaehrungsplan(content)
     },
+    tree,
   })
 }
 
 /** Baut das Ernährungslog eines Tages - `null`, wenn an dem Tag nichts erfasst wurde. */
 async function buildErnaehrungLog(date: string): Promise<string | null> {
-  const settings = getSyncSettings()
-  if (!settings) throw new Error('Obsidian-Sync ist noch nicht eingerichtet.')
+  const settings = requireSettings()
 
   const log = await db.nutritionLogs.where('[athleteId+date]').equals([settings.athleteId, date]).first()
   if (!log) return null
 
+  const plan = log.nutritionPlanId ? await db.nutritionPlans.get(log.nutritionPlanId) : undefined
   const items = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).sortBy('order')
   const foods = await db.foodItems.bulkGet(items.map((i) => i.foodItemId))
   const foodMap = new Map(items.map((i, idx) => [i.id, foods[idx]]))
@@ -121,24 +124,29 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
     bodyLines.push('')
   }
 
-  const frontmatter = [
-    '---',
-    'typ: ernaehrung',
-    `datum: ${date}`,
-    `kalorien: ${round(totalKcal)}`,
-    `protein_g: ${round(totalProtein)}`,
-    `kohlenhydrate_g: ${round(totalCarbs)}`,
-    `fett_g: ${round(totalFat)}`,
-    '---',
-    '',
-  ].join('\n')
+  if (bodyLines.length === 0) bodyLines.push('_Keine Mahlzeiten erfasst._', '')
 
-  const body = bodyLines.length > 0 ? bodyLines.join('\n') : '_Keine Mahlzeiten erfasst._\n'
-  return frontmatter + body
+  // Die Tagesnotiz gehört zum Log und wird zurückgelesen - anders als der "## Notizen"-Block,
+  // der allein dem Nutzer gehört.
+  if (log.notes) bodyLines.push('## Tagesnotiz', '', log.notes, '')
+
+  return [
+    ...buildFrontmatter({
+      typ: 'ernaehrung',
+      datum: date,
+      plan: plan?.phaseName,
+      abgeschlossen: log.completedAt,
+      kalorien: round(totalKcal),
+      protein_g: round(totalProtein),
+      kohlenhydrate_g: round(totalCarbs),
+      fett_g: round(totalFat),
+    }),
+    ...bodyLines,
+  ].join('\n')
 }
 
 /** Gleicht das Ernährungslog eines Tages in beide Richtungen ab. */
-export async function syncErnaehrungLog(date: string): Promise<void> {
+export async function syncErnaehrungLog(date: string, tree?: VaultTree | null): Promise<void> {
   await syncFile({
     path: `${ERNAEHRUNG_LOG_DIR}/${date}.md`,
     build: () => buildErnaehrungLog(date),
@@ -146,5 +154,6 @@ export async function syncErnaehrungLog(date: string): Promise<void> {
     importRemote: async (content) => {
       await importErnaehrungLog(date, content)
     },
+    tree,
   })
 }
