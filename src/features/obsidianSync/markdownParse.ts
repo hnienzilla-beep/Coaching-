@@ -1,12 +1,13 @@
-import { MEAL_TYPES, SUPPLEMENT_TIMINGS } from '../../models/types'
-import type { MealType, SupplementTiming } from '../../models/types'
+import { MEAL_TYPES, MUSCLE_GROUPS, SUPPLEMENT_TIMINGS } from '../../models/types'
+import type { MealType, MuscleGroup, SupplementTiming } from '../../models/types'
+import { VAULT_FORMAT } from './markdownBuild'
 
 /**
- * Parser für die Markdown-Dateien, die der Sync selbst schreibt (siehe fitnessExport.ts,
- * nutritionExport.ts und foodExport.ts) sowie für Lebensmittel-Neu.md, das in Obsidian
- * entsteht. Sie sind bewusst nachsichtig: Zeilen, die nicht ins Muster passen
- * (eigene Notizen, Überschriften, Absätze aus Obsidian), werden übersprungen statt zu einem
- * Fehler zu führen - so zerschießt eine handschriftliche Ergänzung im Vault nicht den Import.
+ * Parser für die Markdown-Dateien, die der Sync selbst schreibt (siehe die `*Export.ts`-Module)
+ * sowie für Lebensmittel-Neu.md, das in Obsidian entsteht. Sie sind bewusst nachsichtig:
+ * Zeilen, die nicht ins Muster passen (eigene Notizen, Überschriften, Absätze aus Obsidian),
+ * werden übersprungen statt zu einem Fehler zu führen - so zerschießt eine handschriftliche
+ * Ergänzung im Vault nicht den Import.
  */
 
 /** "84,5" und "84.5" akzeptieren, alles andere verwerfen. */
@@ -16,8 +17,30 @@ export function parseNumber(raw: string | undefined): number | undefined {
   return Number.isFinite(value) ? value : undefined
 }
 
+/** "ja"/"x"/"true" → true, leer oder "nein"/"-" → false. */
+export function parseBool(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase() ?? ''
+  return value === 'ja' || value === 'x' || value === 'true' || value === 'yes'
+}
+
+/** Leere Zellen und Platzhalter kommen als `undefined` zurück, nicht als leerer String. */
+function parseText(raw: string | undefined): string | undefined {
+  const value = raw?.trim()
+  return !value || value === '-' ? undefined : value
+}
+
 function lines(content: string): string[] {
   return content.split(/\r?\n/)
+}
+
+// -------------------------------------------------------------- Frontmatter
+
+/** Zeilen innerhalb des Frontmatter-Blocks (ohne die "---"-Zeilen). */
+function frontmatterLines(content: string): string[] {
+  const all = lines(content)
+  if (all[0]?.trim() !== '---') return []
+  const end = all.findIndex((line, i) => i > 0 && line.trim() === '---')
+  return end === -1 ? [] : all.slice(1, end)
 }
 
 /** Entfernt den YAML-Frontmatter-Block am Dateianfang. */
@@ -28,12 +51,40 @@ function stripFrontmatter(content: string): string[] {
   return end === -1 ? all : all.slice(end + 1)
 }
 
+/**
+ * Liest den Frontmatter-Block als flache Schlüssel-Wert-Paare. Kein YAML-Parser: `buildFrontmatter`
+ * schreibt nur "schluessel: wert"-Zeilen. Umschließende Anführungszeichen werden entfernt, damit
+ * auch in Obsidian gesetzte Quotes gelesen werden.
+ */
+export function parseFrontmatter(content: string): Record<string, string> {
+  const fields: Record<string, string> = {}
+  for (const line of frontmatterLines(content)) {
+    const match = line.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/)
+    if (!match) continue
+    fields[match[1]] = match[2].trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1')
+  }
+  return fields
+}
+
+/**
+ * Wurde die Datei von dieser App-Version geschrieben (`format:` im Frontmatter)?
+ *
+ * Nur dann darf der Import löschende Semantik anwenden. Fehlt der Marker, stammt die Datei aus
+ * einer älteren Version und war nie vollständig - eine dort fehlende Plan-Phase ist also nicht
+ * gelöscht, sondern wurde nie geschrieben.
+ */
+export function isCurrentFormat(content: string): boolean {
+  const version = Number(parseFrontmatter(content).format)
+  return Number.isFinite(version) && version >= VAULT_FORMAT
+}
+
 // ------------------------------------------------------------ Markdowntabellen
 
 /**
  * Zerlegt eine Tabellenzeile in ihre Zellen. `\|` gehört zum Zellinhalt (so schreibt der
  * Export Namen mit Pipe-Zeichen) und trennt deshalb nicht - lookbehind-Regex wird bewusst
- * vermieden, das ältere iOS-Safari-Versionen nicht kennen.
+ * vermieden, das ältere iOS-Safari-Versionen nicht kennen. `<br>` wird zum Zeilenumbruch
+ * zurückgewandelt (so schreibt `escapeCell` mehrzeilige Notizen).
  */
 export function splitTableRow(line: string): string[] {
   const cells: string[] = []
@@ -57,7 +108,7 @@ export function splitTableRow(line: string): string[] {
   // Die äußeren Pipes erzeugen je eine leere Randzelle - die gehört nicht zur Tabelle.
   if (cells.length > 0 && cells[0].trim() === '') cells.shift()
   if (cells.length > 0 && cells[cells.length - 1].trim() === '') cells.pop()
-  return cells.map((cell) => cell.trim())
+  return cells.map((cell) => cell.trim().replace(/<br\s*\/?>/gi, '\n'))
 }
 
 /** Trennzeile einer Markdowntabelle ("|---|---|" bzw. "| :--- | ---: |"). */
@@ -70,27 +121,232 @@ export function isTableRow(line: string): boolean {
   return line.trim().startsWith('|')
 }
 
-// ---------------------------------------------------------------- Gewicht.md
-
-export interface ParsedWeight {
-  date: string
-  weightKg: number
+/**
+ * Alle Datenzeilen einer Tabelle als Zellen-Arrays - Trennzeilen und die Kopfzeile
+ * (erkannt am erwarteten Titel der ersten Spalte) werden übersprungen.
+ */
+function tableCells(contentLines: string[], firstColumnHeader: string): string[][] {
+  const rows: string[][] = []
+  for (const line of contentLines) {
+    if (!isTableRow(line) || isTableSeparator(line)) continue
+    const cells = splitTableRow(line)
+    if (cells[0]?.toLowerCase() === firstColumnHeader.toLowerCase()) continue
+    rows.push(cells)
+  }
+  return rows
 }
 
-/** Liest die Tabellenzeilen "| 2026-07-28 | 84.5 |" aus Gewicht.md. */
-export function parseGewicht(content: string): ParsedWeight[] {
-  const result: ParsedWeight[] = []
-  const seen = new Set<string>()
-  for (const line of stripFrontmatter(content)) {
-    const match = line.match(/^\|\s*(\d{4}-\d{2}-\d{2})\s*\|([^|]*)\|/)
-    if (!match) continue
-    const weightKg = parseNumber(match[2])
-    if (weightKg === undefined || weightKg <= 0) continue
-    if (seen.has(match[1])) continue // erste (= neueste) Zeile pro Datum gewinnt
-    seen.add(match[1])
-    result.push({ date: match[1], weightKg })
+// ---------------------------------------------------------------- Überschriften
+
+/** "## Plan: Push A" bzw. das alte "## Aktueller Plan: …" - Trenner zwischen Plan-Phasen. */
+function planHeading(line: string): string | null {
+  const match = line.match(/^##\s+(?:Aktueller\s+)?Plan:\s*(.+?)\s*$/i)
+  return match ? match[1] : null
+}
+
+/** Eine "## …"-Überschrift (nicht "### …"). */
+function isSectionHeading(line: string): boolean {
+  return /^##(?!#)/.test(line.trim())
+}
+
+/** "### Bankdrücken" bzw. "### Frühstück". */
+function subHeading(line: string): string | null {
+  const match = line.match(/^###\s+(.+?)\s*$/)
+  return match ? match[1] : null
+}
+
+/**
+ * Fließtext unterhalb einer "## <Titel>"-Überschrift bis zur nächsten Überschrift - für die
+ * Notizfelder, die mehrzeilig sein dürfen (Trainings- und Tagesnotiz).
+ */
+export function parseSection(content: string, title: string): string | undefined {
+  const all = stripFrontmatter(content)
+  const wanted = `## ${title}`.toLowerCase()
+  const start = all.findIndex((line) => line.trim().toLowerCase() === wanted)
+  if (start === -1) return undefined
+
+  const body: string[] = []
+  for (let i = start + 1; i < all.length; i++) {
+    if (isSectionHeading(all[i]) || subHeading(all[i]) !== null) break
+    body.push(all[i])
   }
+  return body.join('\n').trim() || undefined
+}
+
+// ---------------------------------------------------------------- Athlet.md
+
+/**
+ * Stammdaten aus dem Frontmatter von Athlet.md. Reine Textwerte - welche davon übernommen
+ * werden dürfen, entscheidet der Import (`importAthlet`), weil dafür die erlaubten
+ * Auswahlwerte aus dem Kalorienrechner nötig sind.
+ */
+export function parseAthlet(content: string): Record<string, string> {
+  return parseFrontmatter(content)
+}
+
+// ---------------------------------------------------------------- Gewicht.md
+
+export interface ParsedTrackingRow {
+  date: string
+  weightKg?: number
+  bodyFatPct?: number
+  calories?: number
+  protein?: number
+  carbs?: number
+  fat?: number
+  waist?: number
+  arm?: number
+  chest?: number
+  leg?: number
+  notes?: string
+}
+
+/** Positive Zahl oder `undefined` - 0 und Negativwerte sind in dieser Tabelle immer Unsinn. */
+function positive(raw: string | undefined): number | undefined {
+  const value = parseNumber(raw)
+  return value !== undefined && value > 0 ? value : undefined
+}
+
+/**
+ * Liest die Tracking-Tabelle aus Gewicht.md. Datum und Gewicht stehen (auch in älteren
+ * Dateien) in Spalte 1 und 2, alle weiteren Spalten sind optional - eine Datei aus einer
+ * früheren App-Version wird deshalb unverändert weiter gelesen.
+ */
+export function parseGewicht(content: string): ParsedTrackingRow[] {
+  const result: ParsedTrackingRow[] = []
+  const seen = new Set<string>()
+
+  for (const line of stripFrontmatter(content)) {
+    if (!isTableRow(line) || isTableSeparator(line)) continue
+    const cells = splitTableRow(line)
+    const date = cells[0]?.match(/^\d{4}-\d{2}-\d{2}$/) ? cells[0] : null
+    if (!date) continue
+    if (seen.has(date)) continue // erste (= neueste) Zeile pro Datum gewinnt
+    seen.add(date)
+
+    result.push({
+      date,
+      weightKg: positive(cells[1]),
+      bodyFatPct: positive(cells[2]),
+      calories: parseNumber(cells[3]),
+      protein: parseNumber(cells[4]),
+      carbs: parseNumber(cells[5]),
+      fat: parseNumber(cells[6]),
+      waist: positive(cells[7]),
+      arm: positive(cells[8]),
+      chest: positive(cells[9]),
+      leg: positive(cells[10]),
+      notes: parseText(cells[11]),
+    })
+  }
+
   return result
+}
+
+// -------------------------------------------------------------- Uebungen.md
+
+export interface ParsedExerciseRow {
+  name: string
+  muscleGroup?: MuscleGroup
+  favorite: boolean
+}
+
+function toMuscleGroup(raw: string | undefined): MuscleGroup | undefined {
+  const value = raw?.trim().toLowerCase()
+  return MUSCLE_GROUPS.find((group) => group.toLowerCase() === value)
+}
+
+/** Liest "| Bankdrücken | Brust | ja |" aus Uebungen.md. */
+export function parseUebungen(content: string): ParsedExerciseRow[] {
+  const rows: ParsedExerciseRow[] = []
+  for (const cells of tableCells(stripFrontmatter(content), 'Übung')) {
+    const name = parseText(cells[0])
+    if (!name) continue
+    rows.push({ name, muscleGroup: toMuscleGroup(cells[1]), favorite: parseBool(cells[2]) })
+  }
+  return rows
+}
+
+// -------------------------------------------------- Supplement-Datenbank.md
+
+export interface ParsedSupplementRow {
+  name: string
+  defaultDose?: string
+  defaultTiming?: SupplementTiming
+  notes?: string
+}
+
+function toTiming(raw: string | undefined): SupplementTiming | undefined {
+  const value = raw?.trim().toLowerCase()
+  return SUPPLEMENT_TIMINGS.find((timing) => timing.toLowerCase() === value)
+}
+
+/** Liest "| Kreatin | 5 g | Morgens | mit Wasser |" aus Supplement-Datenbank.md. */
+export function parseSupplementDatenbank(content: string): ParsedSupplementRow[] {
+  const rows: ParsedSupplementRow[] = []
+  for (const cells of tableCells(stripFrontmatter(content), 'Supplement')) {
+    const name = parseText(cells[0])
+    if (!name) continue
+    rows.push({
+      name,
+      defaultDose: parseText(cells[1]),
+      defaultTiming: toTiming(cells[2]),
+      notes: parseText(cells[3]),
+    })
+  }
+  return rows
+}
+
+// -------------------------------------------------------- Trainingsplaene.md
+
+export interface ParsedPlanExercise {
+  name: string
+  sets: number
+  reps: string
+  targetWeightKg?: number
+  notes?: string
+}
+
+export interface ParsedTrainingPhase {
+  phaseName: string
+  items: ParsedPlanExercise[]
+}
+
+/**
+ * Liest die Trainingsplan-Phasen: je "## Plan: <Name>" eine Tabelle
+ * "| Übung | Sätze | Wdh. | Zielgewicht (kg) | Notiz |".
+ */
+export function parseTrainingsplaene(content: string): ParsedTrainingPhase[] {
+  const phases: ParsedTrainingPhase[] = []
+  let current: ParsedTrainingPhase | null = null
+
+  for (const line of stripFrontmatter(content)) {
+    const heading = planHeading(line)
+    if (heading) {
+      current = { phaseName: heading, items: [] }
+      phases.push(current)
+      continue
+    }
+    if (!current) continue
+    if (isSectionHeading(line)) {
+      current = null // andere Überschrift (z.B. "## Notizen") beendet die Phase
+      continue
+    }
+    if (!isTableRow(line) || isTableSeparator(line)) continue
+
+    const cells = splitTableRow(line)
+    const name = parseText(cells[0])
+    if (!name || name.toLowerCase() === 'übung') continue
+    current.items.push({
+      name,
+      sets: Math.max(1, Math.round(parseNumber(cells[1]) ?? 1)),
+      reps: parseText(cells[2]) ?? '',
+      targetWeightKg: positive(cells[3]),
+      notes: parseText(cells[4]),
+    })
+  }
+
+  return phases
 }
 
 // ------------------------------------------------------- Training/<datum>.md
@@ -105,24 +361,64 @@ export interface ParsedSet {
 
 export interface ParsedExercise {
   name: string
+  notes?: string
   sets: ParsedSet[]
 }
 
-/** Liest Übungen ("### Bankdrücken") und Sätze ("- [x] Satz 1 · 8 Wdh. · 100 kg · RPE 8"). */
-export function parseTraining(content: string): ParsedExercise[] {
+export interface ParsedTrainingDay {
+  /** Phasenname aus dem Frontmatter (`plan:`), zum Wiederfinden des Trainingsplans. */
+  planName?: string
+  startedAt?: string
+  completedAt?: string
+  notes?: string
+  exercises: ParsedExercise[]
+}
+
+/** ISO-Zeitstempel aus dem Frontmatter - unlesbare Werte werden verworfen. */
+function parseTimestamp(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const value = new Date(raw)
+  return Number.isNaN(value.getTime()) ? undefined : value.toISOString()
+}
+
+/**
+ * Liest eine Trainings-Tagesdatei: Übungen ("### Bankdrücken"), Übungsnotizen
+ * ("_Notiz: langsam ablassen_") und Sätze ("- [x] Satz 1 · 8 Wdh. · 100 kg · RPE 8"),
+ * dazu Plan, Start/Ende aus dem Frontmatter und die Trainingsnotiz aus "## Trainingsnotiz".
+ */
+export function parseTraining(content: string): ParsedTrainingDay {
+  const frontmatter = parseFrontmatter(content)
   const exercises: ParsedExercise[] = []
   let current: ParsedExercise | null = null
+  // Ab der ersten "## …"-Überschrift ist der Übungsteil zu Ende (Trainingsnotiz, Notizen).
+  // Danach kommt nichts mehr dazu - sonst würde eine "### …"-Zeile in eigenen Notizen als
+  // Übung gelesen und beim Import in die App geschrieben.
+  let inExercises = true
 
   for (const line of stripFrontmatter(content)) {
-    const heading = line.match(/^###\s+(.+?)\s*$/)
+    if (isSectionHeading(line)) {
+      current = null
+      inExercises = false
+      continue
+    }
+    if (!inExercises) continue
+
+    const heading = subHeading(line)
     if (heading) {
-      current = { name: heading[1], sets: [] }
+      current = { name: heading, sets: [] }
       exercises.push(current)
+      continue
+    }
+    if (!current) continue
+
+    const note = line.match(/^\s*_Notiz:\s*(.+?)_\s*$/)
+    if (note) {
+      current.notes = note[1].trim()
       continue
     }
 
     const setLine = line.match(/^\s*-\s*\[([ xX])\]\s*(.+)$/)
-    if (!setLine || !current) continue
+    if (!setLine) continue
 
     const done = setLine[1].toLowerCase() === 'x'
     const parts = setLine[2].split('·').map((p) => p.trim())
@@ -149,7 +445,15 @@ export function parseTraining(content: string): ParsedExercise[] {
     current.sets.push(set)
   }
 
-  return exercises.filter((e) => e.name && e.sets.length > 0)
+  return {
+    planName: parseText(frontmatter.plan),
+    startedAt: parseTimestamp(frontmatter.start),
+    completedAt: parseTimestamp(frontmatter.ende),
+    notes: parseSection(content, 'Trainingsnotiz'),
+    // Auch eine Übung ohne Sätze bleibt erhalten ("_Keine Sätze erfasst._") - sie ist in der App
+    // angelegt, nur noch nicht ausgefüllt.
+    exercises: exercises.filter((e) => e.name.trim().length > 0),
+  }
 }
 
 // ------------------------------------------------------------ Supplemente.md
@@ -161,22 +465,34 @@ export interface ParsedSupplement {
   notes?: string
 }
 
-export interface ParsedSupplementPlan {
+export interface ParsedSupplementPhase {
+  /** `undefined`, wenn die Datei keine "## Plan:"-Überschrift hat (handgeschrieben). */
   phaseName?: string
   items: ParsedSupplement[]
 }
 
-/** Liest "- **Kreatin** – 5 g, Morgens (mit Wasser)". */
-export function parseSupplemente(content: string): ParsedSupplementPlan {
-  const items: ParsedSupplement[] = []
-  let phaseName: string | undefined
+/** Liest die Supplementplan-Phasen mit ihren Einträgen "- **Kreatin** – 5 g, Morgens (mit Wasser)". */
+export function parseSupplemente(content: string): ParsedSupplementPhase[] {
+  const phases: ParsedSupplementPhase[] = []
+  let current: ParsedSupplementPhase | null = null
+  // Nach einer anderen "## …"-Überschrift (z.B. "## Notizen") werden keine Einträge mehr
+  // gesammelt, bis die nächste Plan-Überschrift kommt - eigene Notizen sind kein Plan.
+  let blocked = false
 
   for (const line of stripFrontmatter(content)) {
-    const heading = line.match(/^##\s*Aktueller Plan:\s*(.+?)\s*$/i)
+    const heading = planHeading(line)
     if (heading) {
-      phaseName = heading[1]
+      current = { phaseName: heading, items: [] }
+      phases.push(current)
+      blocked = false
       continue
     }
+    if (isSectionHeading(line)) {
+      current = null
+      blocked = true
+      continue
+    }
+    if (blocked) continue
 
     const item = line.match(/^\s*-\s*\*\*(.+?)\*\*\s*[–-]\s*(.+?)\s*$/)
     if (!item) continue
@@ -198,10 +514,15 @@ export function parseSupplemente(content: string): ParsedSupplementPlan {
       rest = rest.slice(0, rest.length - match.length).replace(/[,\s]+$/, '')
     }
 
-    items.push({ name: item[1].trim(), dose: rest.trim(), timing, notes })
+    if (!current) {
+      // Einträge vor der ersten Überschrift gehören zu einer namenlosen Phase.
+      current = { items: [] }
+      phases.push(current)
+    }
+    current.items.push({ name: item[1].trim(), dose: rest.trim(), timing, notes })
   }
 
-  return { phaseName, items }
+  return phases.filter((phase) => phase.items.length > 0)
 }
 
 // ----------------------------------------- Ernaehrungsplan.md / Log/<datum>.md
@@ -213,8 +534,17 @@ export interface ParsedMealItem {
   done: boolean
 }
 
-export interface ParsedMeals {
+export interface ParsedMealPhase {
+  /** `undefined`, wenn die Datei keine "## Plan:"-Überschrift hat (z.B. ein Tageslog). */
   phaseName?: string
+  items: ParsedMealItem[]
+}
+
+export interface ParsedNutritionDay {
+  /** Phasenname aus dem Frontmatter (`plan:`), zum Wiederfinden des Ernährungsplans. */
+  planName?: string
+  completedAt?: string
+  notes?: string
   items: ParsedMealItem[]
 }
 
@@ -224,24 +554,38 @@ function toMealType(raw: string): MealType | undefined {
 
 /**
  * Liest Mahlzeiten unter "### Frühstück":
- * "- Haferflocken – 80g (300 kcal)" (Plan) bzw. "- [x] Haferflocken – 80g (300 kcal)" (Log).
- * Die Kalorienangabe in Klammern wird ignoriert - sie wird aus den Makros neu berechnet.
+ * "- Haferflocken – 80g (300 kcal)" (Plan) bzw. "- [x] Haferflocken – 80g (300 kcal)" (Log),
+ * gruppiert nach Plan-Phase ("## Plan: …"). Die Kalorienangabe in Klammern wird ignoriert -
+ * sie wird aus den Makros neu berechnet.
  */
-export function parseMeals(content: string): ParsedMeals {
-  const items: ParsedMealItem[] = []
-  let phaseName: string | undefined
+export function parseMealPhases(content: string): ParsedMealPhase[] {
+  const phases: ParsedMealPhase[] = []
+  let current: ParsedMealPhase | null = null
   let mealType: MealType | undefined
+  let blocked = false
 
   for (const line of stripFrontmatter(content)) {
-    const planHeading = line.match(/^##\s*Aktueller Plan:\s*(.+?)\s*$/i)
-    if (planHeading) {
-      phaseName = planHeading[1]
+    const heading = planHeading(line)
+    if (heading) {
+      current = { phaseName: heading, items: [] }
+      phases.push(current)
+      mealType = undefined
+      blocked = false
       continue
     }
+    if (isSectionHeading(line)) {
+      // Andere "## …"-Überschrift (Tagesnotiz, Notizen): kein Mahlzeitenblock mehr, sonst
+      // würden Listenzeilen aus eigenen Notizen als Mahlzeit gelesen.
+      current = null
+      mealType = undefined
+      blocked = true
+      continue
+    }
+    if (blocked) continue
 
-    const heading = line.match(/^###\s+(.+?)\s*$/)
-    if (heading) {
-      mealType = toMealType(heading[1])
+    const meal = subHeading(line)
+    if (meal) {
+      mealType = toMealType(meal)
       continue
     }
 
@@ -250,7 +594,11 @@ export function parseMeals(content: string): ParsedMeals {
     const grams = parseNumber(item[3])
     if (grams === undefined || grams <= 0) continue
 
-    items.push({
+    if (!current) {
+      current = { items: [] }
+      phases.push(current)
+    }
+    current.items.push({
       mealType,
       name: item[2].trim(),
       grams,
@@ -259,10 +607,21 @@ export function parseMeals(content: string): ParsedMeals {
     })
   }
 
-  return { phaseName, items }
+  return phases.filter((phase) => phase.items.length > 0)
 }
 
-// ------------------------------------------------------- Lebensmittel-Neu.md
+/** Liest eine Ernährungs-Tagesdatei: Mahlzeiten plus Plan, Abschluss und Tagesnotiz. */
+export function parseErnaehrungLog(content: string): ParsedNutritionDay {
+  const frontmatter = parseFrontmatter(content)
+  return {
+    planName: parseText(frontmatter.plan),
+    completedAt: parseTimestamp(frontmatter.abgeschlossen),
+    notes: parseSection(content, 'Tagesnotiz'),
+    items: parseMealPhases(content).flatMap((phase) => phase.items),
+  }
+}
+
+// ---------------------------------------------------- Lebensmittel(-Neu).md
 
 export interface ParsedNewFood {
   name: string
@@ -281,6 +640,11 @@ export interface ParsedNewFoodRow {
   food: ParsedNewFood | null
 }
 
+export interface ParsedFoodRow extends ParsedNewFood {
+  favorite: boolean
+  unconfirmed: boolean
+}
+
 const NEW_FOOD_HEADERS = ['name', 'kcal', 'protein', 'kh', 'fett']
 
 function isNewFoodHeader(cells: string[]): boolean {
@@ -292,15 +656,20 @@ export function isNewFoodHeaderRow(line: string): boolean {
   return isTableRow(line) && !isTableSeparator(line) && isNewFoodHeader(splitTableRow(line))
 }
 
-function toNewFood(cells: string[]): ParsedNewFood | null {
-  // Die Herkunft ist reine Notiz - fehlt die Spalte, ist die Zeile trotzdem auswertbar.
-  if (cells.length < 5 || cells.length > 6) return null
-  const name = cells[0]
+function toMacros(cells: string[]): ParsedNewFood | null {
+  const name = parseText(cells[0])
   if (!name) return null
   const [kcal, protein, carbs, fat] = cells.slice(1, 5).map(parseNumber)
   if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) return null
   if (kcal < 0 || protein < 0 || carbs < 0 || fat < 0) return null
-  return { name, kcal, protein, carbs, fat, origin: cells[5] || undefined }
+  return { name, kcal, protein, carbs, fat }
+}
+
+function toNewFood(cells: string[]): ParsedNewFood | null {
+  // Die Herkunft ist reine Notiz - fehlt die Spalte, ist die Zeile trotzdem auswertbar.
+  if (cells.length < 5 || cells.length > 6) return null
+  const food = toMacros(cells)
+  return food ? { ...food, origin: parseText(cells[5]) } : null
 }
 
 /**
@@ -319,6 +688,24 @@ export function parseLebensmittelNeu(content: string): ParsedNewFoodRow[] {
     const cells = splitTableRow(line)
     if (isNewFoodHeader(cells)) continue
     rows.push({ line, food: toNewFood(cells) })
+  }
+  return rows
+}
+
+/**
+ * Liest die Lebensmittel-Datenbank aus Lebensmittel.md:
+ * "| Reis (roh) | 349 | 7.0 | 78.0 | 0.6 | ja | |". Anders als in den Tageslogs stehen hier die
+ * Nährwerte dabei - die Tabelle ist deshalb rücklesbar.
+ */
+export function parseLebensmittel(content: string): ParsedFoodRow[] {
+  const rows: ParsedFoodRow[] = []
+  for (const line of stripFrontmatter(content)) {
+    if (!isTableRow(line) || isTableSeparator(line)) continue
+    const cells = splitTableRow(line)
+    if (isNewFoodHeader(cells)) continue
+    const food = toMacros(cells)
+    if (!food) continue
+    rows.push({ ...food, favorite: parseBool(cells[5]), unconfirmed: parseBool(cells[6]) })
   }
   return rows
 }

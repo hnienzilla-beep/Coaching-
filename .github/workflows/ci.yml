@@ -25,5 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # Prüft die Markdown-Parser des Vault-Syncs (Runde schreiben → lesen).
+      - run: npm test
       # Baut mit tsc -b, deckt also auch Typfehler ab.
       - run: npm run build

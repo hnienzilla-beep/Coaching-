@@ -6,7 +6,9 @@ import { DEFAULT_INTERVAL_MINUTES, INTERVAL_OPTIONS, getSyncSettings, saveSyncSe
 import { testConnection } from './githubApi'
 import { notifySyncSettingsChanged, syncNow } from './autoSync'
 import { getSyncState, setSyncState, subscribeSyncState } from './syncState'
-import { importAllFromVault, summarizeImports } from './vaultImport'
+import { summarizeImports } from './importLog'
+import { importAllFromVault } from './vaultFullImport'
+import { restoreFromVaultBackup } from './backupExport'
 
 type StatusType = 'idle' | 'busy' | 'success' | 'error'
 
@@ -101,6 +103,28 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
     }
   }
 
+  async function handleRestoreBackup() {
+    persist()
+    // Das Backup überschreibt Datensätze mit derselben ID - ein Klick soll nicht reichen.
+    const confirmed = window.confirm(
+      'Das Vollbackup aus dem Vault überschreibt gleichnamige Datensätze in dieser App. ' +
+        'Übungsbilder sind im Backup nicht enthalten. Fortfahren?',
+    )
+    if (!confirmed) return
+    setStatus({ type: 'busy', message: 'Lese Backup…' })
+    try {
+      const restored = await restoreFromVaultBackup()
+      setStatus({
+        type: restored ? 'success' : 'error',
+        message: restored
+          ? 'Backup wiederhergestellt ✅'
+          : 'Im Vault liegt noch kein Backup – zuerst synchronisieren.',
+      })
+    } catch (err) {
+      setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Unbekannter Fehler beim Wiederherstellen.' })
+    }
+  }
+
   const busy = status.type === 'busy' || syncState.running
 
   return (
@@ -177,18 +201,23 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
           Start nachgeholt.
         </p>
         <p className="text-xs text-muted">
-          Mit „Änderungen aus dem Vault übernehmen" liest der Sync auch in die andere Richtung: In Obsidian
-          bearbeitete Dateien werden vor dem Hochladen in die App eingelesen. Bei gleichzeitiger Änderung derselben
-          Datei gewinnt der Vault. Lebensmittel, die es in der App nicht gibt, werden dabei übersprungen (aus
-          „80g (300 kcal)" lassen sich keine Makros zurückrechnen). Alles unterhalb einer Überschrift
-          „## Notizen" gehört dir und bleibt beim Zurückschreiben unangetastet.
+          Synchronisiert werden alle Daten des gewählten Athleten: Stammdaten, Tracking, Trainings- und
+          Ernährungspläne, Supplemente, die Übungs-, Supplement- und Lebensmittel-Datenbank sowie die komplette
+          Trainings- und Ernährungshistorie. Übungsbilder und das Hintergrundfoto bleiben nur auf dem Gerät.
         </p>
         <p className="text-xs text-muted">
-          Die Lebensmittel-Datenbank landet als Tabelle in „40-Ernaehrung/Lebensmittel.md" (wird bei jedem Sync
-          komplett neu geschrieben). Neue Lebensmittel kommen umgekehrt über
-          „40-Ernaehrung/Lebensmittel-Neu.md" in die App: Jede Zeile dort wird angelegt und als „unbestätigt"
-          markiert, Namen aus der Datenbank bleiben unangetastet. Danach wird die Tabelle geleert – fehlerhafte
-          Zeilen bleiben zur Korrektur stehen.
+          Mit „Änderungen aus dem Vault übernehmen" liest der Sync auch in die andere Richtung: In Obsidian
+          bearbeitete Dateien werden vor dem Hochladen in die App eingelesen. Bei gleichzeitiger Änderung derselben
+          Datei gewinnt der Vault. Lebensmittel, die es in den Tageslogs gibt, in der App aber nicht, werden
+          übersprungen (aus „80g (300 kcal)" lassen sich keine Makros zurückrechnen) – nachtragen lassen sie sich
+          über „Lebensmittel.md" oder „Lebensmittel-Neu.md". Gelöscht wird über den Vault nur innerhalb einer
+          Tagesdatei oder Plan-Phase: Athleten, Pläne, Übungen, Supplemente und Lebensmittel löschst du nur in der
+          App. Alles unterhalb einer Überschrift „## Notizen" gehört dir und bleibt beim Zurückschreiben
+          unangetastet.
+        </p>
+        <p className="text-xs text-muted">
+          Zusätzlich liegt in „90-Backup/fitness-app-backup.json" ein verlustfreies Vollbackup – für alles, was
+          Markdown nicht abbildet. „Backup aus Vault wiederherstellen" lädt es zurück, gedacht für ein neues Gerät.
         </p>
 
         <div className="rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted">
@@ -214,6 +243,10 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
 
         <Button variant="secondary" onClick={handleImportAll} disabled={busy || !athleteId}>
           Kompletten Vault einlesen
+        </Button>
+
+        <Button variant="secondary" onClick={handleRestoreBackup} disabled={busy || !athleteId}>
+          Backup aus Vault wiederherstellen
         </Button>
 
         {status.message && (

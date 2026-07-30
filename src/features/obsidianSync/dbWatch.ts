@@ -3,10 +3,11 @@ import { triggerAutoSync } from './autoSync'
 
 /**
  * Tabellen, deren Inhalt im Vault landet. Änderungen daran sollen einen Sync auslösen -
- * egal an welcher Stelle der App sie passiert sind. Nicht dabei: `athletes` (nur Auswahl)
- * und `backgroundPhoto` (rein optisch).
+ * egal an welcher Stelle der App sie passiert sind. Nicht dabei: `backgroundPhoto`
+ * (rein optisch und bewusst nicht im Vault).
  */
 const WATCHED_TABLES = [
+  'athletes',
   'dailyEntries',
   'workoutLogs',
   'workoutLogExercises',

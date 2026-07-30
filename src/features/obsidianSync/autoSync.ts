@@ -1,7 +1,7 @@
 import { getSyncSettings } from './settings'
-import { syncFitnessHeute } from './fitnessExport'
+import { syncVault } from './fitnessExport'
 import { getSyncState, isImportingFromVault, setSyncState } from './syncState'
-import { getImportLog, resetImportLog, summarizeImports } from './vaultImport'
+import { getImportLog, resetImportLog, summarizeImports } from './importLog'
 
 /**
  * Automatischer Vault-Sync.
@@ -61,7 +61,7 @@ async function performSync(): Promise<void> {
     resetImportLog()
     do {
       rerunRequested = false
-      await syncFitnessHeute()
+      await syncVault()
     } while (rerunRequested)
     failureCount = 0
     nextAttemptAt = 0
