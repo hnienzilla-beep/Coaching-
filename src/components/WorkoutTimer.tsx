@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react'
 import { db } from '../db/db'
 import { getOrCreateWorkoutLog } from '../db/queries'
 import { formatDuration } from '../lib/calculator'
-import { Button, Card } from './ui'
+import { Button } from './ui'
 
+/**
+ * Trainingsdauer als schmale Zeile im Tageskopf - vorher eine eigene Karte im
+ * eingeklappten "Werkzeuge"-Block, wo der Startknopf praktisch unauffindbar war.
+ */
 export default function WorkoutTimer({
   athleteId,
   date,
@@ -31,12 +35,9 @@ export default function WorkoutTimer({
 
   if (!startedAt) {
     return (
-      <Card className="flex items-center gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trainingsdauer</h2>
-        <Button variant="primary" onClick={start} className="flex-1">
-          Training starten
-        </Button>
-      </Card>
+      <Button variant="primary" onClick={start} className="w-full">
+        ▶ Training starten
+      </Button>
     )
   }
 
@@ -44,11 +45,11 @@ export default function WorkoutTimer({
   const elapsedSeconds = Math.max(0, Math.floor((endMs - new Date(startedAt).getTime()) / 1000))
 
   return (
-    <Card className="flex items-center gap-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trainingsdauer</h2>
-      <span className={`flex-1 text-center text-2xl font-bold tabular-nums ${completedAt ? 'text-fg' : 'text-accent'}`}>
+    <div className="flex items-center gap-3 rounded-xl bg-surface-2 px-3 py-2">
+      <span className="text-[11px] uppercase tracking-wide text-muted">Dauer</span>
+      <span className={`text-lg font-semibold tabular-nums ${completedAt ? 'text-fg' : 'text-accent'}`}>
         {formatDuration(elapsedSeconds)}
       </span>
-    </Card>
+    </div>
   )
 }

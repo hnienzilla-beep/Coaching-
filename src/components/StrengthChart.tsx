@@ -4,7 +4,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { db } from '../db/db'
 import type { WorkoutSet } from '../models/types'
 import { estimateOneRepMax } from '../lib/calculator'
-import { Card, Select } from './ui'
+import { Select } from './ui'
 
 type ChartPoint = { date: string; weight: number; setsLabel: string; oneRm?: number }
 
@@ -85,18 +85,14 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
     .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
     .map((d): ChartPoint => ({ date: d.fullDate.slice(5), weight: d.weight, setsLabel: d.setsLabel, oneRm: d.oneRm }))
 
+  // Überschrift und Rahmen liefert die aufrufende CollapsibleCard - sonst stünde
+  // "Kraft-Verlauf" zweimal untereinander.
   if (availableExercises.length === 0) {
-    return (
-      <Card className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kraft-Verlauf</h2>
-        <p className="text-sm text-muted">💪 Noch keine Gewichte im Trainingslog erfasst.</p>
-      </Card>
-    )
+    return <p className="text-sm text-muted">💪 Noch keine Gewichte im Trainingslog erfasst.</p>
   }
 
   return (
-    <Card className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kraft-Verlauf</h2>
+    <div className="flex flex-col gap-3">
       <Select value={currentExerciseId ?? ''} onChange={(e) => setSelectedExerciseId(e.target.value)}>
         {availableExercises.map((e) => (
           <option key={e.id} value={e.id}>
@@ -115,6 +111,6 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </Card>
+    </div>
   )
 }
