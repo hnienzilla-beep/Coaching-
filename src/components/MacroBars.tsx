@@ -5,16 +5,15 @@ function pct(value: number, target: number): number {
   return Math.max(0, Math.min(100, (value / target) * 100))
 }
 
-// Die Balken tragen bewusst die Vordergrundfarbe statt des Akzents: die Athleten-
-// Akzentfarben sind alle hell gewählt (für schwarze Schrift auf Akzentflächen) und wären
-// als dünner Balken auf hellem Grund kaum zu sehen.
+// Die Balken tragen die Akzentfarbe des Athleten - dieselbe Farbe wie der aktive Tag in
+// der Wochenleiste und die Primärknöpfe.
 function Bar({ done, planned, target }: { done: number; planned: number; target: number }) {
   const donePct = pct(done, target)
   const plannedPct = Math.max(0, Math.min(100 - donePct, pct(planned, target) - donePct))
   return (
     <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
-      <div className="h-full bg-fg" style={{ width: `${donePct}%` }} />
-      <div className="h-full bg-fg/30" style={{ width: `${plannedPct}%` }} />
+      <div className="h-full bg-accent" style={{ width: `${donePct}%` }} />
+      <div className="h-full bg-accent/30" style={{ width: `${plannedPct}%` }} />
     </div>
   )
 }
@@ -96,8 +95,8 @@ export default function MacroBars({
       </div>
 
       <p className="text-[11px] leading-snug text-muted">
-        <span className="inline-block h-2 w-2 rounded-full bg-fg align-middle" /> gegessen ·{' '}
-        <span className="inline-block h-2 w-2 rounded-full bg-fg/30 align-middle" /> geplant – ins Tracking zählt nur, was
+        <span className="inline-block h-2 w-2 rounded-full bg-accent align-middle" /> gegessen ·{' '}
+        <span className="inline-block h-2 w-2 rounded-full bg-accent/30 align-middle" /> geplant – ins Tracking zählt nur, was
         abgehakt ist.
       </p>
     </div>
