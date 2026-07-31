@@ -1,20 +1,27 @@
 import { useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getLastExercisePerformance, getOrCreateWorkoutLog, isoDate } from '../db/queries'
 import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
-import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
-import SearchPicker from '../components/SearchPicker'
+import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
 import WorkoutTimer from '../components/WorkoutTimer'
+import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
+import LogHistoryList from '../components/LogHistoryList'
+import type { DayMarker } from '../components/DayStrip'
 import { formatDuration, nextOrder } from '../lib/calculator'
-import { useCompactMode } from '../lib/compactMode'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 
 type Ctx = { athlete: Athlete }
+
+function durationSeconds(startedAt?: string, completedAt?: string): number | undefined {
+  if (!startedAt || !completedAt) return undefined
+  return Math.max(0, Math.floor((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000))
+}
 
 async function createSetsFromPlanExercise(
   logExerciseId: string,
@@ -38,8 +45,6 @@ async function createSetsFromPlanExercise(
 
 export default function WorkoutLogPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const navigate = useNavigate()
-  const [compactMode] = useCompactMode()
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -60,8 +65,20 @@ export default function WorkoutLogPage() {
     [currentLog?.trainingPlanId],
   )
 
+  // Alle Sätze des Tages in einem Rutsch - Grundlage für die Fortschrittszeile über der Liste.
+  const rowIds = (rows ?? []).map((r) => r.id)
+  const daySets = useLiveQuery(
+    () => (rowIds.length ? db.workoutSets.where('workoutLogExerciseId').anyOf(rowIds).toArray() : []),
+    [rowIds.join(',')],
+  )
+
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
-  const pickerItems = (exercises ?? []).map((e) => ({ id: e.id, label: e.name, sublabel: e.muscleGroup, favorite: e.favorite }))
+  const pickerItems: SearchPickerItem[] = (exercises ?? []).map((e) => ({
+    id: e.id,
+    label: e.name,
+    sublabel: e.muscleGroup,
+    favorite: e.favorite,
+  }))
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
   const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
@@ -76,14 +93,24 @@ export default function WorkoutLogPage() {
     return (a.order ?? 0) - (b.order ?? 0)
   })
 
+  const setsTotal = daySets?.length ?? 0
+  const setsDone = (daySets ?? []).filter((s) => s.done).length
+  const volumeKg = (daySets ?? []).reduce((sum, s) => sum + (s.reps !== undefined && s.weightKg !== undefined ? s.reps * s.weightKg : 0), 0)
+  const elapsed = durationSeconds(currentLog?.startedAt, currentLog?.completedAt)
+
+  const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
+  const status: LogDayStatus = !currentLog ? 'none' : currentLog.completedAt ? 'done' : 'open'
+
   async function addExerciseRow() {
-    if (!exercises?.length) return
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
+    const existing = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
+    // Leere exerciseId: die Zeile startet im Auswahlmodus, statt still die erste Übung des
+    // Alphabets zu setzen, die dann jemand übersieht.
     await db.workoutLogExercises.add({
       id: crypto.randomUUID(),
       workoutLogId: log.id,
-      exerciseId: exercises[0].id,
-      order: nextOrder(rows ?? []),
+      exerciseId: '',
+      order: nextOrder(existing),
     })
   }
 
@@ -125,7 +152,11 @@ export default function WorkoutLogPage() {
     if (!currentLog) return
     await db.workoutLogs.update(currentLog.id, { completedAt: new Date().toISOString() })
     triggerAutoSync()
-    navigate(`/athlete/${athlete.id}`)
+  }
+
+  async function reopenWorkout() {
+    if (!currentLog) return
+    await db.workoutLogs.update(currentLog.id, { completedAt: undefined })
   }
 
   async function deleteLog() {
@@ -140,118 +171,124 @@ export default function WorkoutLogPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <CollapsibleCard title="Werkzeuge" variant="plain" keepMounted defaultExpanded={!compactMode}>
-        <StrengthChart athleteId={athlete.id} />
-        <WorkoutTimer athleteId={athlete.id} date={selectedDate} startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
-        <RestTimer />
-      </CollapsibleCard>
+      <LogDayHeader
+        title="Trainingseinheit"
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        markers={markers}
+        status={status}
+        onDelete={currentLog ? deleteLog : undefined}
+        deleteConfirmText="Trainingseinheit dieses Tages mit allen Sätzen löschen?"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <WorkoutTimer
+            athleteId={athlete.id}
+            date={selectedDate}
+            startedAt={currentLog?.startedAt}
+            completedAt={currentLog?.completedAt}
+          />
+          {currentLog && <RestTimer />}
+        </div>
+      </LogDayHeader>
+
+      {currentLog && setsTotal > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          <StatBadge label="Sätze" value={`${setsDone} / ${setsTotal}`} tone={setsDone === setsTotal ? 'ok' : 'default'} />
+          <StatBadge label="Volumen" value={`${Math.round(volumeKg).toLocaleString('de-DE')} kg`} />
+          {/* Die laufende Dauer steht schon im Tageskopf - hier zählt, wie viel Programm
+              noch vor einem liegt. */}
+          <StatBadge label="Übungen" value={`${sortedRows.length}`} />
+        </div>
+      )}
 
       <Card className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Trainingseinheit {selectedDate}</h2>
-          {currentLog && (
-            <Button variant="danger" onClick={deleteLog}>
-              Eintrag löschen
-            </Button>
-          )}
+        <Field label="Trainingstag (optional)">
+          <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
+            <option value="">– kein Plan zugeordnet –</option>
+            {trainingPlans?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.phaseName}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {sortedRows.length === 0 && (
+          <p className="text-sm text-muted">
+            🏋️ Noch keine Übungen für diesen Tag. Wähle oben einen Trainingstag – dann werden die geplanten Übungen samt
+            letzter Gewichte übernommen – oder füge eine einzelne Übung hinzu.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {sortedRows.map((row) => (
+            <WorkoutExerciseRow
+              key={row.id}
+              rowId={row.id}
+              exerciseId={row.exerciseId}
+              exerciseName={exerciseMap.get(row.exerciseId)?.name}
+              notes={row.notes}
+              pickerItems={pickerItems}
+              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+              imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
+              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+              athleteId={athlete.id}
+              date={selectedDate}
+              onDelete={() => deleteExerciseRow(row.id)}
+            />
+          ))}
         </div>
 
-        <Field label="Datum">
-          <input
-            type="date"
-            value={selectedDate}
-            max={isoDate(new Date())}
-            onChange={(e) => setSelectedDate(e.target.value)}
+        <Button variant="secondary" onClick={addExerciseRow}>
+          + Übung hinzufügen
+        </Button>
+
+        <Field label="Notizen zum Training">
+          <textarea
+            value={currentLog?.notes ?? ''}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Wie lief die Einheit?"
             className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </Field>
 
-        {currentLog ? (
-          <>
-            <Field label="Trainingstag (optional)">
-              <Select value={currentLog.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
-                <option value="">– kein Plan zugeordnet –</option>
-                {trainingPlans?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.phaseName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-
-            <div className="flex flex-col gap-2">
-              {sortedRows.map((row) => (
-                <WorkoutExerciseRow
-                  key={row.id}
-                  rowId={row.id}
-                  exerciseId={row.exerciseId}
-                  pickerItems={pickerItems}
-                  muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
-                  imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
-                  planExercise={planExerciseByExerciseId.get(row.exerciseId)}
-                  athleteId={athlete.id}
-                  date={selectedDate}
-                  onDelete={() => deleteExerciseRow(row.id)}
-                />
-              ))}
-            </div>
-
-            <Button variant="secondary" onClick={addExerciseRow}>
-              + Übung hinzufügen
+        {currentLog?.completedAt ? (
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-center text-sm text-ok">
+              ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+              {elapsed !== undefined ? ` · Dauer: ${formatDuration(elapsed)}` : ''}
+            </p>
+            <Button variant="ghost" onClick={reopenWorkout}>
+              Wieder öffnen
             </Button>
-
-            <Field label="Notizen">
-              <textarea
-                value={currentLog.notes ?? ''}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-              />
-            </Field>
-
-            {currentLog.completedAt ? (
-              <p className="text-center text-sm text-ok">
-                ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
-                {currentLog.startedAt &&
-                  ` · Dauer: ${formatDuration(
-                    Math.max(0, Math.floor((new Date(currentLog.completedAt).getTime() - new Date(currentLog.startedAt).getTime()) / 1000)),
-                  )}`}
-              </p>
-            ) : (
-              <Button variant="primary" onClick={completeWorkout}>
-                Training beenden
-              </Button>
-            )}
-          </>
+          </div>
         ) : (
-          <p className="text-sm text-muted">Starte das Training oben, um Trainingstag, Übungen und Notizen zu erfassen.</p>
+          <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
+            Training beenden
+          </Button>
         )}
       </Card>
 
-      <Card className="flex flex-col gap-1">
-        <h2 className="pb-1 text-sm font-semibold uppercase tracking-wide text-muted">Verlauf</h2>
-        {!logs?.length && <p className="text-sm text-muted">🏋️ Noch keine Trainingseinheiten aufgezeichnet.</p>}
-        <div className="flex max-h-64 flex-col overflow-y-auto">
-          {logs?.map((log) => (
-            <button
-              key={log.id}
-              onClick={() => setSelectedDate(log.date)}
-              className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm ${
-                log.date === selectedDate ? 'bg-surface-2' : ''
-              }`}
-            >
-              <span className="text-muted">{log.date}</span>
-              <span className="text-fg">
-                {log.completedAt ? '✓ ' : ''}
-                {log.startedAt && log.completedAt
-                  ? `${formatDuration(Math.max(0, Math.floor((new Date(log.completedAt).getTime() - new Date(log.startedAt).getTime()) / 1000)))} · `
-                  : ''}
-                {log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : ''}
-              </span>
-            </button>
-          ))}
-        </div>
-      </Card>
+      <LogHistoryList
+        entries={(logs ?? []).map((log) => {
+          const seconds = durationSeconds(log.startedAt, log.completedAt)
+          return {
+            date: log.date,
+            done: !!log.completedAt,
+            summary: [log.trainingPlanId ? planMap.get(log.trainingPlanId)?.phaseName : undefined, seconds !== undefined ? formatDuration(seconds) : undefined]
+              .filter(Boolean)
+              .join(' · '),
+          }
+        })}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        emptyText="🏋️ Noch keine Trainingseinheiten aufgezeichnet."
+      />
+
+      <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
+        <StrengthChart athleteId={athlete.id} />
+      </CollapsibleCard>
     </div>
   )
 }
@@ -259,6 +296,8 @@ export default function WorkoutLogPage() {
 function WorkoutExerciseRow({
   rowId,
   exerciseId,
+  exerciseName,
+  notes,
   pickerItems,
   muscleGroup,
   imageDataUrl,
@@ -269,7 +308,9 @@ function WorkoutExerciseRow({
 }: {
   rowId: string
   exerciseId: string
-  pickerItems: { id: string; label: string; sublabel?: string }[]
+  exerciseName?: string
+  notes?: string
+  pickerItems: SearchPickerItem[]
   muscleGroup?: string
   imageDataUrl?: string
   planExercise?: TrainingPlanExercise
@@ -279,9 +320,18 @@ function WorkoutExerciseRow({
 }) {
   const sets = useLiveQuery(() => db.workoutSets.where('workoutLogExerciseId').equals(rowId).sortBy('setNumber'), [rowId]) ?? []
   const lastPerformance = useLiveQuery(
-    () => getLastExercisePerformance(athleteId, exerciseId, date),
+    () => (exerciseId ? getLastExercisePerformance(athleteId, exerciseId, date) : undefined),
     [athleteId, exerciseId, date],
   )
+
+  // Neue Zeilen haben noch keine Übung - sie öffnen direkt die Suche. Bei allen anderen
+  // bleibt die Suche eingeklappt, weil die Übung praktisch nie mehr gewechselt wird.
+  const [picking, setPicking] = useState(exerciseId === '')
+  const [expanded, setExpanded] = useState(true)
+  const [notesOpen, setNotesOpen] = useState(!!notes)
+
+  const doneCount = sets.filter((s) => s.done).length
+  const allDone = sets.length > 0 && doneCount === sets.length
 
   async function addSet() {
     const last = sets[sets.length - 1]
@@ -316,71 +366,150 @@ function WorkoutExerciseRow({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
+    <div className={`flex flex-col gap-2 rounded-xl border p-2 ${allDone ? 'border-ok/40' : 'border-border'}`}>
       <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <SearchPicker
-            items={pickerItems}
-            value={exerciseId}
-            onChange={(id) => db.workoutLogExercises.update(rowId, { exerciseId: id })}
-            placeholder="Übung suchen..."
-          />
-        </div>
-        <Button variant="ghost" onClick={onDelete}>
-          ✕
-        </Button>
+        {imageDataUrl && <img src={imageDataUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-fg">{exerciseName ?? 'Übung wählen …'}</span>
+            <span className="block truncate text-xs text-muted">
+              {[muscleGroup, sets.length > 0 ? `${doneCount}/${sets.length} Sätze` : 'Noch keine Sätze'].filter(Boolean).join(' · ')}
+            </span>
+          </span>
+          <span className={`shrink-0 text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>▾</span>
+        </button>
       </div>
-      <div className="flex items-center gap-2 pl-1">
-        {imageDataUrl && <img src={imageDataUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />}
-        {muscleGroup && <div className="text-xs text-muted">{muscleGroup}</div>}
-      </div>
-      {lastPerformance && (
-        <div className="pl-1 text-xs text-muted">
-          Letztes Mal ({lastPerformance.date}): {lastPerformance.sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'} kg`).join(' · ')}
-        </div>
-      )}
 
-      <div className="flex flex-col gap-1.5">
-        {sets.map((set) => (
-          <div key={set.id} className={`flex items-center gap-2 ${set.done ? 'opacity-60' : ''}`}>
-            <button
-              type="button"
-              onClick={() => db.workoutSets.update(set.id, { done: !set.done })}
-              aria-label={set.done ? 'Satz als offen markieren' : 'Satz als erledigt markieren'}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
-                set.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
-              }`}
-            >
-              ✓
-            </button>
-            <span className="w-5 shrink-0 text-xs text-muted">{set.setNumber}.</span>
-            <input
-              type="number"
-              value={set.reps ?? ''}
-              onChange={(e) => db.workoutSets.update(set.id, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
-              placeholder="Wdh."
-              className="w-14 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
+      {expanded && (
+        <>
+          {picking && (
+            <SearchPicker
+              items={pickerItems}
+              value={exerciseId || undefined}
+              onChange={(id) => {
+                void db.workoutLogExercises.update(rowId, { exerciseId: id })
+                setPicking(false)
+              }}
+              placeholder="Übung suchen..."
             />
-            <div className="flex-1">
-              <DecimalInput
-                value={set.weightKg}
-                onChange={(n) => db.workoutSets.update(set.id, { weightKg: n })}
-                placeholder="Gewicht (kg)"
-              />
+          )}
+
+          {(planExercise || lastPerformance) && (
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              {planExercise && (
+                <span className="rounded-full bg-surface-2 px-2 py-1 text-muted">
+                  Plan: {planExercise.sets}×{planExercise.reps}
+                  {planExercise.targetWeightKg !== undefined ? ` @ ${planExercise.targetWeightKg} kg` : ''}
+                </span>
+              )}
+              {lastPerformance && (
+                <span className="rounded-full bg-surface-2 px-2 py-1 text-muted">
+                  Letztes Mal ({lastPerformance.date.slice(5)}):{' '}
+                  {lastPerformance.sets.map((s) => `${s.reps ?? '–'}×${s.weightKg ?? '–'}`).join(' · ')} kg
+                </span>
+              )}
             </div>
-            <div className="w-14 shrink-0">
-              <DecimalInput value={set.rpe} onChange={(n) => db.workoutSets.update(set.id, { rpe: n })} placeholder="RPE" />
+          )}
+
+          {sets.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {/* Spaltenköpfe: die Platzhalter in den Feldern verschwinden, sobald ein Wert
+                  drinsteht - ohne Kopfzeile weiß danach niemand mehr, was welche Zahl ist. */}
+              <div className="grid grid-cols-[2rem_1.25rem_1fr_1fr_3rem_1.5rem] items-center gap-1 text-[10px] uppercase tracking-wide text-muted">
+                {/* Leere Zellen statt sr-only-Text: absolut positionierte Elemente sind
+                    keine Grid-Items und würden die Spalten verschieben. Die Bedeutung der
+                    Häkchen- und Löschen-Spalte steht in den aria-labels der Buttons. */}
+                <span />
+                <span className="text-center">#</span>
+                <span>Wdh.</span>
+                <span>kg</span>
+                <span>RPE</span>
+                <span />
+              </div>
+              {sets.map((set) => (
+                <div
+                  key={set.id}
+                  className={`grid grid-cols-[2rem_1.25rem_1fr_1fr_3rem_1.5rem] items-center gap-1 ${set.done ? 'opacity-60' : ''}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => db.workoutSets.update(set.id, { done: !set.done })}
+                    aria-label={set.done ? `Satz ${set.setNumber} als offen markieren` : `Satz ${set.setNumber} als erledigt markieren`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ${
+                      set.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
+                    }`}
+                  >
+                    ✓
+                  </button>
+                  <span className="text-center text-xs tabular-nums text-muted">{set.setNumber}</span>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    value={set.reps ?? ''}
+                    onChange={(e) => db.workoutSets.update(set.id, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    aria-label={`Wiederholungen Satz ${set.setNumber}`}
+                    placeholder="–"
+                  />
+                  <DecimalInput
+                    value={set.weightKg}
+                    onChange={(n) => db.workoutSets.update(set.id, { weightKg: n })}
+                    aria-label={`Gewicht in kg, Satz ${set.setNumber}`}
+                    placeholder="–"
+                  />
+                  <DecimalInput
+                    value={set.rpe}
+                    onChange={(n) => db.workoutSets.update(set.id, { rpe: n })}
+                    aria-label={`RPE Satz ${set.setNumber}`}
+                    placeholder="–"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => deleteSet(set.id)}
+                    aria-label={`Satz ${set.setNumber} löschen`}
+                    className="py-2 text-sm text-muted hover:text-danger"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
-            <Button variant="ghost" onClick={() => deleteSet(set.id)}>
-              ✕
+          )}
+
+          <Button variant="ghost" onClick={addSet}>
+            + Satz hinzufügen
+          </Button>
+
+          {notesOpen && (
+            <Input
+              value={notes ?? ''}
+              onChange={(e) => db.workoutLogExercises.update(rowId, { notes: e.target.value })}
+              placeholder="Notiz zur Übung (z.B. Griff, Technik)"
+              aria-label="Notiz zur Übung"
+            />
+          )}
+
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex gap-1">
+              <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
+                ✎ Übung tauschen
+              </Button>
+              {!notesOpen && (
+                <Button variant="ghost" onClick={() => setNotesOpen(true)}>
+                  + Notiz
+                </Button>
+              )}
+            </div>
+            <Button variant="ghost" onClick={onDelete} aria-label="Übung aus dem Log entfernen">
+              🗑
             </Button>
           </div>
-        ))}
-      </div>
-
-      <Button variant="ghost" onClick={addSet}>
-        + Satz hinzufügen
-      </Button>
+        </>
+      )}
     </div>
   )
 }

@@ -4,25 +4,35 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, isoDate, syncNutritionTotalsToDailyEntry } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
-import type { Athlete, MealType, NutritionLogItem } from '../models/types'
+import { GRAM_PRESETS, sumMacros, type Sums } from '../lib/macros'
+import type { Athlete, FoodItem, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Field, Select } from '../components/ui'
+import { Button, Card, Field, Input, Select } from '../components/ui'
 import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
+import CollapsibleCard from '../components/CollapsibleCard'
+import MacroBars from '../components/MacroBars'
+import MacroSumTable from '../components/MacroSumTable'
+import QuickAddFood from '../components/QuickAddFood'
+import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
+import LogHistoryList from '../components/LogHistoryList'
+import type { DayMarker } from '../components/DayStrip'
 import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
 
-const CAL_TOLERANCE = 100
-const MACRO_TOLERANCE = 15
+type Row = Sums & { item: NutritionLogItem }
 
-type Row = { item: NutritionLogItem; kcal: number; protein: number; carbs: number; fat: number }
-type Sums = { kcal: number; protein: number; carbs: number; fat: number }
+/** Nährwerte einer Portion aus den Werten je 100 g. */
+function macrosForPortion(food: FoodItem | undefined, grams: number): Sums {
+  const factor = grams / 100
+  const protein = food ? food.protein * factor : 0
+  const carbs = food ? food.carbs * factor : 0
+  const fat = food ? food.fat * factor : 0
+  return { kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
+}
 
-function sumRows(rows: Row[]): Sums {
-  return rows.reduce(
-    (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
-    { kcal: 0, protein: 0, carbs: 0, fat: 0 },
-  )
+function macroLine(sums: Sums): string {
+  return `${sums.kcal.toFixed(0)} kcal · P ${sums.protein.toFixed(0)} · C ${sums.carbs.toFixed(0)} · F ${sums.fat.toFixed(0)} g`
 }
 
 export default function NutritionLogPage() {
@@ -41,8 +51,15 @@ export default function NutritionLogPage() {
     [currentLog?.id],
   )
 
+  // Alle Einträge aller Tage - nur für die Kalorien-Zusammenfassung im Verlauf.
+  const logIds = (logs ?? []).map((l) => l.id)
+  const allItems = useLiveQuery(
+    () => (logIds.length ? db.nutritionLogItems.where('nutritionLogId').anyOf(logIds).toArray() : []),
+    [logIds.join(',')],
+  )
+
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems = (foods ?? []).map((f) => ({
+  const foodPickerItems: SearchPickerItem[] = (foods ?? []).map((f) => ({
     id: f.id,
     label: f.name,
     sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
@@ -63,17 +80,10 @@ export default function NutritionLogPage() {
     calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
-  const rows: Row[] = (items ?? []).map((item) => {
-    const food = foodMap.get(item.foodItemId)
-    const factor = item.grams / 100
-    const protein = food ? food.protein * factor : 0
-    const carbs = food ? food.carbs * factor : 0
-    const fat = food ? food.fat * factor : 0
-    return { item, kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
-  })
+  const rows: Row[] = (items ?? []).map((item) => ({ item, ...macrosForPortion(foodMap.get(item.foodItemId), item.grams) }))
 
-  const sums = sumRows(rows)
-  const doneSums = sumRows(rows.filter((r) => r.item.done))
+  const sums = sumMacros(rows)
+  const doneSums = sumMacros(rows.filter((r) => r.item.done))
 
   // Tracking-Synchronisierung: nur die tatsächlich abgehakten ("gegessenen") Einträge zählen,
   // andere Tracking-Felder (Gewicht, Körpermaße) bleiben unangetastet.
@@ -89,18 +99,25 @@ export default function NutritionLogPage() {
 
   const groups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.item.mealType === mealType)
-    return { mealType, rows: groupRows, sum: sumRows(groupRows) }
+    return { mealType, rows: groupRows, sum: sumMacros(groupRows) }
   }).filter((g) => g.rows.length > 0)
 
-  async function addFoodRow() {
+  const usedMealTypes = new Set(groups.map((g) => g.mealType))
+  const suggestedMealType = mealTypeForTime()
+
+  const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
+  const status: LogDayStatus = !currentLog ? 'none' : currentLog.completedAt ? 'done' : 'open'
+
+  async function addFoodRow(mealType: MealType) {
     const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
+    const existing = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).toArray()
     await db.nutritionLogItems.add({
       id: crypto.randomUUID(),
       nutritionLogId: log.id,
-      mealType: mealTypeForTime(),
+      mealType,
       foodItemId: '',
       grams: 100,
-      order: nextOrder(items ?? []),
+      order: nextOrder(existing),
     })
   }
 
@@ -160,7 +177,11 @@ export default function NutritionLogPage() {
   async function completeLog() {
     if (!currentLog) return
     await db.nutritionLogs.update(currentLog.id, { completedAt: new Date().toISOString() })
-    navigate(`/athlete/${athlete.id}`)
+  }
+
+  async function reopenLog() {
+    if (!currentLog) return
+    await db.nutritionLogs.update(currentLog.id, { completedAt: undefined })
   }
 
   async function deleteLog() {
@@ -169,28 +190,38 @@ export default function NutritionLogPage() {
     await db.nutritionLogs.delete(currentLog.id)
   }
 
+  function historySummary(logId: string, planId?: string): string {
+    const dayItems = (allItems ?? []).filter((i) => i.nutritionLogId === logId)
+    const dayRows = dayItems.map((item) => macrosForPortion(foodMap.get(item.foodItemId), item.grams))
+    const doneKcal = sumMacros(dayItems.filter((i) => i.done).map((item) => macrosForPortion(foodMap.get(item.foodItemId), item.grams))).kcal
+    const totalKcal = sumMacros(dayRows).kcal
+    const kcalPart = doneKcal > 0 ? `${Math.round(doneKcal)} kcal` : totalKcal > 0 ? `geplant ${Math.round(totalKcal)} kcal` : ''
+    return [kcalPart, planId ? planMap.get(planId)?.phaseName : undefined].filter(Boolean).join(' · ')
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <LogDayHeader
+        title="Ernährungstag"
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        markers={markers}
+        status={status}
+        onDelete={currentLog ? deleteLog : undefined}
+        deleteConfirmText="Ernährungstag mit allen Einträgen löschen?"
+      />
+
       <Card className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Ernährungstag {selectedDate}</h2>
-          {currentLog && (
-            <Button variant="danger" onClick={deleteLog}>
-              Eintrag löschen
-            </Button>
-          )}
-        </div>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Tagesbilanz</h2>
+        <MacroBars done={doneSums} planned={sums} target={target} evaluate={!!currentLog?.completedAt} />
+        {coachMode && (
+          <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
+            <MacroSumTable sums={sums} target={target} />
+          </CollapsibleCard>
+        )}
+      </Card>
 
-        <Field label="Datum">
-          <input
-            type="date"
-            value={selectedDate}
-            max={isoDate(new Date())}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-          />
-        </Field>
-
+      <Card className="flex flex-col gap-3">
         <Field label="Ernährungsplan-Phase (optional)">
           <Select value={currentLog?.nutritionPlanId ?? ''} onChange={(e) => setNutritionPlanId(e.target.value)}>
             <option value="">– kein Plan zugeordnet –</option>
@@ -202,180 +233,214 @@ export default function NutritionLogPage() {
           </Select>
         </Field>
 
-        <div className="flex flex-col gap-3">
-          {groups.length === 0 && <p className="text-sm text-muted">🍽️ Noch keine Lebensmittel für diesen Tag protokolliert.</p>}
+        {groups.length === 0 && (
+          <p className="text-sm text-muted">
+            🍽️ Noch nichts für diesen Tag protokolliert. Wähle unten eine Mahlzeit – oder übernimm oben eine Plan-Phase.
+          </p>
+        )}
+
+        <div className="flex flex-col gap-4">
           {groups.map((group) => (
-            <div key={group.mealType}>
-              <div className="flex items-center justify-between pb-1">
-                <div className="text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
-                <div className="text-xs text-muted">
-                  {group.sum.kcal.toFixed(0)} kcal · P {group.sum.protein.toFixed(1)} g · C {group.sum.carbs.toFixed(1)} g · F{' '}
-                  {group.sum.fat.toFixed(1)} g
-                </div>
+            <div key={group.mealType} className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.mealType}</div>
+                <Button variant="ghost" onClick={() => addFoodRow(group.mealType)} aria-label={`Lebensmittel zu ${group.mealType} hinzufügen`}>
+                  + Lebensmittel
+                </Button>
               </div>
-              <div className="flex flex-col gap-2">
-                {group.rows.map(({ item }) => (
-                  <LoggedFoodRow key={item.id} item={item} pickerItems={foodPickerItems} />
+              <div className="text-[11px] text-muted">{macroLine(group.sum)}</div>
+              <div className="flex flex-col gap-1.5">
+                {group.rows.map((row) => (
+                  <LoggedFoodRow
+                    key={row.item.id}
+                    row={row}
+                    foodName={foodMap.get(row.item.foodItemId)?.name}
+                    pickerItems={foodPickerItems}
+                  />
                 ))}
               </div>
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={addFoodRow} className="flex-1">
-            + Lebensmittel hinzufügen
-          </Button>
-          {coachMode && currentLog && items && items.length > 0 && (
-            <Button variant="secondary" onClick={saveLogAsPlan} className="flex-1">
-              Als Ernährungsplan speichern
-            </Button>
-          )}
+        {/* Die Mahlzeit wird vor dem Anlegen gewählt - vorher landete jede neue Zeile in der
+            per Uhrzeit geratenen Mahlzeit und musste per Auswahlfeld korrigiert werden. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-muted">Mahlzeit hinzufügen</span>
+          <div className="flex flex-wrap gap-1.5">
+            {MEAL_TYPES.filter((mt) => !usedMealTypes.has(mt)).map((mt) => (
+              <button
+                key={mt}
+                type="button"
+                onClick={() => addFoodRow(mt)}
+                className={`rounded-full border px-3 py-1.5 text-xs transition active:scale-95 ${
+                  mt === suggestedMealType ? 'border-fg font-medium text-fg' : 'border-border text-muted hover:text-fg'
+                }`}
+              >
+                + {mt}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <SumTable sums={sums} target={target} />
-
-        <Field label="Notizen">
+        <Field label="Notizen zum Tag">
           <textarea
             value={currentLog?.notes ?? ''}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
+            placeholder="Auffälligkeiten, Heißhunger, Abweichungen …"
             className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </Field>
 
         {currentLog?.completedAt ? (
-          <p className="text-center text-sm text-ok">
-            ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
-          </p>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-center text-sm text-ok">
+              ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+            </p>
+            <Button variant="ghost" onClick={reopenLog}>
+              Wieder öffnen
+            </Button>
+          </div>
         ) : (
           <Button variant="primary" onClick={completeLog} disabled={!currentLog}>
             Ernährung abschließen
           </Button>
         )}
+
+        {coachMode && currentLog && items && items.length > 0 && (
+          <Button variant="ghost" onClick={saveLogAsPlan}>
+            Als Ernährungsplan speichern
+          </Button>
+        )}
       </Card>
 
-      <Card className="flex flex-col gap-1">
-        <h2 className="pb-1 text-sm font-semibold uppercase tracking-wide text-muted">Verlauf</h2>
-        {!logs?.length && <p className="text-sm text-muted">📅 Noch keine Ernährungstage aufgezeichnet.</p>}
-        <div className="flex max-h-64 flex-col overflow-y-auto">
-          {logs?.map((log) => (
-            <button
-              key={log.id}
-              onClick={() => setSelectedDate(log.date)}
-              className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm ${
-                log.date === selectedDate ? 'bg-surface-2' : ''
-              }`}
-            >
-              <span className="text-muted">{log.date}</span>
-              <span className="text-fg">
-                {log.completedAt ? '✓ ' : ''}
-                {log.nutritionPlanId ? planMap.get(log.nutritionPlanId)?.phaseName : ''}
-              </span>
-            </button>
-          ))}
-        </div>
-      </Card>
+      <LogHistoryList
+        entries={(logs ?? []).map((log) => ({
+          date: log.date,
+          done: !!log.completedAt,
+          summary: historySummary(log.id, log.nutritionPlanId),
+        }))}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        emptyText="📅 Noch keine Ernährungstage aufgezeichnet."
+      />
     </div>
   )
 }
 
 function LoggedFoodRow({
-  item,
+  row,
+  foodName,
   pickerItems,
 }: {
-  item: NutritionLogItem
+  row: Row
+  foodName?: string
   pickerItems: SearchPickerItem[]
 }) {
+  const { item } = row
+  // Neue Zeilen haben noch kein Lebensmittel - sie öffnen direkt die Suche.
+  const [editing, setEditing] = useState(item.foodItemId === '')
+  const favorites = pickerItems.filter((f) => f.favorite)
+
+  function update(patch: Partial<NutritionLogItem>) {
+    void db.nutritionLogItems.update(item.id, patch)
+  }
+
   return (
     <div className={`flex flex-col gap-2 rounded-lg border border-border p-2 ${item.done ? 'opacity-60' : ''}`}>
-      <SearchPicker
-        items={pickerItems}
-        value={item.foodItemId || undefined}
-        onChange={(id) => db.nutritionLogItems.update(item.id, { foodItemId: id })}
-        placeholder="Lebensmittel suchen..."
-      />
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => db.nutritionLogItems.update(item.id, { done: !item.done })}
-          aria-label={item.done ? 'Als nicht gegessen markieren' : 'Als gegessen markieren'}
+          onClick={() => update({ done: !item.done })}
+          aria-label={item.done ? `${foodName ?? 'Eintrag'} als nicht gegessen markieren` : `${foodName ?? 'Eintrag'} als gegessen markieren`}
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
             item.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
           }`}
         >
           ✓
         </button>
-        <Select
-          value={item.mealType}
-          onChange={(e) => db.nutritionLogItems.update(item.id, { mealType: e.target.value as MealType })}
-          className="flex-1"
+        <button type="button" onClick={() => setEditing((v) => !v)} aria-expanded={editing} className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-sm text-fg">{foodName ?? 'Lebensmittel wählen …'}</span>
+          {/* Erst hier steht, was die Portion tatsächlich beiträgt - bisher gab es die
+              Nährwerte nur als Summe über die ganze Mahlzeit. */}
+          <span className="block truncate text-[11px] text-muted">
+            {item.grams} g · {macroLine(row)}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => db.nutritionLogItems.delete(item.id)}
+          aria-label={`${foodName ?? 'Eintrag'} entfernen`}
+          className="shrink-0 px-1 py-2 text-sm text-muted hover:text-danger"
         >
-          {MEAL_TYPES.map((mt) => (
-            <option key={mt} value={mt}>
-              {mt}
-            </option>
-          ))}
-        </Select>
-        <input
-          type="number"
-          value={item.grams}
-          onChange={(e) => db.nutritionLogItems.update(item.id, { grams: Number(e.target.value) })}
-          placeholder="Gramm"
-          className="w-20 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-        />
-        <Button variant="ghost" onClick={() => db.nutritionLogItems.delete(item.id)}>
-          ✕
-        </Button>
+          🗑
+        </button>
       </div>
+
+      {editing && (
+        <div className="flex flex-col gap-2 border-t border-border pt-2">
+          <SearchPicker
+            items={pickerItems}
+            value={item.foodItemId || undefined}
+            onChange={(id) => update({ foodItemId: id })}
+            placeholder="Lebensmittel suchen..."
+            noResultsAction={(query) => <QuickAddFood query={query} onCreated={(id) => update({ foodItemId: id })} />}
+          />
+
+          {!item.foodItemId && favorites.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              {favorites.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => update({ foodItemId: f.id })}
+                  className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs text-accent"
+                >
+                  ⭐ {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <div className="w-20 shrink-0">
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={item.grams}
+                onChange={(e) => update({ grams: Number(e.target.value) })}
+                aria-label="Menge in Gramm"
+              />
+            </div>
+            <span className="text-xs text-muted">g</span>
+            <div className="flex flex-1 gap-1">
+              {GRAM_PRESETS.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => update({ grams: g })}
+                  className={`flex-1 rounded-lg border px-1 py-1.5 text-xs ${
+                    item.grams === g ? 'border-fg bg-fg/10 font-medium text-fg' : 'border-border text-muted'
+                  }`}
+                >
+                  {g}g
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Field label="Mahlzeit">
+            <Select value={item.mealType} onChange={(e) => update({ mealType: e.target.value as MealType })}>
+              {MEAL_TYPES.map((mt) => (
+                <option key={mt} value={mt}>
+                  {mt}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      )}
     </div>
-  )
-}
-
-function diffTone(diff: number, tolerance: number): 'ok' | 'danger' {
-  return Math.abs(diff) <= tolerance ? 'ok' : 'danger'
-}
-
-function SumTable({ sums, target }: { sums: Sums; target: ReturnType<typeof calculate> }) {
-  const diffKcal = sums.kcal - target.targetCalories
-  const diffProtein = sums.protein - target.proteinG
-  const diffCarbs = sums.carbs - target.carbsG
-  const diffFat = sums.fat - target.fatG
-
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs uppercase tracking-wide text-muted">
-          <th></th>
-          <th>Kcal</th>
-          <th>Protein</th>
-          <th>Carbs</th>
-          <th>Fett</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td className="text-muted">Summe (Ist)</td>
-          <td>{sums.kcal.toFixed(0)}</td>
-          <td>{sums.protein.toFixed(0)}</td>
-          <td>{sums.carbs.toFixed(0)}</td>
-          <td>{sums.fat.toFixed(0)}</td>
-        </tr>
-        <tr>
-          <td className="text-muted">Ziel</td>
-          <td>{target.targetCalories}</td>
-          <td>{target.proteinG}</td>
-          <td>{target.carbsG}</td>
-          <td>{target.fatG}</td>
-        </tr>
-        <tr className="font-medium">
-          <td className="text-muted">Differenz</td>
-          <td className={diffTone(diffKcal, CAL_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffKcal.toFixed(0)}</td>
-          <td className={diffTone(diffProtein, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffProtein.toFixed(0)}</td>
-          <td className={diffTone(diffCarbs, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffCarbs.toFixed(0)}</td>
-          <td className={diffTone(diffFat, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffFat.toFixed(0)}</td>
-        </tr>
-      </tbody>
-    </table>
   )
 }

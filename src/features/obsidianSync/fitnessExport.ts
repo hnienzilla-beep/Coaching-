@@ -98,7 +98,11 @@ async function buildTraining(date: string): Promise<string | null> {
   if (!log) return null
 
   const plan = log.trainingPlanId ? await db.trainingPlans.get(log.trainingPlanId) : undefined
-  const logExercises = await db.workoutLogExercises.where('workoutLogId').equals(log.id).sortBy('order')
+  // Eine im Log angelegte, aber noch nicht ausgefüllte Übungszeile hat keine exerciseId -
+  // die gehört nicht als "Unbekannte Übung" in den Vault.
+  const logExercises = (await db.workoutLogExercises.where('workoutLogId').equals(log.id).sortBy('order')).filter(
+    (e) => e.exerciseId !== '',
+  )
   const exerciseDefs = await db.exercises.bulkGet(logExercises.map((e) => e.exerciseId))
 
   const exerciseLines: string[] = []

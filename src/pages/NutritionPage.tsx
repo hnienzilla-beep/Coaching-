@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
@@ -9,17 +9,16 @@ import { calculate, caloriesFromMacros, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, DecimalInput, Input, Select } from '../components/ui'
+import { Button, Card, Select } from '../components/ui'
 import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
+import MacroSumTable from '../components/MacroSumTable'
+import QuickAddFood from '../components/QuickAddFood'
+import { GRAM_PRESETS, sumMacros } from '../lib/macros'
 import { useCoachMode } from '../lib/coachMode'
 import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
-
-const CAL_TOLERANCE = 100
-const MACRO_TOLERANCE = 15
-const GRAM_PRESETS = [50, 100, 150, 200]
 
 type Row = { meal: PlanMeal; kcal: number; protein: number; carbs: number; fat: number }
 
@@ -73,21 +72,14 @@ export default function NutritionPage() {
     })
   }
 
-  function sumRows(list: Row[]): { kcal: number; protein: number; carbs: number; fat: number } {
-    return list.reduce(
-      (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
-      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
-    )
-  }
-
   function sortDraftMeals(list: PlanMeal[]): PlanMeal[] {
     return [...list].sort((a, b) => MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType) || a.order - b.order)
   }
 
   const rows: Row[] = toRows(meals ?? [])
-  const sums = sumRows(rows)
+  const sums = sumMacros(rows)
   const draftRows: Row[] = toRows(draftMeals ?? [])
-  const draftSums = sumRows(draftRows)
+  const draftSums = sumMacros(draftRows)
   const sortedDraftMeals = sortDraftMeals(draftMeals ?? [])
   const draftGroups = MEAL_TYPES.map((mealType) => ({
     mealType,
@@ -266,7 +258,7 @@ export default function NutritionPage() {
             + Zeile hinzufügen
           </Button>
 
-          <SumTable sums={draftSums} target={target} />
+          <MacroSumTable sums={draftSums} target={target} />
 
           <div className="flex gap-2">
             <Button variant="ghost" onClick={cancelEdit} className="flex-1">
@@ -400,50 +392,6 @@ function SortableMealRow({
   )
 }
 
-function QuickAddFood({ query, onCreated }: { query: string; onCreated: (id: string) => void }) {
-  const [name, setName] = useState(query)
-  const [nameTouched, setNameTouched] = useState(false)
-  const [protein, setProtein] = useState(0)
-  const [carbs, setCarbs] = useState(0)
-  const [fat, setFat] = useState(0)
-
-  // Solange der Nutzer den Namen nicht selbst bearbeitet hat, folgt er weiterhin dem
-  // Suchtext - sonst würde beim Weitertippen nach dem ersten "Keine Treffer"-Moment nur
-  // das bis dahin eingegebene Präfix als Name übernommen.
-  useEffect(() => {
-    if (!nameTouched) setName(query)
-  }, [query, nameTouched])
-
-  async function create() {
-    if (!name.trim()) return
-    const id = crypto.randomUUID()
-    await db.foodItems.add({ id, name: name.trim(), protein, carbs, fat, kcal: caloriesFromMacros(protein, carbs, fat) })
-    onCreated(id)
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5 p-2">
-      <p className="text-xs text-muted">Keine Treffer – neues Lebensmittel anlegen:</p>
-      <Input
-        value={name}
-        onChange={(e) => {
-          setName(e.target.value)
-          setNameTouched(true)
-        }}
-        placeholder="Name"
-      />
-      <div className="grid grid-cols-3 gap-1.5">
-        <DecimalInput value={protein} onChange={(n) => setProtein(n ?? 0)} placeholder="Protein" />
-        <DecimalInput value={carbs} onChange={(n) => setCarbs(n ?? 0)} placeholder="Carbs" />
-        <DecimalInput value={fat} onChange={(n) => setFat(n ?? 0)} placeholder="Fett" />
-      </div>
-      <Button type="button" variant="primary" onClick={create}>
-        + Anlegen &amp; auswählen
-      </Button>
-    </div>
-  )
-}
-
 function NutritionOverview({
   phaseName,
   rows,
@@ -485,7 +433,9 @@ function NutritionOverview({
         {groups.map((group) => (
           <div key={group.mealType}>
             <div className="flex items-center justify-between pb-1">
-              <div className="text-xs font-semibold uppercase tracking-wide text-accent">{group.mealType}</div>
+              {/* text-fg statt text-accent: die Athleten-Akzentfarben sind hell und im
+                  Hell-Modus als Schrift praktisch unlesbar. */}
+              <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.mealType}</div>
               <div className="text-xs text-muted">
                 {group.sum.kcal.toFixed(0)} kcal · P {group.sum.protein.toFixed(1)} g · C {group.sum.carbs.toFixed(1)} g · F{' '}
                 {group.sum.fat.toFixed(1)} g
@@ -500,7 +450,7 @@ function NutritionOverview({
         ))}
       </div>
 
-      <SumTable sums={sums} target={target} />
+      <MacroSumTable sums={sums} target={target} />
     </Card>
   )
 }
@@ -511,59 +461,5 @@ function FoodRow({ meal, foodName }: { meal: PlanMeal; foodName?: string }) {
       <span className="text-fg">{foodName ?? '–'}</span>
       <span className="text-muted">{meal.grams} g</span>
     </div>
-  )
-}
-
-function diffTone(diff: number, tolerance: number): 'ok' | 'danger' {
-  return Math.abs(diff) <= tolerance ? 'ok' : 'danger'
-}
-
-function SumTable({
-  sums,
-  target,
-}: {
-  sums: { kcal: number; protein: number; carbs: number; fat: number }
-  target: ReturnType<typeof calculate>
-}) {
-  const diffKcal = sums.kcal - target.targetCalories
-  const diffProtein = sums.protein - target.proteinG
-  const diffCarbs = sums.carbs - target.carbsG
-  const diffFat = sums.fat - target.fatG
-
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-xs uppercase tracking-wide text-muted">
-          <th></th>
-          <th>Kcal</th>
-          <th>Protein</th>
-          <th>Carbs</th>
-          <th>Fett</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td className="text-muted">Summe (Ist)</td>
-          <td>{sums.kcal.toFixed(0)}</td>
-          <td>{sums.protein.toFixed(0)}</td>
-          <td>{sums.carbs.toFixed(0)}</td>
-          <td>{sums.fat.toFixed(0)}</td>
-        </tr>
-        <tr>
-          <td className="text-muted">Ziel</td>
-          <td>{target.targetCalories}</td>
-          <td>{target.proteinG}</td>
-          <td>{target.carbsG}</td>
-          <td>{target.fatG}</td>
-        </tr>
-        <tr className="font-medium">
-          <td className="text-muted">Differenz</td>
-          <td className={diffTone(diffKcal, CAL_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffKcal.toFixed(0)}</td>
-          <td className={diffTone(diffProtein, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffProtein.toFixed(0)}</td>
-          <td className={diffTone(diffCarbs, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffCarbs.toFixed(0)}</td>
-          <td className={diffTone(diffFat, MACRO_TOLERANCE) === 'ok' ? 'text-ok' : 'text-danger'}>{diffFat.toFixed(0)}</td>
-        </tr>
-      </tbody>
-    </table>
   )
 }
