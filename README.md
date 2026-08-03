@@ -166,9 +166,13 @@ deterministisch aufgebaut (keine Zeitstempel, stabile Sortierung), damit sie sic
 nur bei echten Änderungen ändert.
 
 Der laufende Sync liest nur Dateien, die sich im Vault seit dem letzten Sync
-geändert haben. "Kompletten Vault einlesen" im Dialog liest dagegen den gesamten
-Vault noch einmal ein, unabhängig davon - gedacht für ein neues Gerät oder zum
-Wiederherstellen.
+geändert haben. "Vault einlesen (letzte 3 Tage)" im Dialog liest dagegen noch
+einmal ein, unabhängig davon: Stammdaten, Datenbanken und Pläne komplett, die
+Tagesdateien für Training und Ernährung nur für die letzten drei Tage. Die Grenze
+ist Absicht - jede Tagesdatei kostet eine eigene GitHub-Anfrage, ein Vault mit
+einem Jahr Historie käme so auf mehrere hundert. Für ein neues Gerät ist ohnehin
+"Backup aus Vault wiederherstellen" der richtige Weg: Dort steckt der komplette
+Datenbestand in einer einzigen Datei.
 
 Wichtig: Die App hat keinen Server - läuft sie nicht (App geschlossen bzw. von
 iOS beendet), ruht auch der Sync.
