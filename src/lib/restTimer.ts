@@ -149,7 +149,9 @@ function playSignal(): void {
       // Ausgabe nicht verfügbar - die Vibration unten bleibt.
     }
   }
-  navigator.vibrate?.([200, 100, 200])
+  // Wie bei `document` oben: Das Modul wird auch außerhalb eines Browsers geladen (Tests),
+  // und `navigator` gibt es dort nicht überall als globale Variable.
+  if (typeof navigator !== 'undefined') navigator.vibrate?.([200, 100, 200])
 }
 
 /**

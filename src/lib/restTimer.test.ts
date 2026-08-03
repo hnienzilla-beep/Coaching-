@@ -15,6 +15,10 @@ beforeEach(() => {
     setItem: (key: string, value: string) => void store.set(key, value),
     removeItem: (key: string) => void store.delete(key),
   })
+  // Node stellt `navigator` erst ab Version 21 global bereit, die CI läuft auf 20. Der
+  // Standard hier ist deshalb "kein navigator" - so faellt auf, wenn der Zugriff im Modul
+  // nicht abgesichert ist, egal mit welchem Node der Test laeuft.
+  vi.stubGlobal('navigator', undefined)
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-08-03T18:00:00Z'))
   vi.resetModules()
@@ -95,6 +99,27 @@ describe('restTimer', () => {
 
     expect(getRestTimer().endTime).toBeNull()
     expect(getRestTimer().finishedAt).toBeNull()
+  })
+
+  it('vibriert am Pausenende, wo das Geraet es kann', async () => {
+    const vibrate = vi.fn()
+    vi.stubGlobal('navigator', { vibrate })
+    const { startRestTimer } = await loadTimer()
+
+    startRestTimer(30)
+    vi.advanceTimersByTime(31_000)
+
+    expect(vibrate).toHaveBeenCalledOnce()
+  })
+
+  it('kommt ohne navigator aus', async () => {
+    // Kein globales navigator (Node 20, alte Umgebungen) - das Pausenende darf trotzdem
+    // nicht werfen, sonst bleibt der Timer im Zustand "laeuft noch" haengen.
+    const { startRestTimer, getRestTimer } = await loadTimer()
+
+    startRestTimer(30)
+    expect(() => vi.advanceTimersByTime(31_000)).not.toThrow()
+    expect(getRestTimer().endTime).toBeNull()
   })
 
   it('bricht die Pause ab, ohne den Hinweis zu zeigen', async () => {
