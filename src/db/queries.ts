@@ -137,8 +137,28 @@ export async function deleteAthlete(athleteId: string): Promise<void> {
   )
 }
 
+/**
+ * Datumsteil eines Zeitpunkts in UTC. Grundlage der Datumsarithmetik (`addDays`), die
+ * bewusst in UTC rechnet - Sommerzeitwechsel dürfen die Tagesreihen nicht verschieben.
+ *
+ * Für "welcher Tag ist gerade?" ist das die falsche Funktion, dafür gibt es `todayIso`.
+ */
 export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Der heutige Tag nach der Uhr des Geräts.
+ *
+ * Nicht über `isoDate(new Date())`: Das rechnet in UTC und liefert in Mitteleuropa
+ * zwischen Mitternacht und 01:00 bzw. 02:00 Uhr noch den Vortag - wer um halb eins sein
+ * Training einträgt, landet sonst im falschen Tag.
+ */
+export function todayIso(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 export function addDays(iso: string, days: number): string {
@@ -153,7 +173,7 @@ export async function getTrackingSeries(athleteId: string, startDate: string): P
   const entries = await db.dailyEntries.where('athleteId').equals(athleteId).toArray()
   const byDate = new Map(entries.map((e) => [e.date, e]))
 
-  const today = isoDate(new Date())
+  const today = todayIso()
   const lastEntryDate = entries.reduce((max, e) => (e.date > max ? e.date : max), startDate)
   const endDate = lastEntryDate > today ? lastEntryDate : today
 
@@ -304,7 +324,7 @@ interface ProgressExport {
 // zufälligen IDs sind - analog zu importTrainingPlan/importNutritionPlan in db.ts.
 export async function exportProgress(athleteId: string): Promise<string> {
   const athlete = await db.athletes.get(athleteId)
-  const since = addDays(isoDate(new Date()), -6)
+  const since = addDays(todayIso(), -6)
 
   const dailyEntries = (await db.dailyEntries.where('athleteId').equals(athleteId).toArray())
     .filter((e) => e.date >= since)

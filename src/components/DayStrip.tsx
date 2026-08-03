@@ -1,4 +1,4 @@
-import { addDays, isoDate } from '../db/queries'
+import { addDays, todayIso } from '../db/queries'
 
 /** Was an dem Tag protokolliert ist - steuert den Punkt unter der Tageszahl. */
 export type DayMarker = 'open' | 'done'
@@ -25,7 +25,7 @@ export default function DayStrip({
   onSelect: (date: string) => void
   markers: Map<string, DayMarker>
 }) {
-  const today = isoDate(new Date())
+  const today = todayIso()
   const weekStart = startOfWeek(selectedDate)
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DailyEntry } from '../models/types'
-import { isoDate } from '../db/queries'
+import { todayIso } from '../db/queries'
 import { Button } from './ui'
 
 // iOS/Safari erlaubt für installierte Web-Apps nur Web Push (eigener Server nötig).
@@ -18,7 +18,7 @@ export default function ReminderBanner({ entries }: { athleteId: string; entries
     }
   }, [])
 
-  const today = isoDate(new Date())
+  const today = todayIso()
   const todayEntry = entries.find((e) => e.date === today)
   const loggedToday = todayEntry && (todayEntry.weightKg !== undefined || todayEntry.calories !== undefined)
 

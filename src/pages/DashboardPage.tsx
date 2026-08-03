@@ -6,7 +6,7 @@ import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../
 import CollapsibleCard from '../components/CollapsibleCard'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
-import { addDays, isoDate, syncBodyFatToDailyEntry } from '../db/queries'
+import { addDays, syncBodyFatToDailyEntry, todayIso } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
@@ -27,7 +27,7 @@ export default function DashboardPage() {
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
 
-  const weekStart = addDays(isoDate(new Date()), -6)
+  const weekStart = addDays(todayIso(), -6)
   const weekEntries = (entries ?? []).filter((e) => e.date >= weekStart && e.calories !== undefined)
   const avgCalories =
     weekEntries.length > 0 ? Math.round(weekEntries.reduce((sum, e) => sum + (e.calories ?? 0), 0) / weekEntries.length) : undefined
@@ -51,7 +51,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (bodyFatFromFfmi === undefined || !Number.isFinite(bodyFatFromFfmi)) return
-    void syncBodyFatToDailyEntry(athlete.id, isoDate(new Date()), bodyFatFromFfmi)
+    void syncBodyFatToDailyEntry(athlete.id, todayIso(), bodyFatFromFfmi)
   }, [athlete.id, bodyFatFromFfmi])
 
   return (
@@ -146,7 +146,7 @@ export default function DashboardPage() {
               <Input
                 type="date"
                 value={athlete.startDate}
-                max={isoDate(new Date())}
+                max={todayIso()}
                 onChange={(e) => update(athlete.id, { startDate: e.target.value })}
               />
             </Field>

@@ -9,7 +9,10 @@ export function BackgroundPhotoEffect() {
   // Blob -> Object-URL Lebenszyklus: neu erzeugen nur wenn sich der Blob tatsächlich
   // ändert, alte URL beim Wechsel/Unmount immer über die Effekt-Cleanup freigeben.
   useEffect(() => {
-    if (!record?.photo) {
+    // Kein `instanceof Blob`-Check aus Prinzip: Ältere Backups enthielten das Foto als
+    // leeres Objekt (siehe BACKUP_EXCLUDED_TABLES in db.ts). Ohne die Prüfung wirft
+    // createObjectURL, und weil das im Effekt passiert, bliebe die ganze App weiß.
+    if (!(record?.photo instanceof Blob)) {
       setUrl(undefined)
       return
     }
