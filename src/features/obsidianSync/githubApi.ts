@@ -225,25 +225,6 @@ export async function listVaultTree(): Promise<VaultTree | null> {
   }
 }
 
-/** Listet die Dateinamen eines Verzeichnisses im Vault-Repo (leer, wenn es nicht existiert). */
-export async function listMarkdownFiles(dirPath: string): Promise<string[]> {
-  const settings = getSyncSettings()
-  if (!settings) return []
-
-  const res = await githubFetch(`${apiBase(settings)}/contents/${encodePath(dirPath)}`, {
-    headers: authHeaders(settings.token),
-  })
-  if (res.status === 404) return []
-  assertReadable(res, dirPath)
-
-  const data = (await res.json()) as unknown
-  if (!Array.isArray(data)) return []
-  return data
-    .filter((e): e is { type: string; path: string } => !!e && typeof e === 'object' && 'path' in e)
-    .filter((e) => e.type === 'file' && e.path.endsWith('.md'))
-    .map((e) => e.path)
-}
-
 /** Legt eine Datei im Vault-Repo an oder aktualisiert sie. */
 async function putFile(path: string, content: string, commitMessage: string, sha: string | null): Promise<string | null> {
   const settings = getSyncSettings()

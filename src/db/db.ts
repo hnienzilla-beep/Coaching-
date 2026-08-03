@@ -230,9 +230,23 @@ export async function ensureWorkoutSetMigration(): Promise<void> {
   })
 }
 
+/**
+ * Tabellen, die nicht ins JSON-Backup gehören.
+ *
+ * `backgroundPhoto` hält einen rohen Blob - `JSON.stringify` macht daraus `{}`, und beim
+ * Zurückspielen landete dieses leere Objekt als Foto in der Datenbank, woran der
+ * Hintergrund-Layer beim Rendern scheiterte. `progressPhotos` ist ein Altbestand aus
+ * Schema-Version 1 ohne Typ und ohne Nutzung.
+ */
+const BACKUP_EXCLUDED_TABLES = ['backgroundPhoto', 'progressPhotos']
+
+function backupTables() {
+  return db.tables.filter((table) => !BACKUP_EXCLUDED_TABLES.includes(table.name))
+}
+
 export async function exportAllData(): Promise<string> {
   const data: Record<string, unknown[]> = {}
-  for (const table of db.tables) {
+  for (const table of backupTables()) {
     data[table.name] = await table.toArray()
   }
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data })
@@ -240,8 +254,9 @@ export async function exportAllData(): Promise<string> {
 
 export async function importAllData(json: string): Promise<void> {
   const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
-  await db.transaction('rw', db.tables, async () => {
-    for (const table of db.tables) {
+  const tables = backupTables()
+  await db.transaction('rw', tables, async () => {
+    for (const table of tables) {
       const rows = parsed.data[table.name]
       if (!rows) continue
       await table.bulkPut(rows)

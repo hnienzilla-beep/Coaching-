@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { getOrCreateNutritionLog, isoDate, syncNutritionTotalsToDailyEntry } from '../db/queries'
+import { getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import { GRAM_PRESETS, sumMacros, type Sums } from '../lib/macros'
 import type { Athlete, FoodItem, MealType, NutritionLogItem } from '../models/types'
@@ -43,7 +43,7 @@ export default function NutritionLogPage() {
   const nutritionPlans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
 
-  const [selectedDate, setSelectedDate] = useState(isoDate(new Date()))
+  const [selectedDate, setSelectedDate] = useState(todayIso())
   const currentLog = logs?.find((l) => l.date === selectedDate)
 
   const items = useLiveQuery(

@@ -7,7 +7,7 @@ import { testConnection } from './githubApi'
 import { notifySyncSettingsChanged, syncNow } from './autoSync'
 import { getSyncState, setSyncState, subscribeSyncState } from './syncState'
 import { summarizeImports } from './importLog'
-import { importAllFromVault } from './vaultFullImport'
+import { importRecentFromVault } from './vaultRecentImport'
 import { restoreFromVaultBackup } from './backupExport'
 
 type StatusType = 'idle' | 'busy' | 'success' | 'error'
@@ -87,11 +87,11 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
     }
   }
 
-  async function handleImportAll() {
+  async function handleImportRecent() {
     persist()
     setStatus({ type: 'busy', message: 'Lese Vault…' })
     try {
-      const results = await importAllFromVault()
+      const results = await importRecentFromVault()
       const summary = summarizeImports(results)
       setSyncState({ lastImport: summary })
       setStatus({
@@ -241,13 +241,20 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
           </Button>
         </div>
 
-        <Button variant="secondary" onClick={handleImportAll} disabled={busy || !athleteId}>
-          Kompletten Vault einlesen
+        <Button variant="secondary" onClick={handleImportRecent} disabled={busy || !athleteId}>
+          Vault einlesen (letzte 3 Tage)
         </Button>
 
         <Button variant="secondary" onClick={handleRestoreBackup} disabled={busy || !athleteId}>
           Backup aus Vault wiederherstellen
         </Button>
+
+        <p className="text-xs text-muted">
+          „Vault einlesen" holt Stammdaten, Datenbanken und Pläne komplett, Trainings- und
+          Ernährungslogs nur für die letzten 3 Tage – jede ältere Tagesdatei wäre eine eigene
+          Anfrage und würde den Import stark ausbremsen. Die vollständige Historie kommt über
+          „Backup aus Vault wiederherstellen" zurück.
+        </p>
 
         {status.message && (
           <p className={`text-sm ${status.type === 'error' ? 'text-danger' : status.type === 'success' ? 'text-ok' : 'text-muted'}`}>

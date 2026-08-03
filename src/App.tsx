@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom'
 import { BackgroundPhotoEffect } from './lib/backgroundPhoto'
 import { startAutoSync } from './features/obsidianSync/autoSync'
 import { watchDatabaseChanges } from './features/obsidianSync/dbWatch'
+import { startRestTimerRuntime } from './lib/restTimer'
 import AthleteListPage from './pages/AthleteListPage'
 import AthleteLayout from './pages/AthleteLayout'
 import DashboardPage from './pages/DashboardPage'
@@ -14,11 +15,12 @@ import SupplementDatabasePage from './pages/SupplementDatabasePage'
 import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 
 function App() {
-  // Auto-Sync läuft für die gesamte App-Laufzeit (beide Aufrufe sind idempotent, der
-  // Doppelaufruf im React-StrictMode ist also unschädlich).
+  // Auto-Sync und Pausen-Timer laufen für die gesamte App-Laufzeit (alle Aufrufe sind
+  // idempotent, der Doppelaufruf im React-StrictMode ist also unschädlich).
   useEffect(() => {
     watchDatabaseChanges()
     startAutoSync()
+    startRestTimerRuntime()
   }, [])
 
   return (

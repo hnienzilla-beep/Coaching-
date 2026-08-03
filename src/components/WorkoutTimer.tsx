@@ -23,9 +23,17 @@ export default function WorkoutTimer({
 
   useEffect(() => {
     if (!startedAt || completedAt) return
-    setNow(Date.now())
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
+    const update = () => setNow(Date.now())
+    update()
+    const interval = setInterval(update, 1000)
+    // Der Takt wird im Hintergrund gedrosselt und kann von iOS ganz verworfen werden - beim
+    // Zurückkehren deshalb sofort nachziehen, statt auf den nächsten Tick zu warten. Die
+    // Dauer selbst stimmt ohnehin, sie kommt aus dem gespeicherten `startedAt`.
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', update)
+    }
   }, [startedAt, completedAt])
 
   async function start() {

@@ -21,7 +21,7 @@ import {
   importAllData,
   importSelectedAthletes,
 } from '../db/db'
-import { ACCENT_COLORS, clearBackgroundPhoto, createAthlete, deleteAthlete, isoDate, setBackgroundPhoto } from '../db/queries'
+import { ACCENT_COLORS, clearBackgroundPhoto, createAthlete, deleteAthlete, setBackgroundPhoto, todayIso } from '../db/queries'
 import { AccentSwatch, Button, Card, Field, Input, Select } from '../components/ui'
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
@@ -80,7 +80,7 @@ export default function AthleteListPage() {
   async function handleExport() {
     const json = await exportAllData()
     const blob = new Blob([json], { type: 'application/json' })
-    const file = new File([blob], `bodybuilding-coach-backup-${isoDate(new Date())}.json`, { type: 'application/json' })
+    const file = new File([blob], `bodybuilding-coach-backup-${todayIso()}.json`, { type: 'application/json' })
     if (navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: 'Bodybuilding Coach Backup' })
@@ -140,7 +140,7 @@ export default function AthleteListPage() {
   }, [settingsOpen])
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 p-4 pb-10">
+    <div className="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
       <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
         <div>
           <h1 className="text-xl font-bold text-fg">Bodybuilding Coach</h1>
@@ -347,7 +347,7 @@ export default function AthleteListPage() {
               selectedIds.length === 1
                 ? (sortedAthletes.find((a) => a.id === selectedIds[0])?.name ?? 'Athlet')
                 : `${selectedIds.length}-Athleten`
-            const file = new File([json], `Athleten-Export-${name}-${isoDate(new Date())}.json`, { type: 'application/json' })
+            const file = new File([json], `Athleten-Export-${name}-${todayIso()}.json`, { type: 'application/json' })
             await shareOrDownloadFile(file)
             setExportSelectorOpen(false)
           }}
@@ -561,7 +561,7 @@ function NewAthleteForm({ onDone }: { onDone: () => void }) {
       goal,
       proteinPerKg: 2.2,
       fatPerKg: 1,
-      startDate: isoDate(new Date()),
+      startDate: todayIso(),
       accentColor,
     })
     onDone()

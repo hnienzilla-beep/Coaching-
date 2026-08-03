@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { DailyEntry, WorkoutLog } from '../models/types'
-import { isoDate } from '../db/queries'
+import { isoDate, todayIso } from '../db/queries'
 import { Button, Card } from './ui'
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -42,7 +42,7 @@ export default function CalendarOverview({ entries, workoutLogs }: { entries: Da
   }
 
   const monthLabel = firstOfMonth.toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-  const todayIso = isoDate(today)
+  const todayDate = todayIso()
 
   return (
     <Card className="flex flex-col gap-3">
@@ -65,7 +65,7 @@ export default function CalendarOverview({ entries, workoutLogs }: { entries: Da
       <div className="grid grid-cols-7 gap-1">
         {cells.map((iso, i) => {
           if (!iso) return <div key={`empty-${i}`} />
-          const isToday = iso === todayIso
+          const isToday = iso === todayDate
           const tracked = trackedDates.has(iso)
           const trained = trainedDates.has(iso)
           const day = Number(iso.slice(8, 10))

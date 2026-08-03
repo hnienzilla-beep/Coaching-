@@ -1,5 +1,5 @@
 import { db } from '../../db/db'
-import { isoDate } from '../../db/queries'
+import { todayIso } from '../../db/queries'
 import type { FoodItem } from '../../models/types'
 import { byName, nameKey, record, requireSettings } from './importLog'
 import type { ImportResult } from './importLog'
@@ -171,7 +171,7 @@ export async function importLebensmittelNeu(): Promise<ImportResult | null> {
 
   const emptied = rebuildLebensmittelNeu(remote.content, keptLines)
   if (emptied !== null) {
-    await writeFile(LEBENSMITTEL_NEU_PATH, emptied, `Sync ${isoDate(new Date())}: Lebensmittel-Neu`, remote.sha)
+    await writeFile(LEBENSMITTEL_NEU_PATH, emptied, `Sync ${todayIso()}: Lebensmittel-Neu`, remote.sha)
   } else {
     rememberRemoteSha(LEBENSMITTEL_NEU_PATH, remote.sha)
   }
@@ -196,7 +196,7 @@ export async function syncLebensmittel(tree?: VaultTree | null): Promise<void> {
   await syncFile({
     path: LEBENSMITTEL_PATH,
     build: buildLebensmittel,
-    commitMessage: `Sync ${isoDate(new Date())}: Lebensmittel-Datenbank`,
+    commitMessage: `Sync ${todayIso()}: Lebensmittel-Datenbank`,
     importRemote: async (content) => {
       await importLebensmittel(content)
     },

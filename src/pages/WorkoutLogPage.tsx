@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { getLastExercisePerformance, getOrCreateWorkoutLog, isoDate } from '../db/queries'
+import { getLastExercisePerformance, getOrCreateWorkoutLog, todayIso } from '../db/queries'
 import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
@@ -49,7 +49,7 @@ export default function WorkoutLogPage() {
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
 
-  const [selectedDate, setSelectedDate] = useState(isoDate(new Date()))
+  const [selectedDate, setSelectedDate] = useState(todayIso())
   const currentLog = logs?.find((l) => l.date === selectedDate)
 
   const rows = useLiveQuery(

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { isoDate } from '../db/queries'
+import { todayIso } from '../db/queries'
 import DayStrip, { type DayMarker } from './DayStrip'
 import { Button, Card, Input } from './ui'
 
@@ -40,7 +40,7 @@ export default function LogDayHeader({
   children?: ReactNode // z.B. die Timer-Zeile des Trainingslogs
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false)
-  const today = isoDate(new Date())
+  const today = todayIso()
 
   return (
     <Card className="flex flex-col gap-3">

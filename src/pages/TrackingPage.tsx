@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   upsertDailyEntry,
-  isoDate,
+  todayIso,
   getTrackingSeries,
   syncBodyFatToDailyEntry,
   exportProgress,
@@ -33,7 +33,7 @@ export default function TrackingPage() {
     leg: entry.leg,
   }))
 
-  const today = isoDate(new Date())
+  const today = todayIso()
   const calendarWeekComparison = calendarWeekWeightDelta(series, today)
   const [selectedDate, setSelectedDate] = useState(today)
   const selectedIndex = series.findIndex((e) => e.date === selectedDate)
@@ -43,7 +43,7 @@ export default function TrackingPage() {
 
   async function handleExportProgress() {
     const json = await exportProgress(athlete.id)
-    const file = new File([json], `Fortschritt-${athlete.name}-${isoDate(new Date())}.json`, { type: 'application/json' })
+    const file = new File([json], `Fortschritt-${athlete.name}-${todayIso()}.json`, { type: 'application/json' })
     await shareOrDownloadFile(file)
   }
 

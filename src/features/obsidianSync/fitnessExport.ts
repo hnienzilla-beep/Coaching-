@@ -1,5 +1,5 @@
 import { db } from '../../db/db'
-import { addDays, isoDate } from '../../db/queries'
+import { addDays, todayIso } from '../../db/queries'
 import { requireSettings } from './importLog'
 import { buildFrontmatter, fmtNum, tableRow, tableSeparator } from './markdownBuild'
 import { listVaultTree, syncFile } from './githubApi'
@@ -214,7 +214,7 @@ export async function syncSupplemente(tree?: VaultTree | null): Promise<void> {
  */
 const SYNCED_DAYS = 3
 
-export function recentDates(today = isoDate(new Date())): string[] {
+export function recentDates(today = todayIso()): string[] {
   return Array.from({ length: SYNCED_DAYS }, (_, i) => addDays(today, -i))
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useParams, Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ACCENT_COLORS } from '../db/queries'
@@ -19,9 +19,17 @@ const TABS = [
 
 export default function AthleteLayout() {
   const { athleteId } = useParams()
+  const { pathname } = useLocation()
   const athlete = useLiveQuery(() => (athleteId ? db.athletes.get(athleteId) : undefined), [athleteId])
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const colorPickerRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+
+  // Gescrollt wird im <main>, nicht im Dokument - den Scroll beim Reiterwechsel
+  // zurücksetzen übernimmt der Router deshalb nicht mehr.
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 })
+  }, [pathname])
 
   // Beim Verlassen des Athleten zurück auf die Akzentfarbe der Übersicht - nicht einfach
   // entfernen, sonst ginge eine dort eingestellte Farbe verloren.
@@ -44,7 +52,7 @@ export default function AthleteLayout() {
 
   if (!athlete) {
     return (
-      <div className="mx-auto max-w-md p-4 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="mx-auto h-full max-w-md overflow-y-auto p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <Link to="/" className="text-sm text-accent underline">
           ← Zurück zur Athletenliste
         </Link>
@@ -53,8 +61,8 @@ export default function AthleteLayout() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col">
-      <header className="flex items-center gap-3 border-b border-border p-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex h-full max-w-md flex-col overflow-hidden">
+      <header className="shrink-0 flex items-center gap-3 border-b border-border p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <Link to="/" className="text-muted">
           ←
         </Link>
@@ -85,11 +93,11 @@ export default function AthleteLayout() {
         <h1 className="flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
       </header>
 
-      <main className="flex-1 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
         <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto grid w-full max-w-md grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+      <nav className="grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
