@@ -19,10 +19,29 @@
   --color-fg: #fafafa;
 }
 
+/* App-Shell: Das Dokument selbst scrollt nie, gescrollt wird ausschließlich innerhalb der
+   App. Sonst hängt die Position der unteren Navigation (`position: fixed`) an der
+   dynamischen Viewport-Höhe von iOS - je nachdem, ob eine Seite lang genug zum Scrollen
+   ist, blendet Safari seine Leiste ein oder aus und die Navigation springt beim
+   Reiterwechsel. Mit fester Shell-Höhe steht sie immer an derselben Stelle. */
 html,
-body,
-#root {
+body {
   height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+#root {
+  height: 100dvh;
+}
+
+/* Browser ohne dynamische Viewport-Einheiten (dvh) fallen auf die Elternhöhe zurück. */
+@supports not (height: 100dvh) {
+  #root {
+    height: 100%;
+  }
 }
 
 html,
