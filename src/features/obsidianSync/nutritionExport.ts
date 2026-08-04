@@ -1,6 +1,10 @@
 import { db } from '../../db/db'
-import { caloriesFromMacros } from '../../lib/calculator'
+import { calculate, caloriesFromMacros } from '../../lib/calculator'
+import type { CalculatorResult } from '../../lib/calculator'
+import { subtractMacros, sumMacros } from '../../lib/macros'
+import type { Sums } from '../../lib/macros'
 import { MEAL_TYPES } from '../../models/types'
+import type { FoodItem } from '../../models/types'
 import { requireSettings } from './importLog'
 import { buildFrontmatter } from './markdownBuild'
 import { syncFile } from './githubApi'
@@ -14,12 +18,73 @@ function round(n: number): number {
 export const ERNAEHRUNGSPLAN_PATH = '40-Ernaehrung/Ernaehrungsplan.md'
 export const ERNAEHRUNG_LOG_DIR = '40-Ernaehrung/Log'
 
+/** Makros einer Portion - dieselbe Rechnung wie in der App. */
+function macrosForPortion(food: FoodItem | undefined, grams: number): Sums {
+  const factor = grams / 100
+  const protein = food ? food.protein * factor : 0
+  const carbs = food ? food.carbs * factor : 0
+  const fat = food ? food.fat * factor : 0
+  return { kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
+}
+
+/**
+ * Kalorien- und Makro-Vorgabe des gewählten Athleten, gerechnet aus seinen Stammdaten.
+ * `null`, wenn es den Athleten nicht (mehr) gibt - dann bleibt die Vorgabe in der Datei weg.
+ */
+async function macroTarget(): Promise<CalculatorResult | null> {
+  const settings = requireSettings()
+  const athlete = await db.athletes.get(settings.athleteId)
+  return athlete ? calculate(athlete) : null
+}
+
+function targetSums(target: CalculatorResult): Sums {
+  return { kcal: target.targetCalories, protein: target.proteinG, carbs: target.carbsG, fat: target.fatG }
+}
+
+/**
+ * Vorgabe als Frontmatter-Felder. Reine Ausgabe: Der Import liest sie nicht zurück, weil sie
+ * sich aus den Stammdaten in `Athlet.md` ergibt.
+ */
+function targetFields(target: CalculatorResult | null): Record<string, number | undefined> {
+  return {
+    ziel_kalorien: target?.targetCalories,
+    ziel_protein_g: target?.proteinG,
+    ziel_kohlenhydrate_g: target?.carbsG,
+    ziel_fett_g: target?.fatG,
+  }
+}
+
+/**
+ * "2500 kcal · 180 g Protein · 250 g Kohlenhydrate · 70 g Fett" - mit `signed` bekommen Werte
+ * über null ein Pluszeichen, damit eine Differenz als solche lesbar ist.
+ */
+function macroSummary(sums: Sums, signed = false): string {
+  const fmt = (n: number): string => {
+    const value = round(n)
+    return signed && value > 0 ? `+${value}` : `${value}`
+  }
+  return `${fmt(sums.kcal)} kcal · ${fmt(sums.protein)} g Protein · ${fmt(sums.carbs)} g Kohlenhydrate · ${fmt(sums.fat)} g Fett`
+}
+
+/**
+ * Bilanzblock unter den Mahlzeiten: Vorgabe, Ist und die Differenz dazwischen. Bewusst fette
+ * Textzeilen und keine Listenpunkte - Listenpunkte würde der Import als Mahlzeit lesen.
+ */
+function balanceLines(target: CalculatorResult | null, actual: Sums, actualLabel: string): string[] {
+  const lines = target ? [`**Vorgabe:** ${macroSummary(targetSums(target))}`] : []
+  lines.push(`**${actualLabel}:** ${macroSummary(actual)}`)
+  if (target) lines.push(`**Differenz:** ${macroSummary(subtractMacros(actual, targetSums(target)), true)}`)
+  lines.push('')
+  return lines
+}
+
 /** Baut alle Ernährungsplan-Phasen des gewählten Athleten. */
 async function buildErnaehrungsplan(): Promise<string> {
   const settings = requireSettings()
+  const target = await macroTarget()
   const plans = await db.nutritionPlans.where('athleteId').equals(settings.athleteId).sortBy('order')
 
-  const lines = [...buildFrontmatter({ typ: 'ernaehrungsplan' })]
+  const lines = [...buildFrontmatter({ typ: 'ernaehrungsplan', ...targetFields(target) })]
 
   if (plans.length === 0) {
     lines.push('_Noch kein Ernährungsplan angelegt._', '')
@@ -33,10 +98,7 @@ async function buildErnaehrungsplan(): Promise<string> {
 
     lines.push(`## Plan: ${plan.phaseName}`, '')
 
-    let totalKcal = 0
-    let totalProtein = 0
-    let totalCarbs = 0
-    let totalFat = 0
+    const portions: Sums[] = []
 
     for (const mealType of MEAL_TYPES) {
       const mealsOfType = allMeals.filter((m) => m.mealType === mealType)
@@ -44,16 +106,9 @@ async function buildErnaehrungsplan(): Promise<string> {
       lines.push(`### ${mealType}`)
       for (const m of mealsOfType) {
         const food = foodMap.get(m.id)
-        const factor = m.grams / 100
-        const protein = food ? food.protein * factor : 0
-        const carbs = food ? food.carbs * factor : 0
-        const fat = food ? food.fat * factor : 0
-        const kcal = caloriesFromMacros(protein, carbs, fat)
-        totalKcal += kcal
-        totalProtein += protein
-        totalCarbs += carbs
-        totalFat += fat
-        lines.push(`- ${food?.name ?? '?'} – ${m.grams}g (${round(kcal)} kcal)`)
+        const sums = macrosForPortion(food, m.grams)
+        portions.push(sums)
+        lines.push(`- ${food?.name ?? '?'} – ${m.grams}g (${round(sums.kcal)} kcal)`)
       }
       lines.push('')
     }
@@ -61,10 +116,7 @@ async function buildErnaehrungsplan(): Promise<string> {
     if (allMeals.length === 0) {
       lines.push('_Keine Mahlzeiten im Plan._', '')
     } else {
-      lines.push(
-        `**Gesamt:** ${round(totalKcal)} kcal · ${round(totalProtein)} g Protein · ${round(totalCarbs)} g Kohlenhydrate · ${round(totalFat)} g Fett`,
-        '',
-      )
+      lines.push(...balanceLines(target, sumMacros(portions), 'Gesamt'))
     }
   }
 
@@ -91,15 +143,14 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
   const log = await db.nutritionLogs.where('[athleteId+date]').equals([settings.athleteId, date]).first()
   if (!log) return null
 
+  const target = await macroTarget()
   const plan = log.nutritionPlanId ? await db.nutritionPlans.get(log.nutritionPlanId) : undefined
   const items = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).sortBy('order')
   const foods = await db.foodItems.bulkGet(items.map((i) => i.foodItemId))
   const foodMap = new Map(items.map((i, idx) => [i.id, foods[idx]]))
 
-  let totalKcal = 0
-  let totalProtein = 0
-  let totalCarbs = 0
-  let totalFat = 0
+  // Wie in der App zählen nur die abgehakten ("gegessenen") Einträge in die Tagesbilanz.
+  const eaten: Sums[] = []
   const bodyLines: string[] = []
 
   for (const mealType of MEAL_TYPES) {
@@ -108,23 +159,17 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
     bodyLines.push(`### ${mealType}`)
     for (const item of itemsOfType) {
       const food = foodMap.get(item.id)
-      const factor = item.grams / 100
-      const protein = food ? food.protein * factor : 0
-      const carbs = food ? food.carbs * factor : 0
-      const fat = food ? food.fat * factor : 0
-      const kcal = caloriesFromMacros(protein, carbs, fat)
-      if (item.done) {
-        totalKcal += kcal
-        totalProtein += protein
-        totalCarbs += carbs
-        totalFat += fat
-      }
-      bodyLines.push(`- ${item.done ? '[x]' : '[ ]'} ${food?.name ?? '?'} – ${item.grams}g (${round(kcal)} kcal)`)
+      const sums = macrosForPortion(food, item.grams)
+      if (item.done) eaten.push(sums)
+      bodyLines.push(`- ${item.done ? '[x]' : '[ ]'} ${food?.name ?? '?'} – ${item.grams}g (${round(sums.kcal)} kcal)`)
     }
     bodyLines.push('')
   }
 
   if (bodyLines.length === 0) bodyLines.push('_Keine Mahlzeiten erfasst._', '')
+
+  const totals = sumMacros(eaten)
+  bodyLines.push(...balanceLines(target, totals, 'Gegessen'))
 
   // Die Tagesnotiz gehört zum Log und wird zurückgelesen - anders als der "## Notizen"-Block,
   // der allein dem Nutzer gehört.
@@ -136,10 +181,11 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
       datum: date,
       plan: plan?.phaseName,
       abgeschlossen: log.completedAt,
-      kalorien: round(totalKcal),
-      protein_g: round(totalProtein),
-      kohlenhydrate_g: round(totalCarbs),
-      fett_g: round(totalFat),
+      kalorien: round(totals.kcal),
+      protein_g: round(totals.protein),
+      kohlenhydrate_g: round(totals.carbs),
+      fett_g: round(totals.fat),
+      ...targetFields(target),
     }),
     ...bodyLines,
   ].join('\n')

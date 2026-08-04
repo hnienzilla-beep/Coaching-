@@ -1,5 +1,5 @@
 import { db } from '../../db/db'
-import { ACTIVITY_LEVELS, GOALS } from '../../lib/calculator'
+import { ACTIVITY_LEVELS, GOALS, calculate } from '../../lib/calculator'
 import type { Athlete, Gender } from '../../models/types'
 import { record, requireSettings } from './importLog'
 import type { ImportResult } from './importLog'
@@ -13,6 +13,9 @@ import { withVaultImport } from './syncState'
  * Athleten-Stammdaten als Frontmatter in `20-Fitness/Athlet.md` - alles, was der
  * Kalorienrechner braucht, plus die Zielvorgaben. Damit sind die Werte in Obsidian sichtbar
  * und über den Vault auch änderbar.
+ *
+ * Dazu kommt die daraus gerechnete Kalorien- und Makro-Vorgabe (`ziel_*`). Die ist reine
+ * Ausgabe: Sie wird beim Import nicht gelesen, weil sie sich aus den Stammdaten ergibt.
  */
 
 export const ATHLET_PATH = '20-Fitness/Athlet.md'
@@ -23,6 +26,8 @@ async function buildAthlet(): Promise<string | null> {
   const settings = requireSettings()
   const athlete = await db.athletes.get(settings.athleteId)
   if (!athlete) return null
+
+  const target = calculate(athlete)
 
   return [
     ...buildFrontmatter({
@@ -42,12 +47,28 @@ async function buildAthlet(): Promise<string | null> {
       zieldatum: athlete.targetDate,
       ffmi: athlete.ffmi,
       akzentfarbe: athlete.accentColor,
+      grundumsatz_kcal: target.bmr,
+      gesamtumsatz_kcal: target.tdee,
+      ziel_kalorien: target.targetCalories,
+      ziel_protein_g: target.proteinG,
+      ziel_kohlenhydrate_g: target.carbsG,
+      ziel_fett_g: target.fatG,
     }),
     `# ${athlete.name}`,
     '',
     'Die Felder oben sind die Stammdaten aus der App. Werden sie hier geändert, übernimmt der',
     'nächste Sync sie - unbekannte Werte bei Geschlecht, Aktivität und Ziel werden dabei',
     'ignoriert, weil der Kalorienrechner nur die dort vorgesehenen Stufen kennt.',
+    '',
+    '## Vorgabe',
+    '',
+    `- **Kalorien:** ${target.targetCalories} kcal/Tag (Grundumsatz ${target.bmr}, Gesamtumsatz ${target.tdee})`,
+    `- **Protein:** ${target.proteinG} g · **Kohlenhydrate:** ${target.carbsG} g · **Fett:** ${target.fatG} g`,
+    '',
+    'Diese Werte rechnet die App aus den Stammdaten (`grundumsatz_kcal`, `gesamtumsatz_kcal`,',
+    '`ziel_*` im Frontmatter). Sie hier zu ändern hat keine Wirkung - der Sync liest sie nicht',
+    'zurück. Stellschrauben sind Gewicht, Aktivität, Ziel, `kalorien_anpassung` und die',
+    'Makro-Faktoren pro Kilogramm.',
     '',
   ].join('\n')
 }
