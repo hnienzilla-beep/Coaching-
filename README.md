@@ -50,17 +50,17 @@ Personal Access Token mit Schreibrecht auf dieses Repo.
 
 | Datei | Inhalt |
 |---|---|
-| `20-Fitness/Athlet.md` | Stammdaten (Alter, Größe, Aktivität, Ziel, Makro-Faktoren, Zielgewicht, FFMI) als Frontmatter |
+| `20-Fitness/Athlet.md` | Stammdaten (Alter, Größe, Aktivität, Ziel, Makro-Faktoren, Zielgewicht, FFMI) als Frontmatter, dazu die daraus gerechnete Kalorien- und Makro-Vorgabe |
 | `20-Fitness/Gewicht.md` | Tracking je Tag: Gewicht, KFA, Kalorien/Makros, Umfänge, Tagesnotiz |
 | `20-Fitness/Uebungen.md` | Übungs-Datenbank (Muskelgruppe, Favorit) |
 | `20-Fitness/Supplement-Datenbank.md` | Supplement-Stammdaten (Standarddosis, Timing, Notiz) |
 | `20-Fitness/Trainingsplaene.md` | alle Trainingsplan-Phasen mit Sätzen, Wiederholungen, Zielgewicht, Notizen |
 | `20-Fitness/Supplemente.md` | alle Supplementplan-Phasen |
 | `20-Fitness/Training/<datum>.md` | Trainingslog je Tag: Plan, Start/Ende, Sätze, Übungs- und Trainingsnotiz |
-| `40-Ernaehrung/Ernaehrungsplan.md` | alle Ernährungsplan-Phasen |
+| `40-Ernaehrung/Ernaehrungsplan.md` | alle Ernährungsplan-Phasen, je Phase Vorgabe, Gesamt und Differenz |
 | `40-Ernaehrung/Lebensmittel.md` | Lebensmittel-Datenbank (Nährwerte je 100 g, Favorit, "Unbestätigt") |
 | `40-Ernaehrung/Lebensmittel-Neu.md` | Eingang für neue Lebensmittel (siehe unten) |
-| `40-Ernaehrung/Log/<datum>.md` | Ernährungslog je Tag: Plan, Abschluss, Mahlzeiten, Tagesnotiz |
+| `40-Ernaehrung/Log/<datum>.md` | Ernährungslog je Tag: Plan, Abschluss, Mahlzeiten, Vorgabe/Gegessen/Differenz, Tagesnotiz |
 | `90-Backup/fitness-app-backup.json` | verlustfreies Vollbackup - für alles, was Markdown nicht abbildet |
 
 Nur auf dem Gerät bleiben **Übungsbilder** und das **Hintergrundfoto**: Bilder
@@ -121,6 +121,30 @@ Vault ab.
   Überschrift `## Notizen` bleibt beim Zurückschreiben erhalten und wird nie als
   Daten gelesen - anders als `## Trainingsnotiz` und `## Tagesnotiz`, die zum
   jeweiligen Log gehören.
+- Die **Kalorien- und Makro-Vorgabe** wird nur geschrieben, nie gelesen (siehe
+  unten).
+
+### Kalorien- und Makro-Vorgabe
+
+Was der Kalorienrechner aus den Stammdaten ergibt, steht mit im Vault - so lässt
+sich in Obsidian ablesen und auswerten, wogegen ein Tag oder ein Plan gemessen
+wird:
+
+- `Athlet.md`: `grundumsatz_kcal`, `gesamtumsatz_kcal`, `ziel_kalorien`,
+  `ziel_protein_g`, `ziel_kohlenhydrate_g`, `ziel_fett_g` im Frontmatter, dazu
+  ein Abschnitt "Vorgabe" im Text.
+- `Ernaehrungsplan.md`: dieselben `ziel_*`-Felder im Frontmatter, je Phase eine
+  Zeile **Vorgabe**, **Gesamt** und **Differenz**.
+- `Log/<datum>.md`: dieselben `ziel_*`-Felder im Frontmatter, im Text
+  **Vorgabe**, **Gegessen** (nur abgehakte Einträge, wie in der App) und
+  **Differenz**.
+
+Diese Werte sind reine Ausgabe: Werden sie in Obsidian geändert, überschreibt
+der nächste Sync sie wieder. Stellschrauben sind die Stammdaten in `Athlet.md`
+(Gewicht, Aktivität, Ziel, `kalorien_anpassung`, Protein/Fett pro Kilogramm).
+Ändert sich die Vorgabe, schreibt der nächste Durchlauf die betroffenen Dateien
+einmal neu - auch die Tagesdateien der Vergangenheit, die immer die aktuelle
+Vorgabe zeigen.
 
 ### Lebensmittel-Datenbank
 

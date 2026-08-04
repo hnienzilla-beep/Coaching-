@@ -268,6 +268,25 @@ describe('parseMealPhases', () => {
     })
     expect(phases[1].items).toHaveLength(1)
   })
+
+  it('überliest den Vorgabe-Block unter den Mahlzeiten', () => {
+    const content = [
+      ...buildFrontmatter({ typ: 'ernaehrungsplan', ziel_kalorien: 2500, ziel_protein_g: 180 }),
+      '## Plan: Phase 1',
+      '',
+      '### Frühstück',
+      '- Haferflocken – 80g (300 kcal)',
+      '',
+      '**Vorgabe:** 2500 kcal · 180 g Protein · 250 g Kohlenhydrate · 70 g Fett',
+      '**Gesamt:** 300 kcal · 10 g Protein · 50 g Kohlenhydrate · 5 g Fett',
+      '**Differenz:** -2200 kcal · -170 g Protein · -200 g Kohlenhydrate · -65 g Fett',
+      '',
+    ].join('\n')
+
+    expect(parseMealPhases(content)).toEqual([
+      { phaseName: 'Phase 1', items: [{ mealType: 'Frühstück', name: 'Haferflocken', grams: 80, done: false }] },
+    ])
+  })
 })
 
 describe('parseErnaehrungLog', () => {
@@ -298,6 +317,37 @@ describe('parseErnaehrungLog', () => {
       { mealType: 'Frühstück', name: 'Haferflocken', grams: 80, done: true },
       { mealType: 'Frühstück', name: 'Banane', grams: 120, done: false },
     ])
+  })
+
+  // Vorgabe und Bilanz sind reine Ausgabe: Sie stehen zwischen Mahlzeiten und Tagesnotiz und
+  // dürfen weder als Mahlzeit gelesen werden noch die Tagesnotiz verschlucken.
+  it('überliest Vorgabe und Bilanz zwischen Mahlzeiten und Tagesnotiz', () => {
+    const content = [
+      ...buildFrontmatter({
+        typ: 'ernaehrung',
+        datum: '2026-07-29',
+        kalorien: 300,
+        ziel_kalorien: 2500,
+        ziel_protein_g: 180,
+        ziel_kohlenhydrate_g: 250,
+        ziel_fett_g: 70,
+      }),
+      '### Frühstück',
+      '- [x] Haferflocken – 80g (300 kcal)',
+      '',
+      '**Vorgabe:** 2500 kcal · 180 g Protein · 250 g Kohlenhydrate · 70 g Fett',
+      '**Gegessen:** 300 kcal · 10 g Protein · 50 g Kohlenhydrate · 5 g Fett',
+      '**Differenz:** -2200 kcal · -170 g Protein · -200 g Kohlenhydrate · -65 g Fett',
+      '',
+      '## Tagesnotiz',
+      '',
+      'Viel Hunger.',
+      '',
+    ].join('\n')
+
+    const day = parseErnaehrungLog(content)
+    expect(day.items).toEqual([{ mealType: 'Frühstück', name: 'Haferflocken', grams: 80, done: true }])
+    expect(day.notes).toBe('Viel Hunger.')
   })
 })
 
