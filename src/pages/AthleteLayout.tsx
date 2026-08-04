@@ -97,11 +97,11 @@ export default function AthleteLayout() {
         <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
       </main>
 
-      {/* Unten nur die halbe Safe Area als Polster: Der volle Systemabstand (34px auf dem
-          iPhone) schiebt die Reiter spürbar vom Bildschirmrand weg, so viel Platz braucht
-          der Home-Indikator nicht. `max(0.5rem, …)` hält ohne Safe Area (Desktop) ein
-          Mindestpolster, damit die Reiter nicht am Rand kleben. */}
-      <nav className="grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-[max(0.5rem,calc(env(safe-area-inset-bottom)*0.5))] backdrop-blur-xl">
+      {/* Unten bewusst kein Safe-Area-Polster: Die 12px Eigenpolster der Reiter (`py-3`)
+          reichen als Abstand zum Home-Indikator, dessen Oberkante rund 13px über der
+          Unterkante liegt. Der volle Systemabstand (34px) schob die Beschriftungen
+          spürbar vom Rand weg, ohne dass es etwas bringt. */}
+      <nav className="grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-1 backdrop-blur-xl">
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
