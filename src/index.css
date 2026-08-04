@@ -20,10 +20,19 @@
 }
 
 /* App-Shell: Das Dokument selbst scrollt nie, gescrollt wird ausschließlich innerhalb der
-   App. Sonst hängt die Position der unteren Navigation (`position: fixed`) an der
-   dynamischen Viewport-Höhe von iOS - je nachdem, ob eine Seite lang genug zum Scrollen
-   ist, blendet Safari seine Leiste ein oder aus und die Navigation springt beim
-   Reiterwechsel. Mit fester Shell-Höhe steht sie immer an derselben Stelle. */
+   App. Sonst hinge die Position der unteren Navigation an der dynamischen Viewport-Höhe
+   von iOS - je nachdem, ob eine Seite lang genug zum Scrollen ist, blendet Safari seine
+   Leiste ein oder aus und die Navigation springt beim Reiterwechsel.
+
+   Die Hülle hängt am Viewport statt an der Höhe von html/body: `position: fixed` misst
+   gegen den Viewport (mit `viewport-fit=cover` also den ganzen Screen inklusive
+   Safe-Areas) und wird vom `overflow: hidden` des Body nicht beschnitten, weil der Body
+   für fixierte Nachfahren kein umschließender Block ist. Vorher standen hier zwei
+   Höhenquellen nebeneinander - `#root` mit `100dvh` in einem `body` mit `height: 100%`.
+   Fällt `100dvh` größer aus als die Body-Höhe (auf iOS im Standalone-Modus genau der
+   Fall), schnitt der Body die Unterkante von `#root` ab: Die Navigation wurde unten
+   gekappt und darunter blieb ein schwarzer Streifen stehen. Gleiches Vorgehen wie beim
+   Hintergrund-Layer (`.bg-photo-layer` weiter unten). */
 html,
 body {
   height: 100%;
@@ -34,14 +43,8 @@ body {
 }
 
 #root {
-  height: 100dvh;
-}
-
-/* Browser ohne dynamische Viewport-Einheiten (dvh) fallen auf die Elternhöhe zurück. */
-@supports not (height: 100dvh) {
-  #root {
-    height: 100%;
-  }
+  position: fixed;
+  inset: 0;
 }
 
 html,
