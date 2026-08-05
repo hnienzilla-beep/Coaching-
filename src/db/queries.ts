@@ -38,6 +38,15 @@ export function pickAccentColor(existingCount: number): string {
   return ACCENT_COLORS[existingCount % ACCENT_COLORS.length]
 }
 
+/**
+ * Anzeigereihenfolge der Athleten. `order` vergibt `createAthlete` beim Anlegen und
+ * `ensureAthleteOrder` für Bestandsdaten; der erste Eintrag ist der Athlet, in dem die App
+ * startet, wenn es keinen zuletzt geöffneten gibt.
+ */
+export function sortAthletes(athletes: Athlete[]): Athlete[] {
+  return [...athletes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+}
+
 export async function createAthlete(
   partial: Omit<Athlete, 'id' | 'accentColor' | 'order'> & { accentColor?: string },
 ): Promise<Athlete> {

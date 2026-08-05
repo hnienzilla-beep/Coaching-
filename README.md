@@ -43,7 +43,7 @@ Source: "GitHub Actions" aktivieren).
 
 ## Obsidian-Vault-Sync
 
-Über "Obsidian-Sync" (Athletenübersicht) wird der **komplette Datenbestand des
+Über "Obsidian-Sync" (Zahnrad-Menü in der Kopfzeile des Athleten) wird der **komplette Datenbestand des
 gewählten Athleten** als Markdown-Dateien in ein GitHub-Repo geschrieben, das als
 Obsidian-Vault dient. Nötig sind GitHub-Benutzername, Repo-Name und ein
 Personal Access Token mit Schreibrecht auf dieses Repo.
@@ -201,14 +201,27 @@ Datenbestand in einer einzigen Datei.
 Wichtig: Die App hat keinen Server - läuft sie nicht (App geschlossen bzw. von
 iOS beendet), ruht auch der Sync.
 
+## Start und Athletenwechsel
+
+Die App startet **direkt im zuletzt geöffneten Athleten** - eine Athletenübersicht als
+Startbildschirm gibt es nicht mehr. Wurde der gemerkte Athlet gelöscht, wird der erste der
+Reihenfolge genommen; ist überhaupt keiner angelegt, steht das Anlege-Formular als
+Begrüßungsbildschirm da (in jeder Ansichts-Stufe, sonst wäre eine frische Installation eine
+Sackgasse).
+
+Gewechselt wird über den **Namen in der Kopfzeile**: Ab zwei Athleten klappt er zu einer Liste
+auf, bei nur einem steht dort schlicht der Name. Angelegt, sortiert, gelöscht sowie exportiert
+und importiert wird unter "👥 Athleten verwalten" (Zahnrad-Menü oder Athletenliste), ab Stufe
+Normal.
+
 ## Ansichts-Stufen
 
-Wie viel die App zeigt, steuert eine von drei Stufen (Zahnrad-Menü der Athletenübersicht →
-"Ansicht"):
+Wie viel die App zeigt, steuert eine von drei Stufen (Zahnrad-Menü in der Kopfzeile des
+Athleten → "Ansicht"):
 
 | Stufe | Was zu sehen ist |
 |---|---|
-| **Einfach** | Nur das Nötigste, gedacht für den Einstieg. Alles Zusätzliche wird gar nicht erst gezeichnet - es lässt sich also auch nicht aufklappen. Weg fallen: Kalorien-Anpassung, Grund- und Gesamtumsatz und der PDF-Bericht im Dashboard; KFA- und Körpermaße-Diagramm, "Fortschritt teilen" sowie Makro- und Umfangsfelder im Tracking (dort bleiben Gewicht, KFA und Notiz); der Kraft-Verlauf im Trainings-Log; Datenbanken, Obsidian-Sync sowie Export und Import in der Athletenübersicht. |
+| **Einfach** | Nur das Nötigste, gedacht für den Einstieg. Alles Zusätzliche wird gar nicht erst gezeichnet - es lässt sich also auch nicht aufklappen. Weg fallen: Kalorien-Anpassung, Grund- und Gesamtumsatz und der PDF-Bericht im Dashboard; KFA- und Körpermaße-Diagramm, "Fortschritt teilen" sowie Makro- und Umfangsfelder im Tracking (dort bleiben Gewicht, KFA und Notiz); der Kraft-Verlauf im Trainings-Log; Athletenverwaltung, Datenbanken und Obsidian-Sync im Zahnrad-Menü. Athleten wechseln bleibt möglich. |
 | **Normal** | Tracking und Pläne ohne Coach-Details. |
 | **Coach** | Alle Felder, Auswertungen und Export-Funktionen; die Pläne lassen sich bearbeiten. Standard. |
 
@@ -224,8 +237,8 @@ Akzent. Farbe kommt bewusst nur an zwei Stellen dazu - über die frei wählbare
 Akzentfarbe und über die Semantikfarben für "ok" und "Fehler".
 
 Die Akzentfarbe ist an zwei Stellen einstellbar: je Athlet (Farbkreis in der
-Kopfzeile des Athleten) und für die Athletenübersicht samt aller Seiten außerhalb
-eines Athleten (Zahnrad-Menü → "Akzentfarbe", "Standard" nimmt wieder den Akzent
+Kopfzeile des Athleten) und für alle Seiten außerhalb eines Athleten (Farbknopf in
+der Kopfzeile der Athletenverwaltung, "Standard" nimmt wieder den Akzent
 des Themes). Die Übersichtsfarbe liegt in `localStorage`
 (`src/lib/accentColor.ts`), innerhalb eines Athleten überschreibt dessen eigene
 Farbe sie und beim Verlassen wird sie wiederhergestellt.
