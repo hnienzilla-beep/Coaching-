@@ -26,8 +26,7 @@ import { AccentSwatch, Button, Card, Field, Input, Select } from '../components/
 import type { Athlete, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import { useTheme } from '../lib/theme'
-import { useCoachMode } from '../lib/coachMode'
-import { useCompactMode } from '../lib/compactMode'
+import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
 import { useOverviewAccent } from '../lib/accentColor'
 import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
 
@@ -64,8 +63,7 @@ export default function AthleteListPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [theme, setTheme] = useTheme()
-  const [coachMode, setCoachMode] = useCoachMode()
-  const [compactMode, setCompactMode] = useCompactMode()
+  const detailLevel = useDetailLevel()
   const [overviewAccent, setOverviewAccent] = useOverviewAccent()
   const [accentPickerOpen, setAccentPickerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -165,18 +163,26 @@ export default function AthleteListPage() {
               >
                 {theme === 'dark' ? '☀️ Hell-Modus' : '🌙 Dunkel-Modus'}
               </button>
-              <button
-                onClick={() => setCoachMode(!coachMode)}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                {coachMode ? '🧑‍🏫 Coach-Modus: An' : '🧑‍🏫 Coach-Modus: Aus'}
-              </button>
-              <button
-                onClick={() => setCompactMode(!compactMode)}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                {compactMode ? '📥 Karten einklappen: An' : '📥 Karten einklappen: Aus'}
-              </button>
+              <div className="flex flex-col gap-1 px-2 py-1.5">
+                <span className="text-sm text-fg">👁️ Ansicht</span>
+                <div className="flex gap-1 rounded-xl bg-surface-2 p-1">
+                  {DETAIL_LEVELS.map((l) => (
+                    <button
+                      key={l.key}
+                      onClick={() => setDetailLevel(l.key)}
+                      aria-pressed={detailLevel === l.key}
+                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition ${
+                        detailLevel === l.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
+                      }`}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-muted">
+                  {DETAIL_LEVELS.find((l) => l.key === detailLevel)?.hint}
+                </span>
+              </div>
               <button
                 onClick={() => setAccentPickerOpen((v) => !v)}
                 aria-expanded={accentPickerOpen}
@@ -239,38 +245,44 @@ export default function AthleteListPage() {
                   setSettingsOpen(false)
                 }}
               />
-              <div className="my-1 border-t border-border" />
-              <Link
-                to="/lebensmittel"
-                onClick={() => setSettingsOpen(false)}
-                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-              >
-                Lebensmittel-DB
-              </Link>
-              <Link
-                to="/supplemente"
-                onClick={() => setSettingsOpen(false)}
-                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-              >
-                Supplement-DB
-              </Link>
-              <Link
-                to="/uebungen"
-                onClick={() => setSettingsOpen(false)}
-                className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-              >
-                Trainings-DB
-              </Link>
-              <div className="my-1 border-t border-border" />
-              <button
-                onClick={() => {
-                  setObsidianSyncOpen(true)
-                  setSettingsOpen(false)
-                }}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                🔗 Obsidian-Sync
-              </button>
+              {/* Datenbanken und Sync sind Werkzeuge für Fortgeschrittene. Die Ansichts-Auswahl
+                  darüber bleibt in jeder Stufe stehen - sonst gäbe es keinen Weg zurück. */}
+              {detailLevel !== 'einfach' && (
+                <>
+                  <div className="my-1 border-t border-border" />
+                  <Link
+                    to="/lebensmittel"
+                    onClick={() => setSettingsOpen(false)}
+                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+                  >
+                    Lebensmittel-DB
+                  </Link>
+                  <Link
+                    to="/supplemente"
+                    onClick={() => setSettingsOpen(false)}
+                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+                  >
+                    Supplement-DB
+                  </Link>
+                  <Link
+                    to="/uebungen"
+                    onClick={() => setSettingsOpen(false)}
+                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+                  >
+                    Trainings-DB
+                  </Link>
+                  <div className="my-1 border-t border-border" />
+                  <button
+                    onClick={() => {
+                      setObsidianSyncOpen(true)
+                      setSettingsOpen(false)
+                    }}
+                    className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+                  >
+                    🔗 Obsidian-Sync
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -298,30 +310,35 @@ export default function AthleteListPage() {
         </Button>
       )}
 
-      {athletes && athletes.length > 0 && (
+      {/* Export und Import hantieren mit dem kompletten Datenbestand - dieselbe Klasse Werkzeug
+          wie der Obsidian-Sync und die Datenbanken im Menü, deshalb in der Einfach-Ansicht
+          ebenfalls nicht sichtbar. */}
+      {detailLevel !== 'einfach' && athletes && athletes.length > 0 && (
         <Button variant="secondary" onClick={() => setExportSelectorOpen(true)}>
           Athleten exportieren
         </Button>
       )}
 
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={handleExport} className="flex-1">
-          Daten exportieren
-        </Button>
-        <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
-          Daten importieren
-        </Button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept="application/json"
-          className="hidden"
-          onChange={(e) => {
-            void handleImport(e.target.files)
-            e.target.value = ''
-          }}
-        />
-      </div>
+      {detailLevel !== 'einfach' && (
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleExport} className="flex-1">
+            Daten exportieren
+          </Button>
+          <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
+            Daten importieren
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => {
+              void handleImport(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
+      )}
 
       {pendingImport && (
         <ImportAthleteSelector

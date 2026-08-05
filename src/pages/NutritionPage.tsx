@@ -19,7 +19,7 @@ import MacroSumTable from '../components/MacroSumTable'
 import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import { macroLine, sumMacros, type Sums } from '../lib/macros'
-import { useCoachMode } from '../lib/coachMode'
+import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
@@ -33,7 +33,7 @@ function planRemainingText(remaining: number): string {
 
 export default function NutritionPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const [coachMode] = useCoachMode()
+  const coachMode = useCoachMode()
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)

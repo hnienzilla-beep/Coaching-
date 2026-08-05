@@ -14,6 +14,7 @@ import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
 import { formatDuration, nextOrder } from '../lib/calculator'
+import { useSimpleMode } from '../lib/detailLevel'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 
 type Ctx = { athlete: Athlete }
@@ -45,6 +46,7 @@ async function createSetsFromPlanExercise(
 
 export default function WorkoutLogPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const simple = useSimpleMode()
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -286,9 +288,11 @@ export default function WorkoutLogPage() {
         emptyText="🏋️ Noch keine Trainingseinheiten aufgezeichnet."
       />
 
-      <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
-        <StrengthChart athleteId={athlete.id} />
-      </CollapsibleCard>
+      {!simple && (
+        <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
+          <StrengthChart athleteId={athlete.id} />
+        </CollapsibleCard>
+      )}
     </div>
   )
 }

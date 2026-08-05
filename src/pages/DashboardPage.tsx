@@ -10,8 +10,7 @@ import { addDays, syncBodyFatToDailyEntry, todayIso } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
-import { useCoachMode } from '../lib/coachMode'
-import { useCompactMode } from '../lib/compactMode'
+import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
 
 type Ctx = { athlete: Athlete }
 
@@ -21,8 +20,8 @@ function update(athleteId: string, patch: Partial<Athlete>) {
 
 export default function DashboardPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const [coachMode] = useCoachMode()
-  const [compactMode] = useCompactMode()
+  const coachMode = useCoachMode()
+  const simple = useSimpleMode()
   const [showCoachDetails, setShowCoachDetails] = useState(false)
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
@@ -105,24 +104,29 @@ export default function DashboardPage() {
             ))}
           </Select>
         </Field>
-        <Field label="Kalorien-Anpassung (kcal, +Überschuss/-Defizit)">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => update(athlete.id, { calorieAdjustmentKcal: -result.calorieAdjustmentKcal })}
-              className="shrink-0 px-3"
-              title="Vorzeichen umkehren"
-            >
-              ±
-            </Button>
-            <DecimalInput
-              value={result.calorieAdjustmentKcal}
-              onChange={(n) => update(athlete.id, { calorieAdjustmentKcal: n ?? 0 })}
-              className="flex-1"
-            />
-          </div>
-        </Field>
+        {/* In der Einfach-Ansicht steuert allein die Ziel-Schnellauswahl darüber das Defizit
+            bzw. den Überschuss - ein vorzeichenbehaftetes kcal-Feld verwirrt dort mehr, als
+            es nützt. */}
+        {!simple && (
+          <Field label="Kalorien-Anpassung (kcal, +Überschuss/-Defizit)">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => update(athlete.id, { calorieAdjustmentKcal: -result.calorieAdjustmentKcal })}
+                className="shrink-0 px-3"
+                title="Vorzeichen umkehren"
+              >
+                ±
+              </Button>
+              <DecimalInput
+                value={result.calorieAdjustmentKcal}
+                onChange={(n) => update(athlete.id, { calorieAdjustmentKcal: n ?? 0 })}
+                className="flex-1"
+              />
+            </div>
+          </Field>
+        )}
         {coachMode && (
           <button
             type="button"
@@ -187,25 +191,29 @@ export default function DashboardPage() {
       </Card>
 
       {coachMode && athlete.targetWeightKg !== undefined && (
-        <CollapsibleCard title="Zielgewicht-Fortschritt" defaultExpanded={!compactMode}>
+        <CollapsibleCard title="Zielgewicht-Fortschritt">
           <WeightGoalProgress athlete={athlete} entries={entries ?? []} />
         </CollapsibleCard>
       )}
 
       <Card className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Kalorienrechner</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <StatBadge label="BMR" value={`${result.bmr}`} />
-          <StatBadge label="TDEE" value={`${result.tdee}`} />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+          {simple ? 'Deine Tagesvorgabe' : 'Kalorienrechner'}
+        </h2>
+        {/* Einfach: nur die Vorgabe, gegen die man den Tag misst. Grund- und Gesamtumsatz sind
+            Zwischenschritte der Rechnung und stiften beim Einstieg nur Verwirrung. */}
+        <div className={simple ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-3 gap-2'}>
+          {!simple && <StatBadge label="BMR" value={`${result.bmr}`} />}
+          {!simple && <StatBadge label="TDEE" value={`${result.tdee}`} />}
           <StatBadge label="Zielkalorien" value={`${result.targetCalories}`} tone="ok" />
           <StatBadge label="Protein" value={`${result.proteinG} g`} />
           <StatBadge label="Fett" value={`${result.fatG} g`} />
           <StatBadge label="Carbs" value={`${result.carbsG} g`} />
         </div>
-        <p className="text-xs text-muted">Kontrolle (kcal aus Makros): {result.controlCalories} kcal</p>
+        {!simple && <p className="text-xs text-muted">Kontrolle (kcal aus Makros): {result.controlCalories} kcal</p>}
       </Card>
 
-      <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />
+      {!simple && <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />}
     </div>
   )
 }

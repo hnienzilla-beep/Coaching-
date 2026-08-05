@@ -14,11 +14,13 @@ import type { Athlete, DailyEntry } from '../models/types'
 import { calculateBodyFatFromFfmi, calendarWeekWeightDelta, rollingAverage7, weeklyDelta } from '../lib/calculator'
 import { Card, DecimalInput, Field, Input, Button } from '../components/ui'
 import { shareOrDownloadFile } from '../lib/share'
+import { useSimpleMode } from '../lib/detailLevel'
 
 type Ctx = { athlete: Athlete }
 
 export default function TrackingPage() {
   const { athlete } = useOutletContext<Ctx>()
+  const simple = useSimpleMode()
   const series = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate]) ?? []
   const importProgressInputRef = useRef<HTMLInputElement>(null)
 
@@ -61,7 +63,7 @@ export default function TrackingPage() {
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Gewicht &amp; KFA</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{simple ? 'Gewicht' : 'Gewicht & KFA'}</h2>
         <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
@@ -83,17 +85,19 @@ export default function TrackingPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="h-36">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
-              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
-              <Line type="monotone" dataKey="bodyFat" stroke="#f472b6" dot={false} name="KFA (%)" connectNulls />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        {!simple && (
+          <div className="h-36">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={36} />
+                <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+                <Line type="monotone" dataKey="bodyFat" stroke="#f472b6" dot={false} name="KFA (%)" connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </Card>
 
       <Card className="flex flex-col gap-1">
@@ -115,49 +119,55 @@ export default function TrackingPage() {
         )}
       </Card>
 
-      <Card className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Fortschritt teilen</h2>
-        <p className="text-xs text-muted">
-          Exportiert die letzten 7 Tage aus Tracking, Ernähr.-Log und Trainings-Log zum Versenden. Beim Importieren
-          werden diese Tage für {athlete.name} aktualisiert.
-        </p>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleExportProgress} className="flex-1">
-            Fortschritt exportieren
-          </Button>
-          <Button variant="secondary" onClick={() => importProgressInputRef.current?.click()} className="flex-1">
-            Fortschritt importieren
-          </Button>
-        </div>
-        <input
-          ref={importProgressInputRef}
-          type="file"
-          accept="application/json"
-          className="hidden"
-          onChange={(e) => {
-            void handleImportProgress(e.target.files)
-            e.target.value = ''
-          }}
-        />
-      </Card>
+      {!simple && (
+        <Card className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Fortschritt teilen</h2>
+          <p className="text-xs text-muted">
+            Exportiert die letzten 7 Tage aus Tracking, Ernähr.-Log und Trainings-Log zum Versenden. Beim Importieren
+            werden diese Tage für {athlete.name} aktualisiert.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={handleExportProgress} className="flex-1">
+              Fortschritt exportieren
+            </Button>
+            <Button variant="secondary" onClick={() => importProgressInputRef.current?.click()} className="flex-1">
+              Fortschritt importieren
+            </Button>
+          </div>
+          <input
+            ref={importProgressInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => {
+              void handleImportProgress(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </Card>
+      )}
 
-      <Card className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körpermaße</h2>
-        <div className="h-44">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
-              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
-              <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
-              <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
-              <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
-              <Line type="monotone" dataKey="chest" stroke="#e4e4e7" dot={false} name="Brust (cm)" connectNulls />
-              <Line type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+      {/* Umfänge trackt, wer schon eine Weile dabei ist - in der Einfach-Ansicht entfallen
+          Diagramm und Eingabefelder gemeinsam. */}
+      {!simple && (
+        <Card className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Körpermaße</h2>
+          <div className="h-44">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
+                <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
+                <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', fontSize: 12 }} />
+                <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
+                <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
+                <Line type="monotone" dataKey="chest" stroke="#e4e4e7" dot={false} name="Brust (cm)" connectNulls />
+                <Line type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <DayEditor
         athleteId={athlete.id}
@@ -167,6 +177,7 @@ export default function TrackingPage() {
         delta={delta}
         ffmi={athlete.ffmi}
         heightCm={athlete.heightCm}
+        simple={simple}
       />
 
       <Card className="flex flex-col gap-1">
@@ -201,6 +212,7 @@ function DayEditor({
   delta,
   ffmi,
   heightCm,
+  simple,
 }: {
   athleteId: string
   date: string
@@ -209,6 +221,7 @@ function DayEditor({
   delta?: number
   ffmi?: number
   heightCm: number
+  simple: boolean
 }) {
   const current: DailyEntry = entry ?? { id: crypto.randomUUID(), athleteId, date }
   const [savedAt, setSavedAt] = useState<number | null>(null)
@@ -287,30 +300,36 @@ function DayEditor({
         <Field label="KFA (%)">
           <DecimalInput {...decimalField('bodyFatPct')} />
         </Field>
-        <Field label="Kalorien">
-          <Input type="number" {...field('calories')} />
-        </Field>
-        <Field label="Protein (g)">
-          <Input type="number" {...field('protein')} />
-        </Field>
-        <Field label="Carbs (g)">
-          <Input type="number" {...field('carbs')} />
-        </Field>
-        <Field label="Fett (g)">
-          <Input type="number" {...field('fat')} />
-        </Field>
-        <Field label="Bauch (cm)">
-          <DecimalInput {...decimalField('waist')} />
-        </Field>
-        <Field label="Arm (cm)">
-          <DecimalInput {...decimalField('arm')} />
-        </Field>
-        <Field label="Brust (cm)">
-          <DecimalInput {...decimalField('chest')} />
-        </Field>
-        <Field label="Bein (cm)">
-          <DecimalInput {...decimalField('leg')} />
-        </Field>
+        {/* Kalorien und Makros trägt in der Einfach-Ansicht das Ernährungs-Log ein, Umfänge
+            entfallen dort ganz - übrig bleiben Gewicht, KFA und die Notiz. */}
+        {!simple && (
+          <>
+            <Field label="Kalorien">
+              <Input type="number" {...field('calories')} />
+            </Field>
+            <Field label="Protein (g)">
+              <Input type="number" {...field('protein')} />
+            </Field>
+            <Field label="Carbs (g)">
+              <Input type="number" {...field('carbs')} />
+            </Field>
+            <Field label="Fett (g)">
+              <Input type="number" {...field('fat')} />
+            </Field>
+            <Field label="Bauch (cm)">
+              <DecimalInput {...decimalField('waist')} />
+            </Field>
+            <Field label="Arm (cm)">
+              <DecimalInput {...decimalField('arm')} />
+            </Field>
+            <Field label="Brust (cm)">
+              <DecimalInput {...decimalField('chest')} />
+            </Field>
+            <Field label="Bein (cm)">
+              <DecimalInput {...decimalField('leg')} />
+            </Field>
+          </>
+        )}
       </div>
       {bodyFatFromFfmi !== undefined && <p className="text-xs text-muted">KFA automatisch aus FFMI berechnet.</p>}
       <Field label="Notizen">

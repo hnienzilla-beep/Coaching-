@@ -201,6 +201,21 @@ Datenbestand in einer einzigen Datei.
 Wichtig: Die App hat keinen Server - läuft sie nicht (App geschlossen bzw. von
 iOS beendet), ruht auch der Sync.
 
+## Ansichts-Stufen
+
+Wie viel die App zeigt, steuert eine von drei Stufen (Zahnrad-Menü der Athletenübersicht →
+"Ansicht"):
+
+| Stufe | Was zu sehen ist |
+|---|---|
+| **Einfach** | Nur das Nötigste, gedacht für den Einstieg. Alles Zusätzliche wird gar nicht erst gezeichnet - es lässt sich also auch nicht aufklappen. Weg fallen: Kalorien-Anpassung, Grund- und Gesamtumsatz und der PDF-Bericht im Dashboard; KFA- und Körpermaße-Diagramm, "Fortschritt teilen" sowie Makro- und Umfangsfelder im Tracking (dort bleiben Gewicht, KFA und Notiz); der Kraft-Verlauf im Trainings-Log; Datenbanken, Obsidian-Sync sowie Export und Import in der Athletenübersicht. |
+| **Normal** | Tracking und Pläne ohne Coach-Details. |
+| **Coach** | Alle Felder, Auswertungen und Export-Funktionen; die Pläne lassen sich bearbeiten. Standard. |
+
+Die Stufe gilt für das ganze Gerät und liegt in `localStorage` (`src/lib/detailLevel.ts`). Sie
+ersetzt die früheren Schalter "Coach-Modus" und "Karten einklappen": Ein vorhandener
+Coach-Modus wird beim ersten Start übernommen (aus → "Normal", an → "Coach").
+
 ## Design
 
 Die App ist in Schwarz gehalten: reines Schwarz (`#000000`) als Grundfläche, nur
