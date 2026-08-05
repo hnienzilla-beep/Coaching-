@@ -1,10 +1,21 @@
 import { useEffect } from 'react'
-import { HashRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { BackgroundPhotoEffect } from './lib/backgroundPhoto'
 import { startAutoSync } from './features/obsidianSync/autoSync'
 import { watchDatabaseChanges } from './features/obsidianSync/dbWatch'
 import { startRestTimerRuntime } from './lib/restTimer'
+import {
+  ensureAthleteOrder,
+  ensureExerciseSeed,
+  ensureFoodSeed,
+  ensurePlanMealOrder,
+  ensureSupplementSeed,
+  ensureTrainingPlanExerciseOrder,
+  ensureWorkoutLogExerciseOrder,
+  ensureWorkoutSetMigration,
+} from './db/db'
 import AthleteListPage from './pages/AthleteListPage'
+import StartRedirect from './pages/StartRedirect'
 import AthleteLayout from './pages/AthleteLayout'
 import DashboardPage from './pages/DashboardPage'
 import TrackingPage from './pages/TrackingPage'
@@ -17,17 +28,30 @@ import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 function App() {
   // Auto-Sync und Pausen-Timer laufen für die gesamte App-Laufzeit (alle Aufrufe sind
   // idempotent, der Doppelaufruf im React-StrictMode ist also unschädlich).
+  //
+  // Die Seeds und Datenmigrationen hingen früher am Mount der Athletenübersicht. Die ist
+  // keine Startseite mehr, deshalb laufen sie hier - insbesondere `ensureAthleteOrder`
+  // vergibt das `order`, nach dem der Start-Athlet bestimmt wird.
   useEffect(() => {
     watchDatabaseChanges()
     startAutoSync()
     startRestTimerRuntime()
+    ensureFoodSeed()
+    ensureSupplementSeed()
+    ensureExerciseSeed()
+    ensureTrainingPlanExerciseOrder()
+    ensureWorkoutSetMigration()
+    ensureWorkoutLogExerciseOrder()
+    ensurePlanMealOrder()
+    ensureAthleteOrder()
   }, [])
 
   return (
     <HashRouter>
       <BackgroundPhotoEffect />
       <Routes>
-        <Route path="/" element={<AthleteListPage />} />
+        <Route path="/" element={<StartRedirect />} />
+        <Route path="/athleten" element={<AthleteListPage />} />
         <Route path="/lebensmittel" element={<FoodDatabasePage />} />
         <Route path="/supplemente" element={<SupplementDatabasePage />} />
         <Route path="/uebungen" element={<ExerciseDatabasePage />} />
@@ -37,6 +61,8 @@ function App() {
           <Route path="ernaehrung" element={<ErnaehrungPage />} />
           <Route path="training" element={<TrainingPage />} />
         </Route>
+        {/* Ohne Auffangroute rendert eine unbekannte Hash-Adresse eine leere Seite. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
   )

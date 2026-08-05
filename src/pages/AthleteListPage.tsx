@@ -1,36 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useDragSensors } from '../lib/dragSensors'
 import { shareOrDownloadFile } from '../lib/share'
-import {
-  db,
-  ensureAthleteOrder,
-  ensureExerciseSeed,
-  ensureFoodSeed,
-  ensurePlanMealOrder,
-  ensureSupplementSeed,
-  ensureTrainingPlanExerciseOrder,
-  ensureWorkoutLogExerciseOrder,
-  ensureWorkoutSetMigration,
-  exportAllData,
-  exportAthletes,
-  importAllData,
-  importSelectedAthletes,
-} from '../db/db'
-import { ACCENT_COLORS, clearBackgroundPhoto, createAthlete, deleteAthlete, setBackgroundPhoto, todayIso } from '../db/queries'
-import { AccentSwatch, Button, Card, Field, Input, Select } from '../components/ui'
-import type { Athlete, Gender } from '../models/types'
-import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
-import { useTheme } from '../lib/theme'
-import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
+import { db, exportAllData, exportAthletes, importAllData, importSelectedAthletes } from '../db/db'
+import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
+import { AccentSwatch, Button, Card } from '../components/ui'
+import NewAthleteForm from '../components/NewAthleteForm'
+import type { Athlete } from '../models/types'
 import { useOverviewAccent } from '../lib/accentColor'
-import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
+import { clearLastAthleteId, getLastAthleteId } from '../lib/lastAthlete'
 
+/**
+ * Athletenverwaltung. Seit die App direkt im zuletzt geöffneten Athleten startet, ist das
+ * keine Startseite mehr, sondern eine Werkzeugseite hinter dem Zahnrad: Reihenfolge,
+ * Anlegen, Löschen sowie Export und Import des gesamten Datenbestands.
+ */
 export default function AthleteListPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const allEntries = useLiveQuery(() => db.dailyEntries.toArray(), [])
   const latestWeightByAthlete = useMemo(() => {
@@ -44,7 +35,7 @@ export default function AthleteListPage() {
     }
     return map
   }, [allEntries])
-  const sortedAthletes = useMemo(() => [...(athletes ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)), [athletes])
+  const sortedAthletes = useMemo(() => sortAthletes(athletes ?? []), [athletes])
   const sensors = useDragSensors()
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -61,19 +52,15 @@ export default function AthleteListPage() {
     })
   }
 
-  const [showForm, setShowForm] = useState(false)
-  const [theme, setTheme] = useTheme()
-  const detailLevel = useDetailLevel()
+  // `?neu=1` kommt vom Eintrag "+ Neuer Athlet" in der Kopfzeile des Athleten - damit
+  // landet man hier direkt im aufgeklappten Formular.
+  const [showForm, setShowForm] = useState(searchParams.get('neu') === '1')
   const [overviewAccent, setOverviewAccent] = useOverviewAccent()
   const [accentPickerOpen, setAccentPickerOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const settingsRef = useRef<HTMLDivElement>(null)
+  const accentPickerRef = useRef<HTMLDivElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
-  const backgroundPhotoInputRef = useRef<HTMLInputElement>(null)
-  const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
   const [pendingImport, setPendingImport] = useState<{ text: string; athletes: Athlete[] } | null>(null)
   const [exportSelectorOpen, setExportSelectorOpen] = useState(false)
-  const [obsidianSyncOpen, setObsidianSyncOpen] = useState(false)
 
   async function handleExport() {
     const json = await exportAllData()
@@ -115,174 +102,59 @@ export default function AthleteListPage() {
   }
 
   useEffect(() => {
-    ensureFoodSeed()
-    ensureSupplementSeed()
-    ensureExerciseSeed()
-    ensureTrainingPlanExerciseOrder()
-    ensureWorkoutSetMigration()
-    ensureWorkoutLogExerciseOrder()
-    ensurePlanMealOrder()
-    ensureAthleteOrder()
-  }, [])
-
-  useEffect(() => {
-    if (!settingsOpen) return
+    if (!accentPickerOpen) return
     function handleClickOutside(e: MouseEvent) {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setSettingsOpen(false)
+      if (accentPickerRef.current && !accentPickerRef.current.contains(e.target as Node)) {
         setAccentPickerOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [settingsOpen])
+  }, [accentPickerOpen])
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
       <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
-        <div>
-          <h1 className="text-xl font-bold text-fg">Bodybuilding Coach</h1>
-          <p className="text-sm text-muted">Athleten verwalten</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/" className="text-muted" aria-label="Zurück zum Athleten">
+            ←
+          </Link>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-fg">Athleten</h1>
+            <p className="text-sm text-muted">Anlegen, sortieren, löschen</p>
+          </div>
         </div>
-        <div ref={settingsRef} className="relative">
+        {/* Der Akzent für alle Seiten außerhalb eines Athleten - innerhalb eines Athleten
+            gewinnt dessen eigene Farbe, deshalb steht der Picker hier und nicht im
+            Zahnrad-Menü der Kopfzeile. */}
+        <div ref={accentPickerRef} className="relative shrink-0">
           <button
-            onClick={() => {
-              setSettingsOpen((v) => !v)
-              setAccentPickerOpen(false)
-            }}
-            aria-label="Einstellungen"
-            className="rounded-lg border border-border bg-surface-2 p-2 text-lg leading-none text-fg"
+            onClick={() => setAccentPickerOpen((v) => !v)}
+            aria-expanded={accentPickerOpen}
+            aria-label="Akzentfarbe"
+            className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm leading-none text-fg"
           >
-            ⚙️
+            🎨
+            <span
+              className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
+              style={{ background: overviewAccent ?? 'var(--color-accent)' }}
+            />
           </button>
-          {settingsOpen && (
-            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+          {accentPickerOpen && (
+            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
               <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+                type="button"
+                onClick={() => setOverviewAccent(null)}
+                aria-pressed={overviewAccent === null}
+                className={`rounded-lg border px-2 py-1 text-xs ${
+                  overviewAccent === null ? 'border-accent text-fg' : 'border-border text-muted'
+                }`}
               >
-                {theme === 'dark' ? '☀️ Hell-Modus' : '🌙 Dunkel-Modus'}
+                Standard
               </button>
-              <div className="flex flex-col gap-1 px-2 py-1.5">
-                <span className="text-sm text-fg">👁️ Ansicht</span>
-                <div className="flex gap-1 rounded-xl bg-surface-2 p-1">
-                  {DETAIL_LEVELS.map((l) => (
-                    <button
-                      key={l.key}
-                      onClick={() => setDetailLevel(l.key)}
-                      aria-pressed={detailLevel === l.key}
-                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition ${
-                        detailLevel === l.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
-                      }`}
-                    >
-                      {l.label}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] text-muted">
-                  {DETAIL_LEVELS.find((l) => l.key === detailLevel)?.hint}
-                </span>
-              </div>
-              <button
-                onClick={() => setAccentPickerOpen((v) => !v)}
-                aria-expanded={accentPickerOpen}
-                className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                <span>🎨 Akzentfarbe</span>
-                <span
-                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
-                  style={{ background: overviewAccent ?? 'var(--color-accent)' }}
-                />
-              </button>
-              {accentPickerOpen && (
-                <div className="flex flex-wrap gap-2 px-2 pb-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setOverviewAccent(null)}
-                    aria-pressed={overviewAccent === null}
-                    className={`rounded-lg border px-2 py-1 text-xs ${
-                      overviewAccent === null ? 'border-accent text-fg' : 'border-border text-muted'
-                    }`}
-                  >
-                    Standard
-                  </button>
-                  {ACCENT_COLORS.map((color) => (
-                    <AccentSwatch
-                      key={color}
-                      color={color}
-                      selected={overviewAccent === color}
-                      onSelect={setOverviewAccent}
-                    />
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => backgroundPhotoInputRef.current?.click()}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                🖼️ Hintergrundbild wählen
-              </button>
-              {!!backgroundPhotoCount && (
-                <button
-                  onClick={async () => {
-                    await clearBackgroundPhoto()
-                    setSettingsOpen(false)
-                  }}
-                  className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-                >
-                  🗑️ Hintergrundbild entfernen
-                </button>
-              )}
-              <input
-                ref={backgroundPhotoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (file) await setBackgroundPhoto(file)
-                  e.target.value = ''
-                  setSettingsOpen(false)
-                }}
-              />
-              {/* Datenbanken und Sync sind Werkzeuge für Fortgeschrittene. Die Ansichts-Auswahl
-                  darüber bleibt in jeder Stufe stehen - sonst gäbe es keinen Weg zurück. */}
-              {detailLevel !== 'einfach' && (
-                <>
-                  <div className="my-1 border-t border-border" />
-                  <Link
-                    to="/lebensmittel"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Lebensmittel-DB
-                  </Link>
-                  <Link
-                    to="/supplemente"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Supplement-DB
-                  </Link>
-                  <Link
-                    to="/uebungen"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Trainings-DB
-                  </Link>
-                  <div className="my-1 border-t border-border" />
-                  <button
-                    onClick={() => {
-                      setObsidianSyncOpen(true)
-                      setSettingsOpen(false)
-                    }}
-                    className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-                  >
-                    🔗 Obsidian-Sync
-                  </button>
-                </>
-              )}
+              {ACCENT_COLORS.map((color) => (
+                <AccentSwatch key={color} color={color} selected={overviewAccent === color} onSelect={setOverviewAccent} />
+              ))}
             </div>
           )}
         </div>
@@ -302,43 +174,39 @@ export default function AthleteListPage() {
         </DndContext>
       )}
 
+      {/* Nach dem Anlegen direkt in den neuen Athleten - `createAthlete` liefert ihn zurück. */}
       {showForm ? (
-        <NewAthleteForm onDone={() => setShowForm(false)} />
+        <NewAthleteForm onCreated={(a) => navigate(`/athlete/${a.id}`)} onCancel={() => setShowForm(false)} />
       ) : (
         <Button variant="primary" onClick={() => setShowForm(true)}>
           + Athlet hinzufügen
         </Button>
       )}
 
-      {/* Export und Import hantieren mit dem kompletten Datenbestand - dieselbe Klasse Werkzeug
-          wie der Obsidian-Sync und die Datenbanken im Menü, deshalb in der Einfach-Ansicht
-          ebenfalls nicht sichtbar. */}
-      {detailLevel !== 'einfach' && athletes && athletes.length > 0 && (
+      {athletes && athletes.length > 0 && (
         <Button variant="secondary" onClick={() => setExportSelectorOpen(true)}>
           Athleten exportieren
         </Button>
       )}
 
-      {detailLevel !== 'einfach' && (
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleExport} className="flex-1">
-            Daten exportieren
-          </Button>
-          <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
-            Daten importieren
-          </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            onChange={(e) => {
-              void handleImport(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        </div>
-      )}
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={handleExport} className="flex-1">
+          Daten exportieren
+        </Button>
+        <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
+          Daten importieren
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => {
+            void handleImport(e.target.files)
+            e.target.value = ''
+          }}
+        />
+      </div>
 
       {pendingImport && (
         <ImportAthleteSelector
@@ -351,8 +219,6 @@ export default function AthleteListPage() {
           }}
         />
       )}
-
-      {obsidianSyncOpen && <ObsidianSyncModal onClose={() => setObsidianSyncOpen(false)} />}
 
       {exportSelectorOpen && (
         <ExportAthleteSelector
@@ -547,104 +413,14 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
           e.preventDefault()
           if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) {
             await deleteAthlete(a.id)
+            // War das der gemerkte Athlet, würde die App beim nächsten Start ins Leere
+            // starten - dann fällt sie wieder auf den ersten der Reihenfolge zurück.
+            if (getLastAthleteId() === a.id) clearLastAthleteId()
           }
         }}
       >
         Löschen
       </Button>
     </div>
-  )
-}
-
-function NewAthleteForm({ onDone }: { onDone: () => void }) {
-  const [name, setName] = useState('')
-  const [gender, setGender] = useState<Gender>('Männlich')
-  const [age, setAge] = useState(30)
-  const [heightCm, setHeightCm] = useState(180)
-  const [weightKg, setWeightKg] = useState(80)
-  const [activityLevel, setActivityLevel] = useState(ACTIVITY_LEVELS[2].label)
-  const [goal, setGoal] = useState(GOALS[1].label)
-  const [accentColor, setAccentColor] = useState(ACCENT_COLORS[0])
-
-  async function submit() {
-    if (!name.trim()) return
-    await createAthlete({
-      name: name.trim(),
-      gender,
-      age,
-      heightCm,
-      weightKg,
-      activityLevel,
-      goal,
-      proteinPerKg: 2.2,
-      fatPerKg: 1,
-      startDate: todayIso(),
-      accentColor,
-    })
-    onDone()
-  }
-
-  return (
-    <Card className="flex flex-col gap-3">
-      <Field label="Name">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Max" autoFocus />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Geschlecht">
-          <Select value={gender} onChange={(e) => setGender(e.target.value as Gender)}>
-            <option value="Männlich">Männlich</option>
-            <option value="Weiblich">Weiblich</option>
-          </Select>
-        </Field>
-        <Field label="Alter (Jahre)">
-          <Input type="number" value={age} onChange={(e) => setAge(Number(e.target.value))} />
-        </Field>
-        <Field label="Größe (cm)">
-          <Input type="number" value={heightCm} onChange={(e) => setHeightCm(Number(e.target.value))} />
-        </Field>
-        <Field label="Gewicht (kg)">
-          <Input type="number" value={weightKg} onChange={(e) => setWeightKg(Number(e.target.value))} />
-        </Field>
-      </div>
-      <Field label="Aktivitätslevel">
-        <Select value={activityLevel} onChange={(e) => setActivityLevel(e.target.value)}>
-          {ACTIVITY_LEVELS.map((a) => (
-            <option key={a.label} value={a.label}>
-              {a.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Ziel">
-        <Select value={goal} onChange={(e) => setGoal(e.target.value)}>
-          {GOALS.map((g) => (
-            <option key={g.label} value={g.label}>
-              {g.label}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Akzentfarbe">
-        <div className="flex flex-wrap gap-2">
-          {ACCENT_COLORS.map((color) => (
-            <AccentSwatch
-              key={color}
-              color={color}
-              selected={accentColor === color}
-              onSelect={setAccentColor}
-              className="h-7 w-7"
-            />
-          ))}
-        </div>
-      </Field>
-      <div className="flex gap-2">
-        <Button variant="primary" onClick={submit} className="flex-1">
-          Anlegen
-        </Button>
-        <Button variant="ghost" onClick={onDone}>
-          Abbrechen
-        </Button>
-      </div>
-    </Card>
   )
 }
