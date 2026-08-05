@@ -4,15 +4,16 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
-import { GRAM_PRESETS, sumMacros, type Sums } from '../lib/macros'
+import { macroLine, sumMacros, type Sums } from '../lib/macros'
 import type { Athlete, FoodItem, MealType, NutritionLogItem } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Field, Input, Select } from '../components/ui'
-import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
+import { Button, Card, Field, Select } from '../components/ui'
+import { type SearchPickerItem } from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
+import FoodPortionFields from '../components/FoodPortionFields'
+import GroupAddChips from '../components/GroupAddChips'
 import MacroBars from '../components/MacroBars'
 import MacroSumTable from '../components/MacroSumTable'
-import QuickAddFood from '../components/QuickAddFood'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
@@ -29,10 +30,6 @@ function macrosForPortion(food: FoodItem | undefined, grams: number): Sums {
   const carbs = food ? food.carbs * factor : 0
   const fat = food ? food.fat * factor : 0
   return { kcal: caloriesFromMacros(protein, carbs, fat), protein, carbs, fat }
-}
-
-function macroLine(sums: Sums): string {
-  return `${sums.kcal.toFixed(0)} kcal · P ${sums.protein.toFixed(0)} · C ${sums.carbs.toFixed(0)} · F ${sums.fat.toFixed(0)} g`
 }
 
 export default function NutritionLogPage() {
@@ -265,23 +262,13 @@ export default function NutritionLogPage() {
 
         {/* Die Mahlzeit wird vor dem Anlegen gewählt - vorher landete jede neue Zeile in der
             per Uhrzeit geratenen Mahlzeit und musste per Auswahlfeld korrigiert werden. */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted">Mahlzeit hinzufügen</span>
-          <div className="flex flex-wrap gap-1.5">
-            {MEAL_TYPES.filter((mt) => !usedMealTypes.has(mt)).map((mt) => (
-              <button
-                key={mt}
-                type="button"
-                onClick={() => addFoodRow(mt)}
-                className={`rounded-full border px-3 py-1.5 text-xs transition active:scale-95 ${
-                  mt === suggestedMealType ? 'border-fg font-medium text-fg' : 'border-border text-muted hover:text-fg'
-                }`}
-              >
-                + {mt}
-              </button>
-            ))}
-          </div>
-        </div>
+        <GroupAddChips
+          label="Mahlzeit hinzufügen"
+          options={MEAL_TYPES}
+          used={usedMealTypes}
+          onAdd={addFoodRow}
+          highlight={suggestedMealType}
+        />
 
         <Field label="Notizen zum Tag">
           <textarea
@@ -341,7 +328,6 @@ function LoggedFoodRow({
   const { item } = row
   // Neue Zeilen haben noch kein Lebensmittel - sie öffnen direkt die Suche.
   const [editing, setEditing] = useState(item.foodItemId === '')
-  const favorites = pickerItems.filter((f) => f.favorite)
 
   function update(patch: Partial<NutritionLogItem>) {
     void db.nutritionLogItems.update(item.id, patch)
@@ -380,55 +366,12 @@ function LoggedFoodRow({
 
       {editing && (
         <div className="flex flex-col gap-2 border-t border-border pt-2">
-          <SearchPicker
-            items={pickerItems}
-            value={item.foodItemId || undefined}
-            onChange={(id) => update({ foodItemId: id })}
-            placeholder="Lebensmittel suchen..."
-            noResultsAction={(query) => <QuickAddFood query={query} onCreated={(id) => update({ foodItemId: id })} />}
+          <FoodPortionFields
+            pickerItems={pickerItems}
+            foodItemId={item.foodItemId}
+            grams={item.grams}
+            onChange={update}
           />
-
-          {!item.foodItemId && favorites.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-              {favorites.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => update({ foodItemId: f.id })}
-                  className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs text-accent"
-                >
-                  ⭐ {f.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <div className="w-20 shrink-0">
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={item.grams}
-                onChange={(e) => update({ grams: Number(e.target.value) })}
-                aria-label="Menge in Gramm"
-              />
-            </div>
-            <span className="text-xs text-muted">g</span>
-            <div className="flex flex-1 gap-1">
-              {GRAM_PRESETS.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => update({ grams: g })}
-                  className={`flex-1 rounded-lg border px-1 py-1.5 text-xs ${
-                    item.grams === g ? 'border-fg bg-fg/10 font-medium text-fg' : 'border-border text-muted'
-                  }`}
-                >
-                  {g}g
-                </button>
-              ))}
-            </div>
-          </div>
 
           <Field label="Mahlzeit">
             <Select value={item.mealType} onChange={(e) => update({ mealType: e.target.value as MealType })}>
