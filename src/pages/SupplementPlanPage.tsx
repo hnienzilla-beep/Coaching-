@@ -11,13 +11,13 @@ import GroupAddChips from '../components/GroupAddChips'
 import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import { nextOrder } from '../lib/calculator'
-import { useCoachMode } from '../lib/coachMode'
+import { useCoachMode } from '../lib/detailLevel'
 
 type Ctx = { athlete: Athlete }
 
 export default function SupplementPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const [coachMode] = useCoachMode()
+  const coachMode = useCoachMode()
   const plans = useLiveQuery(() => db.supplementPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)

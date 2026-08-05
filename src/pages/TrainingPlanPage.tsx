@@ -13,7 +13,7 @@ import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
 import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
-import { useCoachMode } from '../lib/coachMode'
+import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
@@ -25,7 +25,7 @@ function prescription(row: TrainingPlanExercise): string {
 
 export default function TrainingPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
-  const [coachMode] = useCoachMode()
+  const coachMode = useCoachMode()
   const plans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)

@@ -17,7 +17,7 @@ import MacroSumTable from '../components/MacroSumTable'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
-import { useCoachMode } from '../lib/coachMode'
+import { useCoachMode } from '../lib/detailLevel'
 
 type Ctx = { athlete: Athlete }
 
@@ -35,7 +35,7 @@ function macrosForPortion(food: FoodItem | undefined, grams: number): Sums {
 export default function NutritionLogPage() {
   const { athlete } = useOutletContext<Ctx>()
   const navigate = useNavigate()
-  const [coachMode] = useCoachMode()
+  const coachMode = useCoachMode()
   const logs = useLiveQuery(() => db.nutritionLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const nutritionPlans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
