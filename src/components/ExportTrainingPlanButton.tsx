@@ -25,7 +25,10 @@ export default function ExportTrainingPlanButton({ athlete }: { athlete: Athlete
       doc.text(plan.phaseName, 14, y)
       y += 8
 
-      const rows = await db.trainingPlanExercises.where('planId').equals(plan.id).toArray()
+      // Noch nicht ausgefüllte Planzeilen haben keine exerciseId - sie gehören nicht ins PDF.
+      const rows = (await db.trainingPlanExercises.where('planId').equals(plan.id).sortBy('order')).filter(
+        (r) => r.exerciseId !== '',
+      )
       doc.setFontSize(10)
       if (rows.length === 0) {
         doc.text('Keine Übungen eingetragen.', 14, y)

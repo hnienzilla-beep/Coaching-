@@ -40,7 +40,11 @@ async function buildTrainingsplaene(): Promise<string> {
   }
 
   for (const plan of plans) {
-    const rows = await db.trainingPlanExercises.where('planId').equals(plan.id).sortBy('order')
+    // Eine im Plan angelegte, aber noch nicht ausgefüllte Zeile hat keine exerciseId -
+    // die gehört nicht als "?" in den Vault.
+    const rows = (await db.trainingPlanExercises.where('planId').equals(plan.id).sortBy('order')).filter(
+      (r) => r.exerciseId !== '',
+    )
     const exercises = await db.exercises.bulkGet(rows.map((r) => r.exerciseId))
     lines.push(`## Plan: ${plan.phaseName}`, '')
     if (rows.length === 0) {

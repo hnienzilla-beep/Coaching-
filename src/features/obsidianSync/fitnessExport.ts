@@ -177,7 +177,10 @@ async function buildSupplemente(): Promise<string> {
 
   for (const plan of plans) {
     lines.push(`## Plan: ${plan.phaseName}`, '')
-    const items = await db.supplementPlanItems.where('planId').equals(plan.id).toArray()
+    // Noch nicht ausgefüllte Zeilen haben keine supplementId - sie gehören nicht in den Vault.
+    const items = (await db.supplementPlanItems.where('planId').equals(plan.id).toArray()).filter(
+      (i) => i.supplementId !== '',
+    )
     const supplements = await db.supplements.bulkGet(items.map((i) => i.supplementId))
     if (items.length === 0) {
       lines.push('_Keine Supplemente im Plan._', '')

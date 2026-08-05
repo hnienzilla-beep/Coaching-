@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { MACRO_TOLERANCE, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
 
 function pct(value: number, target: number): number {
@@ -51,17 +52,34 @@ function MacroRow({
   )
 }
 
+const LOG_LEGEND = (
+  <p className="text-[11px] leading-snug text-muted">
+    <span className="inline-block h-2 w-2 rounded-full bg-accent align-middle" /> gegessen ·{' '}
+    <span className="inline-block h-2 w-2 rounded-full bg-accent/30 align-middle" /> geplant – ins Tracking zählt nur, was
+    abgehakt ist.
+  </p>
+)
+
+function logRemainingText(remaining: number): string {
+  return remaining >= 0 ? `Noch ${Math.round(remaining)} kcal übrig` : `${Math.round(-remaining)} kcal über dem Ziel`
+}
+
 /**
  * Tagesbilanz des Ernährungslogs. Der Balken trennt bewusst zwei Dinge, die vorher zu
  * einer Zahl verschmolzen waren: was tatsächlich gegessen (abgehakt) wurde - nur das
  * landet über `syncNutritionTotalsToDailyEntry` im Tracking - und was für den Tag zwar
  * eingeplant, aber noch nicht abgehakt ist.
+ *
+ * Der Ernährungsplan zeigt dieselbe Bilanz, kennt aber kein "gegessen": er übergibt für
+ * `done` und `planned` denselben Wert und ersetzt Legende und Resttext über die Props.
  */
 export default function MacroBars({
   done,
   planned,
   target,
   evaluate = false,
+  legend = LOG_LEGEND,
+  remainingText = logRemainingText,
 }: {
   done: Sums
   planned: Sums
@@ -69,6 +87,9 @@ export default function MacroBars({
   /** Ampelfarben erst, wenn der Tag abgeschlossen ist - vorher liegt jeder Wert
    *  naturgemäß unter dem Ziel und wäre durchgehend rot. */
   evaluate?: boolean
+  /** `null` blendet die Log-Legende aus (im Plan gibt es kein "gegessen"). */
+  legend?: ReactNode | null
+  remainingText?: (remaining: number) => string
 }) {
   const remaining = target.targetCalories - done.kcal
 
@@ -83,9 +104,7 @@ export default function MacroBars({
           </span>
         </div>
         <Bar done={done.kcal} planned={planned.kcal} target={target.targetCalories} />
-        <p className="text-xs text-muted">
-          {remaining >= 0 ? `Noch ${Math.round(remaining)} kcal übrig` : `${Math.round(-remaining)} kcal über dem Ziel`}
-        </p>
+        <p className="text-xs text-muted">{remainingText(remaining)}</p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -94,11 +113,7 @@ export default function MacroBars({
         <MacroRow label="Fett" done={done.fat} planned={planned.fat} target={target.fatG} unit="g" tolerance={MACRO_TOLERANCE} evaluate={evaluate} />
       </div>
 
-      <p className="text-[11px] leading-snug text-muted">
-        <span className="inline-block h-2 w-2 rounded-full bg-accent align-middle" /> gegessen ·{' '}
-        <span className="inline-block h-2 w-2 rounded-full bg-accent/30 align-middle" /> geplant – ins Tracking zählt nur, was
-        abgehakt ist.
-      </p>
+      {legend}
     </div>
   )
 }

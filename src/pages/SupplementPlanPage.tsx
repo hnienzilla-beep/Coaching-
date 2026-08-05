@@ -3,18 +3,17 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, exportSupplementPlan, importSupplementPlan } from '../db/db'
 import { shareOrDownloadFile } from '../lib/share'
-import { nextOrder } from '../lib/calculator'
 import type { Athlete, Supplement, SupplementPlanItem, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
-import { Button, Card, Select } from '../components/ui'
-import SearchPicker from '../components/SearchPicker'
+import { Button, Card, Field, Input, Select } from '../components/ui'
+import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
+import GroupAddChips from '../components/GroupAddChips'
+import PlanItemRow from '../components/PlanItemRow'
+import PlanPhaseHeader from '../components/PlanPhaseHeader'
+import { nextOrder } from '../lib/calculator'
 import { useCoachMode } from '../lib/coachMode'
 
 type Ctx = { athlete: Athlete }
-
-function sortByTiming<T extends { timing: SupplementTiming }>(items: T[]): T[] {
-  return [...items].sort((a, b) => SUPPLEMENT_TIMINGS.indexOf(a.timing) - SUPPLEMENT_TIMINGS.indexOf(b.timing))
-}
 
 export default function SupplementPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
@@ -23,6 +22,8 @@ export default function SupplementPlanPage() {
   const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
+  // Frisch angelegte Zeilen starten aufgeklappt - dort fehlt das Supplement noch.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
@@ -32,10 +33,25 @@ export default function SupplementPlanPage() {
     () => (currentPlanId ? db.supplementPlanItems.where('planId').equals(currentPlanId).toArray() : []),
     [currentPlanId],
   )
-  const sortedItems = sortByTiming(items ?? [])
 
   const supplementMap = new Map((supplements ?? []).map((s) => [s.id, s]))
-  const pickerItems = (supplements ?? []).map((s) => ({ id: s.id, label: s.name, sublabel: s.defaultDose }))
+  const pickerItems: SearchPickerItem[] = (supplements ?? []).map((s) => ({
+    id: s.id,
+    label: s.name,
+    sublabel: s.defaultDose,
+  }))
+
+  const editing = mode === 'edit' && coachMode
+  const allItems = items ?? []
+  // Leseansicht und Kennzahlen überspringen Zeilen ohne Supplement (gerade erst angelegt).
+  const visibleItems = editing ? allItems : allItems.filter((i) => i.supplementId !== '')
+
+  const groups = SUPPLEMENT_TIMINGS.map((timing) => ({
+    timing,
+    items: visibleItems.filter((i) => i.timing === timing),
+  })).filter((g) => g.items.length > 0)
+
+  const usedTimings = new Set(groups.map((g) => g.timing))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -48,23 +64,35 @@ export default function SupplementPlanPage() {
     await db.supplementPlanItems.where('planId').equals(planId).delete()
     await db.supplementPlans.delete(planId)
     setActivePlanId(null)
+    setMode('view')
   }
 
   async function renamePhase(planId: string, name: string) {
     await db.supplementPlans.update(planId, { phaseName: name })
   }
 
-  async function addRow() {
-    if (!currentPlanId || !supplements?.length) return
-    const first = supplements[0]
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function addRow(timing: SupplementTiming) {
+    if (!currentPlanId) return
+    // Ohne Supplement-Vorauswahl: Dosis und Zeitpunkt werden beim Auswählen aus dem
+    // Supplement übernommen, der Zeitpunkt der Gruppe bleibt dabei erhalten.
     const item: SupplementPlanItem = {
       id: crypto.randomUUID(),
       planId: currentPlanId,
-      supplementId: first.id,
-      dose: first.defaultDose,
-      timing: first.defaultTiming,
+      supplementId: '',
+      dose: '',
+      timing,
     }
     await db.supplementPlanItems.add(item)
+    setExpandedIds((prev) => new Set(prev).add(item.id))
   }
 
   async function handleExportPlan() {
@@ -86,108 +114,97 @@ export default function SupplementPlanPage() {
     }
   }
 
+  const filledCount = allItems.filter((i) => i.supplementId !== '').length
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {plans?.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setActivePlanId(p.id)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${
-              p.id === currentPlanId ? 'bg-accent text-accent-fg font-medium' : 'bg-surface-2 text-muted'
-            }`}
-          >
-            {p.phaseName}
-          </button>
-        ))}
-        {coachMode && (
-          <button onClick={addPhase} className="shrink-0 rounded-full border border-dashed border-border px-3 py-1.5 text-sm text-muted">
-            + Phase
-          </button>
-        )}
-      </div>
+      <PlanPhaseHeader
+        title="Supplementplan"
+        phases={plans ?? []}
+        activePhaseId={currentPlanId}
+        onSelect={(id) => {
+          setActivePlanId(id)
+          setMode('view')
+        }}
+        onAdd={coachMode ? addPhase : undefined}
+        addLabel="+ Phase"
+        onRename={activePlan ? (name) => renamePhase(activePlan.id, name) : undefined}
+        onDelete={activePlan && plans && plans.length > 1 ? () => deletePhase(activePlan.id) : undefined}
+        deleteConfirmText="Diese Phase mit allen Supplementen löschen?"
+        subtitle={filledCount ? `${filledCount} ${filledCount === 1 ? 'Supplement' : 'Supplemente'}` : undefined}
+        editing={editing}
+        actions={
+          activePlan && coachMode ? (
+            <Button variant={editing ? 'primary' : 'secondary'} onClick={() => setMode(editing ? 'view' : 'edit')}>
+              {editing ? 'Fertig' : 'Bearbeiten'}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {activePlan && mode === 'view' && (
-        <SupplementOverview
-          phaseName={activePlan.phaseName}
-          items={sortedItems}
-          supplementMap={supplementMap}
-          onEdit={coachMode ? () => setMode('edit') : undefined}
-        />
-      )}
-
-      {activePlan && mode === 'edit' && coachMode && (
+      {activePlan && (
         <Card className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <input
-              value={activePlan.phaseName}
-              onChange={(e) => renamePhase(activePlan.id, e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-semibold text-fg outline-none focus:border-accent"
-            />
-            {plans && plans.length > 1 && (
-              <Button variant="danger" onClick={() => deletePhase(activePlan.id)}>
-                Phase löschen
-              </Button>
-            )}
-          </div>
+          {groups.length === 0 && (
+            <p className="text-sm text-muted">
+              💊 Noch keine Supplemente in dieser Phase.
+              {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
+            </p>
+          )}
 
-          <div className="flex flex-col gap-2">
-            {sortedItems.map((item) => {
-              const supplement = supplementMap.get(item.supplementId)
-              return (
-                <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-border p-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <SearchPicker
-                        items={pickerItems}
-                        value={item.supplementId}
-                        onChange={(id) => {
-                          const s = supplementMap.get(id)
-                          db.supplementPlanItems.update(item.id, {
-                            supplementId: id,
-                            dose: s?.defaultDose ?? item.dose,
-                            timing: s?.defaultTiming ?? item.timing,
-                          })
-                        }}
-                        placeholder="Supplement suchen..."
-                      />
-                    </div>
-                    <Button variant="ghost" onClick={() => db.supplementPlanItems.delete(item.id)}>
-                      ✕
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={item.dose}
-                      onChange={(e) => db.supplementPlanItems.update(item.id, { dose: e.target.value })}
-                      placeholder="Dosis, z.B. 5 g"
-                      className="w-28 min-w-0 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm text-fg outline-none focus:border-accent"
-                    />
-                    <Select
-                      value={item.timing}
-                      onChange={(e) => db.supplementPlanItems.update(item.id, { timing: e.target.value as SupplementTiming })}
-                      className="flex-1"
+          <div className="flex flex-col gap-4">
+            {groups.map((group) => (
+              <div key={group.timing} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  {/* text-fg statt text-accent: die Athleten-Akzentfarben sind hell und im
+                      Hell-Modus als Schrift praktisch unlesbar. */}
+                  <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.timing}</div>
+                  {editing && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => addRow(group.timing)}
+                      aria-label={`Supplement zu ${group.timing} hinzufügen`}
                     >
-                      {SUPPLEMENT_TIMINGS.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  {supplement?.notes && <div className="pl-1 text-xs text-muted">{supplement.notes}</div>}
+                      + Supplement
+                    </Button>
+                  )}
                 </div>
-              )
-            })}
+
+                {editing ? (
+                  <div className="flex flex-col gap-1.5">
+                    {group.items.map((item) => (
+                      <SupplementRow
+                        key={item.id}
+                        item={item}
+                        supplement={supplementMap.get(item.supplementId)}
+                        supplementMap={supplementMap}
+                        pickerItems={pickerItems}
+                        expanded={expandedIds.has(item.id)}
+                        onToggle={() => toggleExpanded(item.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-fg">
+                          {supplementMap.get(item.supplementId)?.name ?? '–'}
+                        </span>
+                        <span className="shrink-0 text-muted">{item.dose}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
-          <Button variant="secondary" onClick={addRow}>
-            + Supplement hinzufügen
-          </Button>
-
-          <Button variant="primary" onClick={() => setMode('view')}>
-            Fertig
-          </Button>
+          {editing && (
+            <GroupAddChips label="Einnahmezeitpunkt hinzufügen" options={SUPPLEMENT_TIMINGS} used={usedTimings} onAdd={addRow} />
+          )}
         </Card>
       )}
 
@@ -215,53 +232,85 @@ export default function SupplementPlanPage() {
   )
 }
 
-function SupplementOverview({
-  phaseName,
-  items,
+function SupplementRow({
+  item,
+  supplement,
   supplementMap,
-  onEdit,
+  pickerItems,
+  expanded,
+  onToggle,
 }: {
-  phaseName: string
-  items: SupplementPlanItem[]
+  item: SupplementPlanItem
+  supplement?: Supplement
   supplementMap: Map<string, Supplement>
-  onEdit?: () => void
+  pickerItems: SearchPickerItem[]
+  expanded: boolean
+  onToggle: () => void
 }) {
-  const groups = SUPPLEMENT_TIMINGS.map((timing) => ({
-    timing,
-    items: items.filter((i) => i.timing === timing),
-  })).filter((g) => g.items.length > 0)
+  const [picking, setPicking] = useState(item.supplementId === '')
+
+  function update(patch: Partial<SupplementPlanItem>) {
+    void db.supplementPlanItems.update(item.id, patch)
+  }
 
   return (
-    <Card className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{phaseName}</h2>
-        {onEdit && (
-          <Button variant="secondary" onClick={onEdit}>
-            Bearbeiten
-          </Button>
-        )}
+    <PlanItemRow
+      title={supplement?.name ?? 'Supplement wählen …'}
+      subtitle={[item.dose, item.timing].filter(Boolean).join(' · ')}
+      expanded={expanded}
+      onToggle={onToggle}
+      onDelete={() => db.supplementPlanItems.delete(item.id)}
+      deleteLabel={`${supplement?.name ?? 'Supplement'} aus dem Plan entfernen`}
+    >
+      {picking && (
+        <SearchPicker
+          items={pickerItems}
+          value={item.supplementId || undefined}
+          onChange={(id) => {
+            const s = supplementMap.get(id)
+            // Der Zeitpunkt der Gruppe hat Vorrang, sobald einer gesetzt ist - sonst würde
+            // die Zeile beim Auswählen in eine andere Gruppe springen.
+            update({ supplementId: id, dose: item.dose || (s?.defaultDose ?? '') })
+            setPicking(false)
+          }}
+          placeholder="Supplement suchen..."
+        />
+      )}
+
+      <div className="flex items-center gap-2">
+        <div className="w-28 shrink-0">
+          <Input
+            value={item.dose}
+            onChange={(e) => update({ dose: e.target.value })}
+            placeholder="z.B. 5 g"
+            aria-label="Dosis"
+          />
+        </div>
+        <Select
+          value={item.timing}
+          onChange={(e) => update({ timing: e.target.value as SupplementTiming })}
+          className="flex-1"
+          aria-label="Einnahmezeitpunkt"
+        >
+          {SUPPLEMENT_TIMINGS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </Select>
       </div>
 
-      {groups.length === 0 && <p className="text-sm text-muted">💊 Noch keine Supplements in dieser Phase.</p>}
+      {supplement?.notes && (
+        <Field label="Hinweis aus der Supplement-Datenbank">
+          <span className="text-xs text-muted">{supplement.notes}</span>
+        </Field>
+      )}
 
-      <div className="flex flex-col gap-3">
-        {groups.map((group) => (
-          <div key={group.timing}>
-            <div className="pb-1 text-xs font-semibold uppercase tracking-wide text-accent">{group.timing}</div>
-            <div className="flex flex-col gap-1">
-              {group.items.map((item) => {
-                const supplement = supplementMap.get(item.supplementId)
-                return (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                    <span className="text-fg">{supplement?.name ?? '–'}</span>
-                    <span className="text-muted">{item.dose}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
+      <div className="flex gap-1">
+        <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
+          ✎ Supplement tauschen
+        </Button>
       </div>
-    </Card>
+    </PlanItemRow>
   )
 }
