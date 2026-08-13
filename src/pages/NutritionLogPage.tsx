@@ -138,7 +138,7 @@ export default function NutritionLogPage() {
         })
       }
     })
-    navigate(`/athlete/${athlete.id}/ernaehrung`)
+    navigate(`/athlete/${athlete.id}/ernaehrung`, { state: { view: 'plan' } })
   }
 
   async function setNutritionPlanId(planId: string) {

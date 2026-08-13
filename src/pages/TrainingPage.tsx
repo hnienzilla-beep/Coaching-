@@ -2,14 +2,16 @@ import { useState } from 'react'
 import TrainingPlanPage from './TrainingPlanPage'
 import WorkoutLogPage from './WorkoutLogPage'
 
+// Das Log steht bewusst vorne und ist die Startansicht: Es ist die Ansicht, die beim
+// Training selbst gebraucht wird, der Plan dagegen selten.
 const VIEWS = [
-  { key: 'plan', label: 'Plan' },
   { key: 'log', label: 'Log' },
+  { key: 'plan', label: 'Plan' },
 ] as const
 type View = (typeof VIEWS)[number]['key']
 
 export default function TrainingPage() {
-  const [view, setView] = useState<View>('plan')
+  const [view, setView] = useState<View>('log')
 
   return (
     <div className="flex flex-col gap-4">
