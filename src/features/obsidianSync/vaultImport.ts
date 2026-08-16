@@ -222,6 +222,9 @@ export async function importSupplemente(content: string): Promise<ImportResult> 
 
         await db.supplementPlanItems.where('planId').equals(plan.id).delete()
 
+        // Die Reihenfolge der Datei wird zur Reihenfolge im Plan - in Obsidian umgestellte
+        // Zeilen stehen danach auch in der App so.
+        let itemOrder = 0
         for (const item of phase.items) {
           const key = nameKey(item.name)
           let supplement: Supplement | undefined = supplementMap.get(key)
@@ -242,6 +245,7 @@ export async function importSupplemente(content: string): Promise<ImportResult> 
             dose: item.dose,
             timing: item.timing,
             notes: item.notes,
+            order: itemOrder++,
           })
           changed++
         }

@@ -229,6 +229,31 @@ Die Stufe gilt für das ganze Gerät und liegt in `localStorage` (`src/lib/detai
 ersetzt die früheren Schalter "Coach-Modus" und "Karten einklappen": Ein vorhandener
 Coach-Modus wird beim ersten Start übernommen (aus → "Normal", an → "Coach").
 
+## Pläne
+
+Trainings-, Ernährungs- und Supplementplan teilen sich denselben Kopf
+(`src/components/PlanPhaseHeader.tsx`): Name der Phase, an welcher Stelle sie steht
+("Tag 2 von 3") und wie viel drinsteht. Darunter steht die Übersicht aller Phasen, und die
+hat zwei Gestalten:
+
+- **Beim Lesen** eine Chip-Leiste zum Umschalten. Jeder Chip trägt die Zahl seiner Einträge,
+  leere Phasen bleiben ohne Zahl. Die aktive Phase wird in den sichtbaren Ausschnitt
+  gescrollt, wenn die Leiste breiter ist als der Bildschirm.
+- **Beim Bearbeiten** (Stufe Coach → "Bearbeiten") eine Liste mit Zuggriff ⠿: Die Phasen
+  lassen sich per Drag & Drop umsortieren, die Reihenfolge steht danach überall so - auch in
+  der Planauswahl der beiden Logs und im Vault. Verschieben wechselt die Phase nicht;
+  angezeigt bleibt die, die gerade bearbeitet wird.
+
+Chips und Sortierliste sind bewusst getrennt: Ein waagerecht scrollender Streifen und Drag &
+Drop sind auf dem Touchscreen dieselbe Wischbewegung und kämen sich sonst in die Quere.
+
+Auch die **Zeilen innerhalb einer Phase** lassen sich im Bearbeiten-Modus am Zuggriff
+verschieben - im Trainingsplan über den ganzen Tag hinweg, im Ernährungs- und
+Supplementplan innerhalb einer Mahlzeit bzw. eines Einnahmezeitpunkts (die Gruppe wechselt
+man über das Auswahlfeld der Zeile, nicht durch Ziehen). Die Reihenfolge der Supplemente
+landet auch in `Supplemente.md`; umgekehrt wird die Reihenfolge der Datei beim Einlesen
+übernommen.
+
 ## Design
 
 Die App ist in Schwarz gehalten: reines Schwarz (`#000000`) als Grundfläche, nur

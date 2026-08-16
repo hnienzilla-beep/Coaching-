@@ -9,6 +9,7 @@ import {
   ensureExerciseSeed,
   ensureFoodSeed,
   ensurePlanMealOrder,
+  ensureSupplementPlanItemOrder,
   ensureSupplementSeed,
   ensureTrainingPlanExerciseOrder,
   ensureWorkoutLogExerciseOrder,
@@ -43,6 +44,7 @@ function App() {
     ensureWorkoutSetMigration()
     ensureWorkoutLogExerciseOrder()
     ensurePlanMealOrder()
+    ensureSupplementPlanItemOrder()
     ensureAthleteOrder()
   }, [])
 

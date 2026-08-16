@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { db, exportSupplementPlan, importSupplementPlan } from '../db/db'
+import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, Supplement, SupplementPlanItem, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
@@ -12,6 +16,7 @@ import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import { nextOrder } from '../lib/calculator'
 import { useCoachMode } from '../lib/detailLevel'
+import { useDragSensors } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
@@ -30,10 +35,24 @@ export default function SupplementPlanPage() {
   const activePlan = plans?.find((p) => p.id === currentPlanId)
 
   const items = useLiveQuery(
-    () => (currentPlanId ? db.supplementPlanItems.where('planId').equals(currentPlanId).toArray() : []),
+    () => (currentPlanId ? db.supplementPlanItems.where('planId').equals(currentPlanId).sortBy('order') : []),
     [currentPlanId],
   )
 
+  // Zahl der Supplemente je Phase für die Phasen-Übersicht - eine Abfrage über alle Phasen
+  // statt einer je Chip. Zeilen ohne Supplement zählen nicht mit.
+  const planIdKey = (plans ?? []).map((p) => p.id).join(',')
+  const itemCounts = useLiveQuery(async () => {
+    const planIds = planIdKey === '' ? [] : planIdKey.split(',')
+    const all = await db.supplementPlanItems.where('planId').anyOf(planIds).toArray()
+    const counts = new Map<string, number>()
+    for (const item of all) {
+      if (item.supplementId !== '') counts.set(item.planId, (counts.get(item.planId) ?? 0) + 1)
+    }
+    return counts
+  }, [planIdKey])
+
+  const sensors = useDragSensors()
   const supplementMap = new Map((supplements ?? []).map((s) => [s.id, s]))
   const pickerItems: SearchPickerItem[] = (supplements ?? []).map((s) => ({
     id: s.id,
@@ -90,9 +109,27 @@ export default function SupplementPlanPage() {
       supplementId: '',
       dose: '',
       timing,
+      order: nextOrder(allItems),
     }
     await db.supplementPlanItems.add(item)
     setExpandedIds((prev) => new Set(prev).add(item.id))
+  }
+
+  // Wie im Ernährungsplan wirkt Drag & Drop nur innerhalb einer Zeitpunkt-Gruppe - der
+  // Zeitpunkt selbst ändert sich nur über das Auswahlfeld der Zeile. Jede Gruppe bekommt
+  // deshalb ihren eigenen DndContext und ihre eigenen order-Werte 0..n.
+  async function handleDragEndInGroup(groupItems: SupplementPlanItem[], event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = groupItems.findIndex((i) => i.id === active.id)
+    const newIndex = groupItems.findIndex((i) => i.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(groupItems, oldIndex, newIndex)
+    await db.transaction('rw', db.supplementPlanItems, async () => {
+      for (let i = 0; i < reordered.length; i++) {
+        await db.supplementPlanItems.update(reordered[i].id, { order: i })
+      }
+    })
   }
 
   async function handleExportPlan() {
@@ -120,7 +157,11 @@ export default function SupplementPlanPage() {
     <div className="flex flex-col gap-4">
       <PlanPhaseHeader
         title="Supplementplan"
-        phases={plans ?? []}
+        phases={(plans ?? []).map((p) => ({
+          id: p.id,
+          phaseName: p.phaseName,
+          count: itemCounts?.get(p.id) ?? 0,
+        }))}
         activePhaseId={currentPlanId}
         onSelect={(id) => {
           setActivePlanId(id)
@@ -130,6 +171,17 @@ export default function SupplementPlanPage() {
         addLabel="+ Phase"
         onRename={activePlan ? (name) => renamePhase(activePlan.id, name) : undefined}
         onDelete={activePlan && plans && plans.length > 1 ? () => deletePhase(activePlan.id) : undefined}
+        onReorder={
+          coachMode
+            ? (ids) => {
+                // Ohne gesetztes activePlanId zeigt die Seite die erste Phase - nach dem
+                // Verschieben wäre das eine andere, und die gerade bearbeitete Phase wäre weg.
+                setActivePlanId(currentPlanId)
+                void savePhaseOrder('supplementPlans', ids)
+              }
+            : undefined
+        }
+        countLabel={(n) => `${n} ${n === 1 ? 'Supplement' : 'Supplemente'}`}
         deleteConfirmText="Diese Phase mit allen Supplementen löschen?"
         subtitle={filledCount ? `${filledCount} ${filledCount === 1 ? 'Supplement' : 'Supplemente'}` : undefined}
         editing={editing}
@@ -170,19 +222,27 @@ export default function SupplementPlanPage() {
                 </div>
 
                 {editing ? (
-                  <div className="flex flex-col gap-1.5">
-                    {group.items.map((item) => (
-                      <SupplementRow
-                        key={item.id}
-                        item={item}
-                        supplement={supplementMap.get(item.supplementId)}
-                        supplementMap={supplementMap}
-                        pickerItems={pickerItems}
-                        expanded={expandedIds.has(item.id)}
-                        onToggle={() => toggleExpanded(item.id)}
-                      />
-                    ))}
-                  </div>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e) => void handleDragEndInGroup(group.items, e)}
+                  >
+                    <SortableContext items={group.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                      <div className="flex flex-col gap-1.5">
+                        {group.items.map((item) => (
+                          <SupplementRow
+                            key={item.id}
+                            item={item}
+                            supplement={supplementMap.get(item.supplementId)}
+                            supplementMap={supplementMap}
+                            pickerItems={pickerItems}
+                            expanded={expandedIds.has(item.id)}
+                            onToggle={() => toggleExpanded(item.id)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 ) : (
                   <div className="flex flex-col gap-1">
                     {group.items.map((item) => (
@@ -248,69 +308,83 @@ function SupplementRow({
   onToggle: () => void
 }) {
   const [picking, setPicking] = useState(item.supplementId === '')
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
 
   function update(patch: Partial<SupplementPlanItem>) {
     void db.supplementPlanItems.update(item.id, patch)
   }
 
   return (
-    <PlanItemRow
-      title={supplement?.name ?? 'Supplement wählen …'}
-      subtitle={[item.dose, item.timing].filter(Boolean).join(' · ')}
-      expanded={expanded}
-      onToggle={onToggle}
-      onDelete={() => db.supplementPlanItems.delete(item.id)}
-      deleteLabel={`${supplement?.name ?? 'Supplement'} aus dem Plan entfernen`}
-    >
-      {picking && (
-        <SearchPicker
-          items={pickerItems}
-          value={item.supplementId || undefined}
-          onChange={(id) => {
-            const s = supplementMap.get(id)
-            // Der Zeitpunkt der Gruppe hat Vorrang, sobald einer gesetzt ist - sonst würde
-            // die Zeile beim Auswählen in eine andere Gruppe springen.
-            update({ supplementId: id, dose: item.dose || (s?.defaultDose ?? '') })
-            setPicking(false)
-          }}
-          placeholder="Supplement suchen..."
-        />
-      )}
-
-      <div className="flex items-center gap-2">
-        <div className="w-28 shrink-0">
-          <Input
-            value={item.dose}
-            onChange={(e) => update({ dose: e.target.value })}
-            placeholder="z.B. 5 g"
-            aria-label="Dosis"
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
+      <PlanItemRow
+        title={supplement?.name ?? 'Supplement wählen …'}
+        subtitle={[item.dose, item.timing].filter(Boolean).join(' · ')}
+        expanded={expanded}
+        onToggle={onToggle}
+        onDelete={() => db.supplementPlanItems.delete(item.id)}
+        deleteLabel={`${supplement?.name ?? 'Supplement'} aus dem Plan entfernen`}
+        dragHandle={
+          <button
+            {...attributes}
+            {...listeners}
+            type="button"
+            className="shrink-0 touch-none px-1 text-lg text-muted"
+            aria-label="Verschieben"
+          >
+            ⠿
+          </button>
+        }
+      >
+        {picking && (
+          <SearchPicker
+            items={pickerItems}
+            value={item.supplementId || undefined}
+            onChange={(id) => {
+              const s = supplementMap.get(id)
+              // Der Zeitpunkt der Gruppe hat Vorrang, sobald einer gesetzt ist - sonst würde
+              // die Zeile beim Auswählen in eine andere Gruppe springen.
+              update({ supplementId: id, dose: item.dose || (s?.defaultDose ?? '') })
+              setPicking(false)
+            }}
+            placeholder="Supplement suchen..."
           />
+        )}
+
+        <div className="flex items-center gap-2">
+          <div className="w-28 shrink-0">
+            <Input
+              value={item.dose}
+              onChange={(e) => update({ dose: e.target.value })}
+              placeholder="z.B. 5 g"
+              aria-label="Dosis"
+            />
+          </div>
+          <Select
+            value={item.timing}
+            onChange={(e) => update({ timing: e.target.value as SupplementTiming })}
+            className="flex-1"
+            aria-label="Einnahmezeitpunkt"
+          >
+            {SUPPLEMENT_TIMINGS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
         </div>
-        <Select
-          value={item.timing}
-          onChange={(e) => update({ timing: e.target.value as SupplementTiming })}
-          className="flex-1"
-          aria-label="Einnahmezeitpunkt"
-        >
-          {SUPPLEMENT_TIMINGS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
-      </div>
 
-      {supplement?.notes && (
-        <Field label="Hinweis aus der Supplement-Datenbank">
-          <span className="text-xs text-muted">{supplement.notes}</span>
-        </Field>
-      )}
+        {supplement?.notes && (
+          <Field label="Hinweis aus der Supplement-Datenbank">
+            <span className="text-xs text-muted">{supplement.notes}</span>
+          </Field>
+        )}
 
-      <div className="flex gap-1">
-        <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
-          ✎ Supplement tauschen
-        </Button>
-      </div>
-    </PlanItemRow>
+        <div className="flex gap-1">
+          <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
+            ✎ Supplement tauschen
+          </Button>
+        </div>
+      </PlanItemRow>
+    </div>
   )
 }
