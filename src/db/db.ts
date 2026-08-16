@@ -171,6 +171,26 @@ export async function ensurePlanMealOrder(): Promise<void> {
 }
 
 // Bestandsdaten (vor Einführung von order) bekommen eine Reihenfolge nach Einfüge-Position.
+export async function ensureSupplementPlanItemOrder(): Promise<void> {
+  await db.transaction('rw', db.supplementPlanItems, async () => {
+    const all = await db.supplementPlanItems.toArray()
+    const missingOrder = all.filter((r) => r.order === undefined)
+    if (missingOrder.length === 0) return
+    const byPlan = new Map<string, typeof all>()
+    for (const row of missingOrder) {
+      const list = byPlan.get(row.planId) ?? []
+      list.push(row)
+      byPlan.set(row.planId, list)
+    }
+    for (const [, rows] of byPlan) {
+      for (let i = 0; i < rows.length; i++) {
+        await db.supplementPlanItems.update(rows[i].id, { order: i })
+      }
+    }
+  })
+}
+
+// Bestandsdaten (vor Einführung von order) bekommen eine Reihenfolge nach Einfüge-Position.
 export async function ensureWorkoutLogExerciseOrder(): Promise<void> {
   await db.transaction('rw', db.workoutLogExercises, async () => {
     const all = await db.workoutLogExercises.toArray()
@@ -415,7 +435,7 @@ interface SupplementPlanTemplate {
 export async function exportSupplementPlan(planId: string): Promise<string> {
   const plan = await db.supplementPlans.get(planId)
   if (!plan) throw new Error('Plan nicht gefunden')
-  const items = await db.supplementPlanItems.where('planId').equals(planId).toArray()
+  const items = await db.supplementPlanItems.where('planId').equals(planId).sortBy('order')
   const supplements = await db.supplements.bulkGet(items.map((i) => i.supplementId))
   const template: SupplementPlanTemplate = {
     kind: 'supplementPlan',
@@ -444,6 +464,7 @@ export async function importSupplementPlan(json: string, athleteId: string): Pro
   await db.transaction('rw', db.supplementPlans, db.supplementPlanItems, db.supplements, async () => {
     const order = await db.supplementPlans.where('athleteId').equals(athleteId).count()
     await db.supplementPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    let itemOrder = 0
     for (const item of template.items) {
       let supplement = await db.supplements.where('name').equals(item.supplementName).first()
       if (!supplement && item.supplementFallback) {
@@ -458,6 +479,7 @@ export async function importSupplementPlan(json: string, athleteId: string): Pro
         dose: item.dose,
         timing: item.timing,
         notes: item.notes,
+        order: itemOrder++,
       })
     }
   })

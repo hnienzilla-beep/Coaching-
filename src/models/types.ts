@@ -116,6 +116,7 @@ export interface SupplementPlanItem {
   dose: string
   timing: SupplementTiming
   notes?: string
+  order: number // Reihenfolge innerhalb des Einnahmezeitpunkts
 }
 
 export const MUSCLE_GROUPS = ['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme', 'Bauch', 'Ganzkörper', 'Sonstiges'] as const

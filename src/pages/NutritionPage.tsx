@@ -5,6 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
+import { savePhaseOrder } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, PlanMeal } from '../models/types'
@@ -51,6 +52,17 @@ export default function NutritionPage() {
     () => (currentPlanId ? db.planMeals.where('planId').equals(currentPlanId).sortBy('order') : []),
     [currentPlanId],
   )
+
+  // Zahl der Einträge je Phase für die Phasen-Übersicht - eine Abfrage über alle Phasen
+  // statt einer je Chip.
+  const planIdKey = (plans ?? []).map((p) => p.id).join(',')
+  const mealCounts = useLiveQuery(async () => {
+    const planIds = planIdKey === '' ? [] : planIdKey.split(',')
+    const all = await db.planMeals.where('planId').anyOf(planIds).toArray()
+    const counts = new Map<string, number>()
+    for (const meal of all) counts.set(meal.planId, (counts.get(meal.planId) ?? 0) + 1)
+    return counts
+  }, [planIdKey])
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
   const foodPickerItems: SearchPickerItem[] = (foods ?? []).map((f) => ({
@@ -215,7 +227,13 @@ export default function NutritionPage() {
     <div className="flex flex-col gap-4">
       <PlanPhaseHeader
         title="Ernährungsplan"
-        phases={plans ?? []}
+        phases={(plans ?? []).map((p) => ({
+          id: p.id,
+          phaseName: p.phaseName,
+          // Beim Bearbeiten zählt der Entwurf, sonst stünde in der Übersicht eine andere
+          // Zahl als in der Zeile darüber.
+          count: editing && p.id === currentPlanId ? rows.length : (mealCounts?.get(p.id) ?? 0),
+        }))}
         activePhaseId={currentPlanId}
         onSelect={(id) => {
           setActivePlanId(id)
@@ -225,6 +243,17 @@ export default function NutritionPage() {
         addLabel="+ Phase"
         onRename={activePlan ? (name) => renamePhase(activePlan.id, name) : undefined}
         onDelete={activePlan && plans && plans.length > 1 ? () => deletePhase(activePlan.id) : undefined}
+        onReorder={
+          coachMode
+            ? (ids) => {
+                // Ohne gesetztes activePlanId zeigt die Seite die erste Phase - nach dem
+                // Verschieben wäre das eine andere, und die gerade bearbeitete Phase wäre weg.
+                setActivePlanId(currentPlanId)
+                void savePhaseOrder('nutritionPlans', ids)
+              }
+            : undefined
+        }
+        countLabel={(n) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'}`}
         deleteConfirmText="Diese Phase mit allen Mahlzeiten löschen?"
         subtitle={subtitle}
         editing={editing}

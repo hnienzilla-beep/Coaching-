@@ -5,6 +5,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
+import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
 import { estimateWorkoutDurationMinutes, nextOrder } from '../lib/calculator'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
@@ -36,6 +37,20 @@ export default function TrainingPlanPage() {
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
   const activePlan = plans?.find((p) => p.id === currentPlanId)
+
+  // Zahl der Übungen je Tag für die Phasen-Übersicht - eine Abfrage über alle Tage statt
+  // einer je Chip. Leere Zeilen (noch ohne Übung) zählen nicht mit, sonst stünde am Chip
+  // eine Zahl, zu der in der Leseansicht nichts zu sehen ist.
+  const planIdKey = (plans ?? []).map((p) => p.id).join(',')
+  const exerciseCounts = useLiveQuery(async () => {
+    const planIds = planIdKey === '' ? [] : planIdKey.split(',')
+    const all = await db.trainingPlanExercises.where('planId').anyOf(planIds).toArray()
+    const counts = new Map<string, number>()
+    for (const row of all) {
+      if (row.exerciseId !== '') counts.set(row.planId, (counts.get(row.planId) ?? 0) + 1)
+    }
+    return counts
+  }, [planIdKey])
 
   const rows = useLiveQuery(
     () => (currentPlanId ? db.trainingPlanExercises.where('planId').equals(currentPlanId).sortBy('order') : []),
@@ -140,7 +155,11 @@ export default function TrainingPlanPage() {
     <div className="flex flex-col gap-4">
       <PlanPhaseHeader
         title="Trainingsplan"
-        phases={plans ?? []}
+        phases={(plans ?? []).map((p) => ({
+          id: p.id,
+          phaseName: p.phaseName,
+          count: exerciseCounts?.get(p.id) ?? 0,
+        }))}
         activePhaseId={currentPlanId}
         onSelect={(id) => {
           setActivePlanId(id)
@@ -150,6 +169,18 @@ export default function TrainingPlanPage() {
         addLabel="+ Tag"
         onRename={activePlan ? (name) => renamePhase(activePlan.id, name) : undefined}
         onDelete={activePlan && plans && plans.length > 1 ? () => deletePhase(activePlan.id) : undefined}
+        onReorder={
+          coachMode
+            ? (ids) => {
+                // Ohne gesetztes activePlanId zeigt die Seite die erste Phase - nach dem
+                // Verschieben wäre das eine andere, und der gerade bearbeitete Tag wäre weg.
+                setActivePlanId(currentPlanId)
+                void savePhaseOrder('trainingPlans', ids)
+              }
+            : undefined
+        }
+        countLabel={(n) => `${n} ${n === 1 ? 'Übung' : 'Übungen'}`}
+        phaseNoun="Tag"
         deleteConfirmText="Diesen Trainingstag mit allen Übungen löschen?"
         subtitle={
           filledRows.length ? `${filledRows.length} ${filledRows.length === 1 ? 'Übung' : 'Übungen'}` : undefined

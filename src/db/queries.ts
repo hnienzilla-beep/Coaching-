@@ -87,6 +87,25 @@ export async function createDefaultTrainingPlans(athleteId: string): Promise<voi
   await createDefaultPhases((plan) => db.trainingPlans.add(plan), athleteId, ['Tag A', 'Tag B', 'Tag C'])
 }
 
+export type PhaseTableName = 'trainingPlans' | 'nutritionPlans' | 'supplementPlans'
+
+/**
+ * Schreibt eine per Drag & Drop entstandene Reihenfolge zurück - der Listenindex wird zum
+ * `order`-Wert. Bewusst für alle Phasen der Liste, nicht nur für die verschobene: nur so
+ * bleiben die Werte lückenlos, auch wenn Bestandsdaten mal gleiche `order` tragen.
+ */
+export async function savePhaseOrder(tableName: PhaseTableName, orderedIds: string[]): Promise<void> {
+  // Über den Tabellennamen statt über die Tabelle selbst: die drei Plan-Tabellen haben
+  // verschiedene Zeilentypen, und ein gemeinsamer Obertyp lässt sich Dexies Table-Typ nicht
+  // unterschieben, ohne die Typsicherheit an anderer Stelle aufzuweichen.
+  const table = db.table<{ id: string; order: number }>(tableName)
+  await db.transaction('rw', table, async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await table.update(orderedIds[i], { order: i })
+    }
+  })
+}
+
 export async function deleteAthlete(athleteId: string): Promise<void> {
   await db.transaction(
     'rw',
