@@ -1,5 +1,6 @@
 import { db } from './db'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
+import { byName, nameKey } from '../lib/names'
 import type {
   Athlete,
   BackgroundPhoto,
@@ -420,6 +421,11 @@ export async function importProgress(json: string, athleteId: string): Promise<v
     'rw',
     [db.dailyEntries, db.workoutLogs, db.workoutLogExercises, db.workoutSets, db.exercises, db.nutritionLogs, db.nutritionLogItems, db.foodItems],
     async () => {
+      // Übungen und Lebensmittel einmal über den Namen nachschlagen (nicht über den Index, der
+      // Groß-/Kleinschreibung unterscheidet) - sonst legt jeder Import Doppelgänger an.
+      const exerciseByName = byName(await db.exercises.toArray())
+      const foodByName = byName(await db.foodItems.toArray())
+
       for (const entry of template.dailyEntries) {
         await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, ...entry })
       }
@@ -433,10 +439,11 @@ export async function importProgress(json: string, athleteId: string): Promise<v
         }
         await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
         for (const [i, ex] of day.exercises.entries()) {
-          let exercise = await db.exercises.where('name').equals(ex.exerciseName).first()
+          let exercise = exerciseByName.get(nameKey(ex.exerciseName))
           if (!exercise && ex.exerciseFallback) {
             exercise = { id: crypto.randomUUID(), name: ex.exerciseName, ...ex.exerciseFallback }
             await db.exercises.add(exercise)
+            exerciseByName.set(nameKey(ex.exerciseName), exercise)
           }
           if (!exercise) continue
           const logExerciseId = crypto.randomUUID()
@@ -452,10 +459,11 @@ export async function importProgress(json: string, athleteId: string): Promise<v
         if (day.notes !== undefined) await db.nutritionLogs.update(log.id, { notes: day.notes })
         await db.nutritionLogItems.where('nutritionLogId').equals(log.id).delete()
         for (const item of day.items) {
-          let food = await db.foodItems.where('name').equals(item.foodName).first()
+          let food = foodByName.get(nameKey(item.foodName))
           if (!food && item.foodMacros) {
             food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
             await db.foodItems.add(food)
+            foodByName.set(nameKey(item.foodName), food)
           }
           if (!food) continue
           await db.nutritionLogItems.add({

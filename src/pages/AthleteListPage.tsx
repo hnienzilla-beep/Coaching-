@@ -7,12 +7,19 @@ import { CSS } from '@dnd-kit/utilities'
 import { useDragSensors } from '../lib/dragSensors'
 import { shareOrDownloadFile } from '../lib/share'
 import { db, exportAllData, exportAthletes, importAllData, importSelectedAthletes } from '../db/db'
+import { dedupeDatabase, dedupeTotal, findDuplicates, summarizeDedupe } from '../db/dedupe'
 import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
 import { AccentSwatch, Button, Card } from '../components/ui'
 import NewAthleteForm from '../components/NewAthleteForm'
 import type { Athlete } from '../models/types'
 import { useOverviewAccent } from '../lib/accentColor'
 import { clearLastAthleteId, getLastAthleteId } from '../lib/lastAthlete'
+
+/** Zusatz für die Import-Rückmeldung, wenn dabei Doppelgänger zusammengeführt wurden. */
+function cleanupNote(report: Parameters<typeof summarizeDedupe>[0]): string {
+  const summary = summarizeDedupe(report)
+  return summary ? `\n\nDabei zusammengeführt – ${summary}.` : ''
+}
 
 /**
  * Athletenverwaltung. Seit die App direkt im zuletzt geöffneten Athleten startet, ist das
@@ -95,10 +102,30 @@ export default function AthleteListPage() {
       }
       if (!confirm('Import überschreibt vorhandene Daten mit gleicher ID. Fortfahren?')) return
       await importAllData(text)
-      alert('Import abgeschlossen.')
+      alert(`Import abgeschlossen.${cleanupNote(await dedupeDatabase())}`)
     } catch {
       alert('Import fehlgeschlagen. Ist die Datei ein gültiges Backup?')
     }
+  }
+
+  /**
+   * Führt Doppelgänger zusammen - anders als die automatische Bereinigung beim Start auch
+   * gleichnamige Athleten, weil das Daten zweier Personen vermischen kann, wenn zwei Athleten
+   * zufällig gleich heißen. Deshalb vorher zeigen, was passieren würde.
+   */
+  async function handleDedupe() {
+    const preview = await findDuplicates({ mergeAthletes: true })
+    if (dedupeTotal(preview.report) === 0) {
+      alert('Keine doppelten Einträge gefunden.')
+      return
+    }
+    const athleteNote =
+      preview.mergedAthleteNames.length > 0
+        ? `\n\nAchtung: Gleichnamige Athleten werden zusammengeführt (${preview.mergedAthleteNames.join(', ')}).`
+        : ''
+    if (!confirm(`Zusammenführen:\n\n${summarizeDedupe(preview.report)}${athleteNote}\n\nFortfahren?`)) return
+    const report = await dedupeDatabase({ mergeAthletes: true })
+    alert(`Bereinigt – ${summarizeDedupe(report) ?? 'nichts gefunden'}.`)
   }
 
   useEffect(() => {
@@ -189,6 +216,10 @@ export default function AthleteListPage() {
         </Button>
       )}
 
+      <Button variant="secondary" onClick={handleDedupe}>
+        Doppelte Einträge bereinigen
+      </Button>
+
       <div className="flex gap-2">
         <Button variant="secondary" onClick={handleExport} className="flex-1">
           Daten exportieren
@@ -215,7 +246,7 @@ export default function AthleteListPage() {
           onConfirm={async (selectedIds) => {
             await importSelectedAthletes(pendingImport.text, selectedIds)
             setPendingImport(null)
-            alert('Import abgeschlossen.')
+            alert(`Import abgeschlossen.${cleanupNote(await dedupeDatabase())}`)
           }}
         />
       )}

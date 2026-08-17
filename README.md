@@ -201,6 +201,35 @@ Datenbestand in einer einzigen Datei.
 Wichtig: Die App hat keinen Server - läuft sie nicht (App geschlossen bzw. von
 iOS beendet), ruht auch der Sync.
 
+## Doppelte Einträge
+
+IDs vergibt die App pro Browser-Profil zufällig: Dasselbe Lebensmittel heißt auf dem
+iPhone und auf dem Rechner gleich, hat dort aber je eine eigene ID. Jeder Import, der
+Zeilen nur über die ID zusammenführt, legt deshalb alles neu an, was er nicht
+wiedererkennt - nach einem "Backup aus Vault wiederherstellen" auf einem Gerät, das
+seine Datenbanken schon selbst angelegt hatte, stand früher jedes Lebensmittel, jede
+Übung und jedes Supplement zweimal in der App, samt der daran hängenden Pläne.
+
+Dagegen greifen zwei Dinge:
+
+- **Beim Import** (`resolveReferencesByName` in `src/db/db.ts`) bekommen Lebensmittel,
+  Übungen und Supplemente aus der Datei die ID des schon vorhandenen Eintrags gleichen
+  Namens; die Verweise der importierten Pläne und Logs werden mit umgeschrieben. Denselben
+  Namensschlüssel (`src/lib/names.ts`, `nameKey`) benutzen auch der Vault-Import, die
+  Startdaten und die Plan-Vorlagen - sonst legt die eine Stelle an, was die andere für
+  vorhanden hält.
+- **Beim Start** räumt `ensureNoDuplicates` (`src/db/dedupe.ts`) auf, was schon in der
+  Datenbank steht: gleichnamige Stammdaten werden zusammengeführt und alle Verweise
+  umgehängt, mehrfach vorhandene Tage (Tracking, Trainings-, Ernährungslog) zu einem
+  verschmolzen (leere Felder werden dabei aus den Doppelgängern gefüllt), gleichnamige
+  Plan-Phasen je Athlet zusammengelegt und Kind-Zeilen entfernt, die danach in jedem Feld
+  übereinstimmen. Überlebender ist immer der Datensatz mit den meisten Daten bzw. den
+  meisten Verweisen; ein Eintrag ohne Doppelgänger wird nie angefasst.
+
+**Athleten** bleiben dabei außen vor: Zwei Athleten mit gleichem Namen können auch zwei
+verschiedene Personen sein. Sie werden nur über "Doppelte Einträge bereinigen" in der
+Athletenverwaltung zusammengeführt - dort steht vorher, was passieren würde.
+
 ## Start und Athletenwechsel
 
 Die App startet **direkt im zuletzt geöffneten Athleten** - eine Athletenübersicht als

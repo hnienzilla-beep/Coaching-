@@ -15,6 +15,7 @@ import {
   ensureWorkoutLogExerciseOrder,
   ensureWorkoutSetMigration,
 } from './db/db'
+import { ensureNoDuplicates } from './db/dedupe'
 import AthleteListPage from './pages/AthleteListPage'
 import StartRedirect from './pages/StartRedirect'
 import AthleteLayout from './pages/AthleteLayout'
@@ -37,15 +38,20 @@ function App() {
     watchDatabaseChanges()
     startAutoSync()
     startRestTimerRuntime()
-    ensureFoodSeed()
-    ensureSupplementSeed()
-    ensureExerciseSeed()
-    ensureTrainingPlanExerciseOrder()
-    ensureWorkoutSetMigration()
-    ensureWorkoutLogExerciseOrder()
-    ensurePlanMealOrder()
-    ensureSupplementPlanItemOrder()
-    ensureAthleteOrder()
+    // Der Reihe nach: erst die Seeds und Migrationen, dann die Bereinigung - sie soll den
+    // fertigen Datenbestand sehen und nicht mitten in einem Nachtrag messen.
+    void (async () => {
+      await ensureFoodSeed()
+      await ensureSupplementSeed()
+      await ensureExerciseSeed()
+      await ensureTrainingPlanExerciseOrder()
+      await ensureWorkoutSetMigration()
+      await ensureWorkoutLogExerciseOrder()
+      await ensurePlanMealOrder()
+      await ensureSupplementPlanItemOrder()
+      await ensureAthleteOrder()
+      await ensureNoDuplicates()
+    })()
   }, [])
 
   return (

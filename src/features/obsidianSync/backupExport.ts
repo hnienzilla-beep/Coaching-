@@ -1,4 +1,5 @@
 import { exportAthletes, importAllData } from '../../db/db'
+import { dedupeDatabase } from '../../db/dedupe'
 import { requireSettings } from './importLog'
 import { readFile, syncFile } from './githubApi'
 import type { VaultTree } from './githubApi'
@@ -67,6 +68,10 @@ export async function syncBackup(tree?: VaultTree | null): Promise<void> {
 /**
  * Lädt das Vollbackup aus dem Vault zurück in die App. Bestehende Datensätze mit derselben ID
  * werden überschrieben, alles andere bleibt erhalten. `false`, wenn es im Vault kein Backup gibt.
+ *
+ * Anschließend wird bereinigt: Auf einem Gerät, das seine Lebensmittel-, Übungs- und
+ * Supplement-Datenbank schon selbst angelegt hat, treffen zwei Datenbestände mit verschiedenen
+ * IDs aufeinander - ohne diesen Schritt stünde danach alles doppelt in der App.
  */
 export async function restoreFromVaultBackup(): Promise<boolean> {
   requireSettings()
@@ -75,6 +80,7 @@ export async function restoreFromVaultBackup(): Promise<boolean> {
 
   await withVaultImport(async () => {
     await importAllData(remote.content)
+    await dedupeDatabase()
   })
   return true
 }

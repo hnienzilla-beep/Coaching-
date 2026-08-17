@@ -24,6 +24,7 @@ import type {
 import { FOOD_SEED } from '../data/foodSeed'
 import { SUPPLEMENT_SEED } from '../data/supplementSeed'
 import { EXERCISE_SEED } from '../data/exerciseSeed'
+import { byName, nameKey } from '../lib/names'
 
 export class CoachDB extends Dexie {
   athletes!: EntityTable<Athlete, 'id'>
@@ -87,9 +88,11 @@ export async function ensureFoodSeed(): Promise<void> {
   // ohne das würde ein zweiter Aufruf den Datenbestand ein zweites Mal einfügen.
   // Nachfüll-Logik statt reinem "leer?"-Check: ergänzt neu hinzugekommene FOOD_SEED-Einträge
   // auch bei Bestandsnutzern, ohne eigene/bearbeitete Lebensmittel anzufassen.
+  // Verglichen wird über `nameKey` (wie beim Vault-Import), sonst legt der Seed neben einem aus
+  // dem Vault übernommenen "haferflocken" ein zweites "Haferflocken" an.
   await db.transaction('rw', db.foodItems, async () => {
-    const existingNames = new Set(await db.foodItems.orderBy('name').keys())
-    const missing = FOOD_SEED.filter((f) => !existingNames.has(f.name))
+    const existingNames = new Set((await db.foodItems.orderBy('name').keys()).map((n) => nameKey(String(n))))
+    const missing = FOOD_SEED.filter((f) => !existingNames.has(nameKey(f.name)))
     if (missing.length === 0) return
     await db.foodItems.bulkAdd(
       missing.map((f) => ({
@@ -106,8 +109,8 @@ export async function ensureFoodSeed(): Promise<void> {
 
 export async function ensureSupplementSeed(): Promise<void> {
   await db.transaction('rw', db.supplements, async () => {
-    const existingNames = new Set(await db.supplements.orderBy('name').keys())
-    const missing = SUPPLEMENT_SEED.filter((s) => !existingNames.has(s.name))
+    const existingNames = new Set((await db.supplements.orderBy('name').keys()).map((n) => nameKey(String(n))))
+    const missing = SUPPLEMENT_SEED.filter((s) => !existingNames.has(nameKey(s.name)))
     if (missing.length === 0) return
     await db.supplements.bulkAdd(
       missing.map((s) => ({
@@ -123,8 +126,8 @@ export async function ensureSupplementSeed(): Promise<void> {
 
 export async function ensureExerciseSeed(): Promise<void> {
   await db.transaction('rw', db.exercises, async () => {
-    const existingNames = new Set(await db.exercises.orderBy('name').keys())
-    const missing = EXERCISE_SEED.filter((e) => !existingNames.has(e.name))
+    const existingNames = new Set((await db.exercises.orderBy('name').keys()).map((n) => nameKey(String(n))))
+    const missing = EXERCISE_SEED.filter((e) => !existingNames.has(nameKey(e.name)))
     if (missing.length === 0) return
     await db.exercises.bulkAdd(missing.map((e) => ({ id: crypto.randomUUID(), name: e.name, muscleGroup: e.muscleGroup })))
   })
@@ -272,12 +275,91 @@ export async function exportAllData(): Promise<string> {
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data })
 }
 
+/**
+ * Stammdaten-Tabellen und die Felder, die auf sie verweisen. Grundlage von
+ * `resolveReferencesByName` - und damit die Liste der Stellen, an denen ein Import sonst
+ * Doppelgänger erzeugen würde.
+ */
+const REFERENCE_TABLES: { table: string; references: { table: string; field: string }[] }[] = [
+  {
+    table: 'foodItems',
+    references: [
+      { table: 'planMeals', field: 'foodItemId' },
+      { table: 'nutritionLogItems', field: 'foodItemId' },
+    ],
+  },
+  {
+    table: 'exercises',
+    references: [
+      { table: 'trainingPlanExercises', field: 'exerciseId' },
+      { table: 'workoutLogExercises', field: 'exerciseId' },
+    ],
+  },
+  {
+    table: 'supplements',
+    references: [{ table: 'supplementPlanItems', field: 'supplementId' }],
+  },
+]
+
+/**
+ * Bindet die Stammdaten einer Import-Datei an den vorhandenen Bestand.
+ *
+ * IDs werden pro Browser-Profil zufällig vergeben: "Haferflocken" hat auf dem iPhone eine andere
+ * ID als auf dem Rechner, obwohl beide Geräte dasselbe Lebensmittel meinen. Ein Import, der Zeilen
+ * nur über die ID zusammenführt (`bulkPut`), legt deshalb die komplette Lebensmittel-, Übungs- und
+ * Supplement-Datenbank ein zweites Mal an - genau daher stammen die doppelten Einträge.
+ *
+ * Hier bekommt jede Zeile, deren Name schon existiert, die vorhandene ID; die Werte aus der Datei
+ * bleiben erhalten (ein Backup einzuspielen soll den gesicherten Stand herstellen). Die Verweise
+ * der importierten Pläne und Logs werden entsprechend umgeschrieben.
+ */
+async function resolveReferencesByName(
+  data: Record<string, Record<string, unknown>[]>,
+): Promise<Record<string, Record<string, unknown>[]>> {
+  const resolved = { ...data }
+
+  for (const { table, references } of REFERENCE_TABLES) {
+    const rows = resolved[table]
+    if (!rows || rows.length === 0) continue
+
+    const existing = byName((await db.table(table).toArray()) as { id: string; name: string }[])
+    const remap = new Map<string, string>()
+    resolved[table] = rows.map((row) => {
+      const name = typeof row.name === 'string' ? row.name : ''
+      const match = name ? existing.get(nameKey(name)) : undefined
+      if (!match || match.id === row.id) return row
+      remap.set(row.id as string, match.id)
+      return { ...row, id: match.id }
+    })
+    if (remap.size === 0) continue
+
+    for (const reference of references) {
+      const referencing = resolved[reference.table]
+      if (!referencing) continue
+      resolved[reference.table] = referencing.map((row) => {
+        const target = remap.get(row[reference.field] as string)
+        return target === undefined ? row : { ...row, [reference.field]: target }
+      })
+    }
+  }
+
+  return resolved
+}
+
+/**
+ * Spielt ein Backup ein. Zeilen mit gleicher ID werden überschrieben, Stammdaten zusätzlich über
+ * ihren Namen an den vorhandenen Bestand gebunden (siehe `resolveReferencesByName`).
+ *
+ * Für den Rest (mehrfach vorhandene Tage, gleichnamige Plan-Phasen) gibt es `dedupeDatabase` -
+ * die Oberfläche ruft es direkt nach dem Import auf.
+ */
 export async function importAllData(json: string): Promise<void> {
   const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
+  const data = await resolveReferencesByName(parsed.data)
   const tables = backupTables()
   await db.transaction('rw', tables, async () => {
     for (const table of tables) {
-      const rows = parsed.data[table.name]
+      const rows = data[table.name]
       if (!rows) continue
       await table.bulkPut(rows)
     }
@@ -288,8 +370,8 @@ export async function importAllData(json: string): Promise<void> {
 // importAllData) auf nur die zu den angegebenen Athleten gehörenden Zeilen - direkt über
 // athleteId, transitiv über planId/workoutLogId/nutritionLogId für die jeweils
 // abhängigen Tabellen. Globale Referenztabellen (foodItems/supplements/exercises) werden
-// unverändert komplett durchgereicht, da bulkPut ein reines Upsert ist und nichts
-// Bestehendes überschreibt.
+// unverändert komplett durchgereicht; sie werden beim Import über `resolveReferencesByName`
+// an den vorhandenen Bestand gebunden, statt als Doppelgänger neu anzulegen.
 function filterDataToAthletes(data: Record<string, Record<string, unknown>[]>, athleteIds: string[]): Record<string, Record<string, unknown>[]> {
   const athleteIdSet = new Set(athleteIds)
   const byAthlete = (rows: Record<string, unknown>[] | undefined) => (rows ?? []).filter((r) => athleteIdSet.has(r.athleteId as string))
@@ -348,7 +430,7 @@ export async function exportAthletes(athleteIds: string[]): Promise<string> {
 
 export async function importSelectedAthletes(json: string, athleteIds: string[]): Promise<void> {
   const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
-  const filtered = filterDataToAthletes(parsed.data, athleteIds)
+  const filtered = await resolveReferencesByName(filterDataToAthletes(parsed.data, athleteIds))
   await db.transaction('rw', db.tables, async () => {
     for (const table of db.tables) {
       const rows = filtered[table.name]
@@ -399,11 +481,15 @@ export async function importNutritionPlan(json: string, athleteId: string): Prom
   await db.transaction('rw', db.nutritionPlans, db.planMeals, db.foodItems, async () => {
     const order = await db.nutritionPlans.where('athleteId').equals(athleteId).count()
     await db.nutritionPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    // Einmal nachschlagen statt je Zeile: über `nameKey` und nicht über den Index, sonst gilt
+    // "Reis (roh)" gegen "reis (roh)" als unbekannt und wird ein zweites Mal angelegt.
+    const foods = byName(await db.foodItems.toArray())
     for (const [index, item] of template.items.entries()) {
-      let food = await db.foodItems.where('name').equals(item.foodName).first()
+      let food = foods.get(nameKey(item.foodName))
       if (!food && item.foodMacros) {
         food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
         await db.foodItems.add(food)
+        foods.set(nameKey(item.foodName), food)
       }
       if (!food) continue
       await db.planMeals.add({
@@ -464,12 +550,14 @@ export async function importSupplementPlan(json: string, athleteId: string): Pro
   await db.transaction('rw', db.supplementPlans, db.supplementPlanItems, db.supplements, async () => {
     const order = await db.supplementPlans.where('athleteId').equals(athleteId).count()
     await db.supplementPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    const supplements = byName(await db.supplements.toArray())
     let itemOrder = 0
     for (const item of template.items) {
-      let supplement = await db.supplements.where('name').equals(item.supplementName).first()
+      let supplement = supplements.get(nameKey(item.supplementName))
       if (!supplement && item.supplementFallback) {
         supplement = { id: crypto.randomUUID(), name: item.supplementName, ...item.supplementFallback }
         await db.supplements.add(supplement)
+        supplements.set(nameKey(item.supplementName), supplement)
       }
       if (!supplement) continue
       await db.supplementPlanItems.add({
@@ -533,11 +621,13 @@ export async function importTrainingPlan(json: string, athleteId: string): Promi
   await db.transaction('rw', db.trainingPlans, db.trainingPlanExercises, db.exercises, async () => {
     const order = await db.trainingPlans.where('athleteId').equals(athleteId).count()
     await db.trainingPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    const exercises = byName(await db.exercises.toArray())
     for (const item of template.items) {
-      let exercise = await db.exercises.where('name').equals(item.exerciseName).first()
+      let exercise = exercises.get(nameKey(item.exerciseName))
       if (!exercise && item.exerciseFallback) {
         exercise = { id: crypto.randomUUID(), name: item.exerciseName, ...item.exerciseFallback }
         await db.exercises.add(exercise)
+        exercises.set(nameKey(item.exerciseName), exercise)
       }
       if (!exercise) continue
       await db.trainingPlanExercises.add({

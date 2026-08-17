@@ -48,12 +48,7 @@ export function requireSettings(): ObsidianSyncSettings {
   return settings
 }
 
-/** Nachschlagewerk über den Namen - so werden Referenzen geräteübergreifend aufgelöst. */
-export function byName<T extends { name: string }>(items: T[]): Map<string, T> {
-  return new Map(items.map((item) => [item.name.trim().toLowerCase(), item]))
-}
-
-/** Schlüssel für `byName`-Karten. */
-export function nameKey(name: string): string {
-  return name.trim().toLowerCase()
-}
+// Namensabgleich (`byName`/`nameKey`) liegt in `lib/names`, damit Vault-Import, Seeds, Backup-
+// Import und die Bereinigung doppelter Einträge denselben Schlüssel benutzen - sonst legt die
+// eine Stelle an, was die andere für vorhanden hält.
+export { byName, nameKey } from '../../lib/names'
