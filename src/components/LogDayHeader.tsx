@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { todayIso } from '../db/queries'
+import { addDays, todayIso } from '../db/queries'
 import DayStrip, { type DayMarker } from './DayStrip'
 import { Button, Card, Input } from './ui'
 
@@ -15,6 +15,14 @@ function formatDay(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
+/** "Heute"/"Morgen"/"Gestern" statt des Datums - beim Vorausplanen die häufigsten drei Tage. */
+function relativeDay(iso: string, today: string): string | undefined {
+  if (iso === today) return 'Heute'
+  if (iso === addDays(today, 1)) return 'Morgen'
+  if (iso === addDays(today, -1)) return 'Gestern'
+  return undefined
+}
+
 /**
  * Gemeinsamer Kopf beider Tages-Logs: welcher Tag, in welchem Zustand, und der Wechsel
  * zu einem anderen Tag - alles an einer Stelle statt wie früher verteilt auf ein
@@ -28,6 +36,7 @@ export default function LogDayHeader({
   status,
   onDelete,
   deleteConfirmText,
+  allowFuture = false,
   children,
 }: {
   title: string
@@ -37,22 +46,24 @@ export default function LogDayHeader({
   status: LogDayStatus
   onDelete?: () => void
   deleteConfirmText?: string
+  /** Künftige Tage zulassen - siehe `DayStrip`. Betrifft Wochenleiste und Kalenderfeld. */
+  allowFuture?: boolean
   children?: ReactNode // z.B. die Timer-Zeile des Trainingslogs
 }) {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const today = todayIso()
+  const relative = relativeDay(selectedDate, today)
 
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
-          <p className="truncate text-base font-semibold text-fg">
-            {selectedDate === today ? 'Heute' : formatDay(selectedDate)}
-          </p>
-          <p className="text-xs text-muted">
-            {selectedDate === today ? formatDay(selectedDate) : ''}
-            {selectedDate === today ? ' · ' : ''}
+          <p className="truncate text-base font-semibold text-fg">{relative ?? formatDay(selectedDate)}</p>
+          <p className="truncate text-xs text-muted">
+            {/* Bei "Heute"/"Morgen"/"Gestern" steht das ausgeschriebene Datum darunter, sonst
+                stünde es doppelt. */}
+            {relative ? `${formatDay(selectedDate)} · ` : ''}
             {STATUS_LABEL[status]}
           </p>
         </div>
@@ -83,7 +94,7 @@ export default function LogDayHeader({
         <Input
           type="date"
           value={selectedDate}
-          max={today}
+          max={allowFuture ? undefined : today}
           onChange={(e) => {
             if (!e.target.value) return
             onSelectDate(e.target.value)
@@ -92,7 +103,7 @@ export default function LogDayHeader({
         />
       )}
 
-      <DayStrip selectedDate={selectedDate} onSelect={onSelectDate} markers={markers} />
+      <DayStrip selectedDate={selectedDate} onSelect={onSelectDate} markers={markers} allowFuture={allowFuture} />
 
       {children}
     </Card>
