@@ -269,6 +269,56 @@ describe('parseMealPhases', () => {
     expect(phases[1].items).toHaveLength(1)
   })
 
+  it('liest "## Rezept:" als Rezept samt Ausbeute', () => {
+    const content = [
+      ...buildFrontmatter({ typ: 'ernaehrungsplan' }),
+      '## Plan: Phase 1',
+      '',
+      '### Frühstück',
+      '- Haferflocken – 80g (300 kcal)',
+      '',
+      '## Rezept: Protein-Eis Schoko',
+      '',
+      '**Ergibt:** 2 Portionen',
+      '',
+      '### Snack 1',
+      '- Joghurt (natur, 3,5%) – 150g (96 kcal)',
+      '- Whey Protein (Pulver) – 60g (236 kcal)',
+      '',
+      '**Gesamt:** 332 kcal · 27 g Protein · 9 g Kohlenhydrate · 7 g Fett',
+      '**Je Portion:** 166 kcal · 13 g Protein · 5 g Kohlenhydrate · 4 g Fett',
+      '',
+    ].join('\n')
+
+    const phases = parseMealPhases(content)
+    expect(phases).toHaveLength(2)
+    expect(phases[0].isRecipe).toBeUndefined()
+    expect(phases[1]).toEqual({
+      phaseName: 'Protein-Eis Schoko',
+      isRecipe: true,
+      servings: 2,
+      items: [
+        { mealType: 'Snack 1', name: 'Joghurt (natur, 3,5%)', grams: 150, done: false },
+        { mealType: 'Snack 1', name: 'Whey Protein (Pulver)', grams: 60, done: false },
+      ],
+    })
+  })
+
+  it('nimmt ein Rezept ohne "**Ergibt:**"-Zeile hin', () => {
+    const content = [
+      ...buildFrontmatter({ typ: 'ernaehrungsplan' }),
+      '## Rezept: Handgeschrieben',
+      '',
+      '### Snack 1',
+      '- Haferflocken – 80g',
+      '',
+    ].join('\n')
+
+    const [phase] = parseMealPhases(content)
+    expect(phase.isRecipe).toBe(true)
+    expect(phase.servings).toBeUndefined()
+  })
+
   it('überliest den Vorgabe-Block unter den Mahlzeiten', () => {
     const content = [
       ...buildFrontmatter({ typ: 'ernaehrungsplan', ziel_kalorien: 2500, ziel_protein_g: 180 }),

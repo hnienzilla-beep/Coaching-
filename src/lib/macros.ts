@@ -38,6 +38,11 @@ export function macroLine(sums: Sums): string {
   return `${sums.kcal.toFixed(0)} kcal · P ${sums.protein.toFixed(0)} · C ${sums.carbs.toFixed(0)} · F ${sums.fat.toFixed(0)} g`
 }
 
+/** Alle Werte mit demselben Faktor - für Rezepte, die portionsweise gerechnet werden. */
+export function scaleMacros(s: Sums, factor: number): Sums {
+  return { kcal: s.kcal * factor, protein: s.protein * factor, carbs: s.carbs * factor, fat: s.fat * factor }
+}
+
 export function subtractMacros(a: Sums, b: Sums): Sums {
   return { kcal: a.kcal - b.kcal, protein: a.protein - b.protein, carbs: a.carbs - b.carbs, fat: a.fat - b.fat }
 }

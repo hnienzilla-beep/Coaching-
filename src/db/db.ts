@@ -367,6 +367,9 @@ interface NutritionPlanTemplate {
   kind: 'nutritionPlan'
   version: 1
   phaseName: string
+  // Fehlen beide (Vorlage aus einer aelteren Version), entsteht ein normaler Tagesplan.
+  isRecipe?: boolean
+  servings?: number
   items: { mealType: MealType; grams: number; foodName: string; foodMacros?: Omit<FoodItem, 'id' | 'name'> }[]
 }
 
@@ -379,6 +382,8 @@ export async function exportNutritionPlan(planId: string): Promise<string> {
     kind: 'nutritionPlan',
     version: 1,
     phaseName: plan.phaseName,
+    isRecipe: plan.isRecipe,
+    servings: plan.servings,
     items: meals.map((m, i) => {
       const food = foods[i]
       return {
@@ -398,7 +403,14 @@ export async function importNutritionPlan(json: string, athleteId: string): Prom
   const planId = crypto.randomUUID()
   await db.transaction('rw', db.nutritionPlans, db.planMeals, db.foodItems, async () => {
     const order = await db.nutritionPlans.where('athleteId').equals(athleteId).count()
-    await db.nutritionPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    await db.nutritionPlans.add({
+      id: planId,
+      athleteId,
+      phaseName: template.phaseName,
+      order,
+      isRecipe: template.isRecipe,
+      servings: template.servings,
+    })
     for (const [index, item] of template.items.entries()) {
       let food = await db.foodItems.where('name').equals(item.foodName).first()
       if (!food && item.foodMacros) {

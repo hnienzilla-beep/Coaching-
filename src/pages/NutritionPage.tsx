@@ -5,12 +5,11 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
-import { savePhaseOrder } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
-import type { Athlete, MealType, PlanMeal } from '../models/types'
+import type { Athlete, MealType, NutritionPlan, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Field, Select } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import { type SearchPickerItem } from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
 import FoodPortionFields from '../components/FoodPortionFields'
@@ -19,9 +18,10 @@ import MacroBars from '../components/MacroBars'
 import MacroSumTable from '../components/MacroSumTable'
 import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
-import { macroLine, sumMacros, type Sums } from '../lib/macros'
+import { macroLine, scaleMacros, sumMacros, type Sums } from '../lib/macros'
 import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
+import { servingsLabel, servingsOf } from '../lib/recipes'
 
 type Ctx = { athlete: Athlete }
 
@@ -38,6 +38,9 @@ export default function NutritionPage() {
   const plans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
+  // Tagesplaene und Rezepte teilen sich Tabelle und Seite, aber nie eine Liste: Ein Rezept ist
+  // kein Tagesablauf, und die Phasenleiste waere mit einem Dutzend Gerichten unbrauchbar.
+  const [kind, setKind] = useState<'plan' | 'recipe'>('plan')
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [draftMeals, setDraftMeals] = useState<PlanMeal[] | null>(null)
   // Frisch angelegte Zeilen starten aufgeklappt - dort fehlt das Lebensmittel noch.
@@ -45,8 +48,13 @@ export default function NutritionPage() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const sensors = useDragSensors()
 
-  const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
-  const activePlan = plans?.find((p) => p.id === currentPlanId)
+  const isRecipeView = kind === 'recipe'
+  const visiblePlans = (plans ?? []).filter((p) => !!p.isRecipe === isRecipeView)
+  // activePlanId zeigt nach einem Listenwechsel noch auf die andere Liste - dann greift der
+  // erste Eintrag der jetzt sichtbaren, sonst staende die Seite leer da.
+  const currentPlanId = visiblePlans.find((p) => p.id === activePlanId)?.id ?? visiblePlans[0]?.id ?? null
+  const activePlan = visiblePlans.find((p) => p.id === currentPlanId)
+  const recipeCount = (plans ?? []).filter((p) => p.isRecipe).length
 
   const meals = useLiveQuery(
     () => (currentPlanId ? db.planMeals.where('planId').equals(currentPlanId).sortBy('order') : []),
@@ -105,18 +113,66 @@ export default function NutritionPage() {
   const rows: Row[] = toRows(visibleMeals)
   const sums = sumMacros(rows)
 
-  const groups = MEAL_TYPES.map((mealType) => {
+  // Im Rezept ist die Mahlzeit bedeutungslos - gewählt wird sie erst beim Einfügen ins Log.
+  // Die Zeilen behalten trotzdem ihren Mahlzeit-Typ (der Vault-Export braucht einen), stehen
+  // hier aber als eine flache Zutatenliste statt unter "### Snack 1".
+  const recipeRowMealType: MealType = visibleMeals[visibleMeals.length - 1]?.mealType ?? mealTypeForTime()
+
+  const mealGroups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
-    return { mealType, rows: groupRows, sum: sumMacros(groupRows) }
+    return { key: mealType, label: mealType, mealType, rows: groupRows, sum: sumMacros(groupRows) }
   }).filter((g) => g.rows.length > 0)
 
-  const usedMealTypes = new Set(groups.map((g) => g.mealType))
+  const groups = isRecipeView
+    ? rows.length
+      ? [{ key: 'zutaten', label: 'Zutaten', mealType: recipeRowMealType, rows, sum: sumMacros(rows) }]
+      : []
+    : mealGroups
+
+  const usedMealTypes = new Set(mealGroups.map((g) => g.mealType))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
     const id = crypto.randomUUID()
-    await db.nutritionPlans.add({ id, athleteId: athlete.id, phaseName: `Phase ${order + 1}`, order })
+    await db.nutritionPlans.add({
+      id,
+      athleteId: athlete.id,
+      phaseName: isRecipeView ? `Rezept ${recipeCount + 1}` : `Phase ${order + 1}`,
+      order,
+      ...(isRecipeView ? { isRecipe: true, servings: 1 } : {}),
+    })
     setActivePlanId(id)
+  }
+
+  /**
+   * Umschalten zwischen Tagesplan und Rezept. Die Ansicht wechselt mit, sonst waere die
+   * gerade bearbeitete Phase nach dem Haken aus der Liste verschwunden.
+   */
+  async function setIsRecipe(plan: NutritionPlan, value: boolean) {
+    await db.nutritionPlans.update(plan.id, {
+      isRecipe: value || undefined,
+      servings: value ? servingsOf(plan) : undefined,
+    })
+    setKind(value ? 'recipe' : 'plan')
+    setActivePlanId(plan.id)
+  }
+
+  async function setServings(planId: string, servings: number) {
+    await db.nutritionPlans.update(planId, { servings: servings > 0 ? servings : 1 })
+  }
+
+  /**
+   * Umsortieren wirkt nur in der sichtbaren Liste. Statt bei 0 neu zu zählen werden die
+   * `order`-Werte neu verteilt, die diese Gruppe ohnehin schon belegt - sonst bekämen
+   * Tagespläne und Rezepte dieselben Nummern und lägen im Vault-Export beliebig ineinander.
+   */
+  async function saveVisibleOrder(orderedIds: string[]) {
+    const slots = visiblePlans.map((p) => p.order).sort((a, b) => a - b)
+    await db.transaction('rw', db.nutritionPlans, async () => {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await db.nutritionPlans.update(orderedIds[i], { order: slots[i] })
+      }
+    })
   }
 
   async function deletePhase(planId: string) {
@@ -219,15 +275,50 @@ export default function NutritionPage() {
     }
   }
 
-  const subtitle = groups.length
-    ? `${groups.length} ${groups.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'} · ${rows.length} ${rows.length === 1 ? 'Eintrag' : 'Einträge'}`
-    : undefined
+  const entryText = `${rows.length} ${rows.length === 1 ? 'Eintrag' : 'Einträge'}`
+  // Beim Rezept sagt die Zahl der Mahlzeiten nichts - es ist ein Gericht. Dort steht
+  // stattdessen die Ausbeute, an der die Portionsrechnung im Log haengt.
+  const subtitle = isRecipeView
+    ? activePlan
+      ? `${entryText} · ergibt ${servingsLabel(servingsOf(activePlan))}`
+      : undefined
+    : groups.length
+      ? `${groups.length} ${groups.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'} · ${entryText}`
+      : undefined
+
+  const perServing = activePlan && isRecipeView ? scaleMacros(sums, 1 / servingsOf(activePlan)) : null
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        {(['plan', 'recipe'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => {
+              setKind(k)
+              cancelEdit()
+            }}
+            aria-pressed={kind === k}
+            className={`flex-1 rounded-xl px-3 py-2 text-sm transition active:scale-95 ${
+              kind === k
+                ? 'bg-accent font-medium text-accent-fg'
+                : 'border border-border bg-surface-2 text-muted hover:text-fg'
+            }`}
+          >
+            {k === 'plan' ? 'Tagespläne' : 'Rezepte'}
+          </button>
+        ))}
+      </div>
+
       <PlanPhaseHeader
-        title="Ernährungsplan"
-        phases={(plans ?? []).map((p) => ({
+        title={isRecipeView ? 'Rezept' : 'Ernährungsplan'}
+        phaseNoun={isRecipeView ? 'Rezept' : 'Phase'}
+        addLabel={isRecipeView ? '+ Rezept' : '+ Phase'}
+        deleteConfirmText={
+          isRecipeView ? 'Dieses Rezept mit allen Zutaten löschen?' : 'Diese Phase mit allen Mahlzeiten löschen?'
+        }
+        phases={visiblePlans.map((p) => ({
           id: p.id,
           phaseName: p.phaseName,
           // Beim Bearbeiten zählt der Entwurf, sonst stünde in der Übersicht eine andere
@@ -240,21 +331,22 @@ export default function NutritionPage() {
           cancelEdit()
         }}
         onAdd={coachMode ? addPhase : undefined}
-        addLabel="+ Phase"
         onRename={activePlan ? (name) => renamePhase(activePlan.id, name) : undefined}
-        onDelete={activePlan && plans && plans.length > 1 ? () => deletePhase(activePlan.id) : undefined}
+        onDelete={
+          // Ein Tagesplan muss bleiben (die Seite braucht einen), Rezepte sind optional.
+          activePlan && (isRecipeView || visiblePlans.length > 1) ? () => deletePhase(activePlan.id) : undefined
+        }
         onReorder={
           coachMode
             ? (ids) => {
                 // Ohne gesetztes activePlanId zeigt die Seite die erste Phase - nach dem
                 // Verschieben wäre das eine andere, und die gerade bearbeitete Phase wäre weg.
                 setActivePlanId(currentPlanId)
-                void savePhaseOrder('nutritionPlans', ids)
+                void saveVisibleOrder(ids)
               }
             : undefined
         }
         countLabel={(n) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'}`}
-        deleteConfirmText="Diese Phase mit allen Mahlzeiten löschen?"
         subtitle={subtitle}
         editing={editing}
         actions={
@@ -270,42 +362,96 @@ export default function NutritionPage() {
             )
           ) : undefined
         }
-      />
+      >
+        {editing && activePlan && (
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={!!activePlan.isRecipe}
+                onChange={(e) => void setIsRecipe(activePlan, e.target.checked)}
+                className="h-4 w-4 accent-accent"
+              />
+              Als Rezept verwenden
+            </label>
+            {activePlan.isRecipe ? (
+              <>
+                <Field label="Ergibt … Portionen">
+                  <DecimalInput
+                    value={servingsOf(activePlan)}
+                    onChange={(v) => void setServings(activePlan.id, v ?? 1)}
+                  />
+                </Field>
+                <p className="text-xs text-muted">
+                  Die Zutaten unten beschreiben den ganzen Ansatz. Im Ernährungslog gibst du dann Portionen ein und
+                  bekommst die Zutaten anteilig eingetragen.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-muted">
+                Ein Rezept ist ein Gericht statt eines Tagesablaufs: Es taucht nicht in der Planauswahl des Logs auf,
+                sondern lässt sich dort portionsweise einfügen.
+              </p>
+            )}
+          </div>
+        )}
+      </PlanPhaseHeader>
 
       {activePlan && (
         <>
+          {/* Ein Rezept am Tagesziel zu messen ergibt keinen Sinn - "Noch 2300 kcal einzuplanen"
+              stünde sonst unter jedem Eis. Dort zählt, was der Ansatz insgesamt hat und was davon
+              auf eine Portion entfällt: die Zahl, die im Log am Ende landet. */}
           <Card className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Bilanz der Phase</h2>
-            <MacroBars done={sums} planned={sums} target={target} legend={null} remainingText={planRemainingText} />
-            {coachMode && (
-              <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
-                <MacroSumTable sums={sums} target={target} />
-              </CollapsibleCard>
+            {isRecipeView && perServing ? (
+              <>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Nährwerte</h2>
+                <div className="flex flex-col gap-1 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted">Ganzes Rezept</span>
+                    <span className="text-right text-fg">{macroLine(sums)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted">Je Portion</span>
+                    <span className="text-right font-medium text-fg">{macroLine(perServing)}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Bilanz der Phase</h2>
+                <MacroBars done={sums} planned={sums} target={target} legend={null} remainingText={planRemainingText} />
+                {coachMode && (
+                  <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
+                    <MacroSumTable sums={sums} target={target} />
+                  </CollapsibleCard>
+                )}
+              </>
             )}
           </Card>
 
           <Card className="flex flex-col gap-3">
             {groups.length === 0 && (
               <p className="text-sm text-muted">
-                🍽️ Noch keine Mahlzeiten in dieser Phase.
+                🍽️ {isRecipeView ? 'Noch keine Zutaten in diesem Rezept.' : 'Noch keine Mahlzeiten in dieser Phase.'}
                 {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
               </p>
             )}
 
             <div className="flex flex-col gap-4">
               {groups.map((group) => (
-                <div key={group.mealType} className="flex flex-col gap-1.5">
+                <div key={group.key} className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     {/* text-fg statt text-accent: die Athleten-Akzentfarben sind hell und im
                         Hell-Modus als Schrift praktisch unlesbar. */}
-                    <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.mealType}</div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.label}</div>
                     {editing && (
                       <Button
                         variant="ghost"
                         onClick={() => addDraftRow(group.mealType)}
-                        aria-label={`Lebensmittel zu ${group.mealType} hinzufügen`}
+                        aria-label={`${isRecipeView ? 'Zutat' : `Lebensmittel zu ${group.label}`} hinzufügen`}
                       >
-                        + Lebensmittel
+                        {isRecipeView ? '+ Zutat' : '+ Lebensmittel'}
                       </Button>
                     )}
                   </div>
@@ -329,6 +475,7 @@ export default function NutritionPage() {
                               onToggle={() => toggleExpanded(row.meal.id)}
                               onChange={(patch) => updateDraftMeal(row.meal.id, patch)}
                               onRemove={() => removeDraftMeal(row.meal.id)}
+                              showMealType={!isRecipeView}
                             />
                           ))}
                         </div>
@@ -353,15 +500,22 @@ export default function NutritionPage() {
               ))}
             </div>
 
-            {editing && (
-              <GroupAddChips
-                label="Mahlzeit hinzufügen"
-                options={MEAL_TYPES}
-                used={usedMealTypes}
-                onAdd={addDraftRow}
-                highlight={mealTypeForTime()}
-              />
-            )}
+            {editing &&
+              (isRecipeView ? (
+                groups.length === 0 && (
+                  <Button variant="secondary" onClick={() => addDraftRow(recipeRowMealType)}>
+                    + Zutat
+                  </Button>
+                )
+              ) : (
+                <GroupAddChips
+                  label="Mahlzeit hinzufügen"
+                  options={MEAL_TYPES}
+                  used={usedMealTypes}
+                  onAdd={addDraftRow}
+                  highlight={mealTypeForTime()}
+                />
+              ))}
 
             {editing && (
               <Button variant="ghost" onClick={cancelEdit}>
@@ -404,6 +558,7 @@ function SortableMealRow({
   onToggle,
   onChange,
   onRemove,
+  showMealType,
 }: {
   row: Row
   foodName?: string
@@ -412,6 +567,7 @@ function SortableMealRow({
   onToggle: () => void
   onChange: (patch: Partial<PlanMeal>) => void
   onRemove: () => void
+  showMealType: boolean // im Rezept nicht: die Mahlzeit wird erst beim Einfügen ins Log gewählt
 }) {
   const { meal } = row
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
@@ -444,15 +600,17 @@ function SortableMealRow({
           onChange={onChange}
         />
 
-        <Field label="Mahlzeit">
-          <Select value={meal.mealType} onChange={(e) => onChange({ mealType: e.target.value as MealType })}>
-            {MEAL_TYPES.map((mt) => (
-              <option key={mt} value={mt}>
-                {mt}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {showMealType && (
+          <Field label="Mahlzeit">
+            <Select value={meal.mealType} onChange={(e) => onChange({ mealType: e.target.value as MealType })}>
+              {MEAL_TYPES.map((mt) => (
+                <option key={mt} value={mt}>
+                  {mt}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </PlanItemRow>
     </div>
   )
