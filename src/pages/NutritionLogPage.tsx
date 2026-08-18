@@ -89,8 +89,12 @@ export default function NutritionLogPage() {
 
   // Tracking-Synchronisierung: nur die tatsächlich abgehakten ("gegessenen") Einträge zählen,
   // andere Tracking-Felder (Gewicht, Körpermaße) bleiben unangetastet.
+  //
+  // Vorausgeplante Tage bleiben außen vor: Am Tracking hängen 7-Tage-Trend, Gewichtsverlauf
+  // und `Gewicht.md`, und ein Tag, an dem noch nichts gegessen sein *kann*, gehört dort nicht
+  // als 0-kcal-Zeile hinein. Sobald der Tag da ist und abgehakt wird, läuft der Abgleich normal.
   useEffect(() => {
-    if (!currentLog) return
+    if (!currentLog || selectedDate > todayIso()) return
     void syncNutritionTotalsToDailyEntry(athlete.id, selectedDate, {
       calories: doneSums.kcal,
       protein: doneSums.protein,
@@ -244,6 +248,9 @@ export default function NutritionLogPage() {
         status={status}
         onDelete={currentLog ? deleteLog : undefined}
         deleteConfirmText="Ernährungstag mit allen Einträgen löschen?"
+        // Anders als beim Training: Essen lässt sich im Voraus planen, ein Training nicht
+        // im Voraus protokollieren.
+        allowFuture
       />
 
       <Card className="flex flex-col gap-3">

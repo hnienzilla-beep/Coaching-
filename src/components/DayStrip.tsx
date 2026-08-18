@@ -20,10 +20,17 @@ export default function DayStrip({
   selectedDate,
   onSelect,
   markers,
+  allowFuture = false,
 }: {
   selectedDate: string
   onSelect: (date: string) => void
   markers: Map<string, DayMarker>
+  /**
+   * Künftige Tage anwählbar machen. Standard aus: Ein Training lässt sich nur protokollieren,
+   * nachdem es stattgefunden hat. Das Ernährungslog schaltet es ein - dort ist der Tag im
+   * Voraus zu füllen der normale Fall (einkaufen, vorkochen, Wettkampfwoche planen).
+   */
+  allowFuture?: boolean
 }) {
   const today = todayIso()
   const weekStart = startOfWeek(selectedDate)
@@ -33,7 +40,7 @@ export default function DayStrip({
     <div className="grid grid-cols-7 gap-1">
       {days.map((date, i) => {
         const selected = date === selectedDate
-        const future = date > today
+        const future = date > today && !allowFuture
         const marker = markers.get(date)
         return (
           <button
