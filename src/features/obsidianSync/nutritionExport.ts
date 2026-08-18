@@ -1,10 +1,11 @@
 import { db } from '../../db/db'
 import { calculate, caloriesFromMacros } from '../../lib/calculator'
 import type { CalculatorResult } from '../../lib/calculator'
-import { subtractMacros, sumMacros } from '../../lib/macros'
+import { scaleMacros, subtractMacros, sumMacros } from '../../lib/macros'
 import type { Sums } from '../../lib/macros'
 import { MEAL_TYPES } from '../../models/types'
 import type { FoodItem } from '../../models/types'
+import { servingsLabel, servingsOf } from '../../lib/recipes'
 import { requireSettings } from './importLog'
 import { buildFrontmatter } from './markdownBuild'
 import { syncFile } from './githubApi'
@@ -96,7 +97,10 @@ async function buildErnaehrungsplan(): Promise<string> {
     const foods = await db.foodItems.bulkGet(allMeals.map((m) => m.foodItemId))
     const foodMap = new Map(allMeals.map((m, i) => [m.id, foods[i]]))
 
-    lines.push(`## Plan: ${plan.phaseName}`, '')
+    // Rezepte bekommen eine eigene Überschrift: Sie sind kein Tagesablauf, und der Import muss
+    // sie beim Zurücklesen wieder als Rezept anlegen statt als Plan-Phase.
+    lines.push(`## ${plan.isRecipe ? 'Rezept' : 'Plan'}: ${plan.phaseName}`, '')
+    if (plan.isRecipe) lines.push(`**Ergibt:** ${servingsLabel(servingsOf(plan))}`, '')
 
     const portions: Sums[] = []
 
@@ -114,7 +118,16 @@ async function buildErnaehrungsplan(): Promise<string> {
     }
 
     if (allMeals.length === 0) {
-      lines.push('_Keine Mahlzeiten im Plan._', '')
+      lines.push(plan.isRecipe ? '_Keine Zutaten im Rezept._' : '_Keine Mahlzeiten im Plan._', '')
+    } else if (plan.isRecipe) {
+      // Ein Gericht am Tagesziel zu messen sagt nichts - hier zählt der Ansatz und was davon
+      // auf eine Portion entfällt, also die Menge, die im Log landet.
+      const total = sumMacros(portions)
+      lines.push(
+        `**Gesamt:** ${macroSummary(total)}`,
+        `**Je Portion:** ${macroSummary(scaleMacros(total, 1 / servingsOf(plan)))}`,
+        '',
+      )
     } else {
       lines.push(...balanceLines(target, sumMacros(portions), 'Gesamt'))
     }

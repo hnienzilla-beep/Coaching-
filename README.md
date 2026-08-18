@@ -57,7 +57,7 @@ Personal Access Token mit Schreibrecht auf dieses Repo.
 | `20-Fitness/Trainingsplaene.md` | alle Trainingsplan-Phasen mit Sätzen, Wiederholungen, Zielgewicht, Notizen |
 | `20-Fitness/Supplemente.md` | alle Supplementplan-Phasen |
 | `20-Fitness/Training/<datum>.md` | Trainingslog je Tag: Plan, Start/Ende, Sätze, Übungs- und Trainingsnotiz |
-| `40-Ernaehrung/Ernaehrungsplan.md` | alle Ernährungsplan-Phasen, je Phase Vorgabe, Gesamt und Differenz |
+| `40-Ernaehrung/Ernaehrungsplan.md` | alle Ernährungsplan-Phasen, je Phase Vorgabe, Gesamt und Differenz; Rezepte stehen unter `## Rezept:` statt `## Plan:`, mit Ausbeute und Nährwerten je Portion |
 | `40-Ernaehrung/Lebensmittel.md` | Lebensmittel-Datenbank (Nährwerte je 100 g, Favorit, "Unbestätigt") |
 | `40-Ernaehrung/Lebensmittel-Neu.md` | Eingang für neue Lebensmittel (siehe unten) |
 | `40-Ernaehrung/Log/<datum>.md` | Ernährungslog je Tag: Plan, Abschluss, Mahlzeiten, Vorgabe/Gegessen/Differenz, Tagesnotiz |
@@ -246,6 +246,31 @@ hat zwei Gestalten:
 
 Chips und Sortierliste sind bewusst getrennt: Ein waagerecht scrollender Streifen und Drag &
 Drop sind auf dem Touchscreen dieselbe Wischbewegung und kämen sich sonst in die Quere.
+
+### Rezepte
+
+Eine Ernährungsplan-Phase kann statt eines Tagesablaufs auch ein **Gericht** sein: Schalter
+"Als Rezept verwenden" im Bearbeiten-Modus des Ernährungsplans. Rezepte liegen in derselben
+Tabelle wie die Tagespläne, aber nie in derselben Liste - oben auf der Planseite steht dafür
+ein Umschalter "Tagespläne / Rezepte", und in der Planauswahl des Logs tauchen Rezepte gar
+nicht erst auf. Ein Dutzend Gerichte in der Phasenleiste wäre sonst unbrauchbar.
+
+Im Rezept beschreiben die Zeilen den **kompletten Ansatz**, dazu steht dabei, wie viele
+Portionen er ergibt. Weil die Mahlzeit erst beim Einfügen gewählt wird, stehen die Zeilen dort
+als eine flache **Zutatenliste** statt unter "### Snack 1", und die Bilanz misst nicht gegen
+das Tagesziel ("Noch 2300 kcal einzuplanen" unter einem Eis sagt nichts), sondern zeigt den
+ganzen Ansatz und die Nährwerte je Portion.
+
+Im Ernährungslog gibt es dafür **"Rezept einfügen"**: Rezept, Mahlzeit und Portionszahl
+wählen, eine Vorschau zeigt vorher, was dabei herauskommt. Die Zutaten landen **einzeln** und
+anteilig im Log - ein halbes Eis aus einem Rezept über zwei Portionen wird zu 75 g Joghurt,
+30 g Whey und so weiter. Einzeln deshalb, weil die Makros so aufs Gramm stimmen und sich
+hinterher noch jede Zutat ändern, abhaken oder entfernen lässt. Mengen werden dabei auf eine
+Nachkommastelle gerundet; eine auf 0 g geschrumpfte Zutat fällt weg.
+
+Ohne gepflegte Ausbeute gilt **eine Portion** - dann ist die eingegebene Zahl direkt der
+Faktor, "0,5" also das halbe Rezept. Dasselbe Rezept zweimal einzufügen heißt, es zweimal
+gegessen zu haben: Anders als beim Tagesplan wird hier nicht auf Dubletten geprüft.
 
 Auch die **Zeilen innerhalb einer Phase** lassen sich im Bearbeiten-Modus am Zuggriff
 verschieben - im Trainingsplan über den ganzen Tag hinweg, im Ernährungs- und

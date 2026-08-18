@@ -284,6 +284,12 @@ export async function importErnaehrungsplan(content: string): Promise<ImportResu
         // handgeschrieben - dann bleibt der bestehende Plan lieber unangetastet.
         if (resolved.every((r) => !r.food)) continue
 
+        // "## Rezept:" statt "## Plan:" macht die Phase zum Gericht; ohne "**Ergibt:**" bleibt
+        // es bei einer Portion, dann ist die Portionszahl im Log direkt der Faktor.
+        const recipeFields = phase.isRecipe
+          ? { isRecipe: true, servings: phase.servings && phase.servings > 0 ? phase.servings : 1 }
+          : { isRecipe: undefined, servings: undefined }
+
         let plan: NutritionPlan | undefined = phase.phaseName ? planByName.get(nameKey(phase.phaseName)) : plans[0]
         if (!plan) {
           plan = {
@@ -291,9 +297,12 @@ export async function importErnaehrungsplan(content: string): Promise<ImportResu
             athleteId: settings.athleteId,
             phaseName: phase.phaseName ?? 'Aus Vault importiert',
             order: nextOrder++,
+            ...recipeFields,
           }
           await db.nutritionPlans.add(plan)
           planByName.set(nameKey(plan.phaseName), plan)
+        } else {
+          await db.nutritionPlans.update(plan.id, recipeFields)
         }
 
         await db.planMeals.where('planId').equals(plan.id).delete()

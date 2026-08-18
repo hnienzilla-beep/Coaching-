@@ -60,6 +60,20 @@ export interface NutritionPlan {
   athleteId: string
   phaseName: string
   order: number
+  /**
+   * Rezept statt Tagesplan: Die Zeilen sind die Zutaten eines Gerichts, das portionsweise ins
+   * Tageslog eingefügt wird - nicht ein Tagesablauf, den man als Ganzes übernimmt. Rezepte
+   * tauchen deshalb weder in der Planauswahl des Logs noch in der Phasenleiste der Tagesplaene
+   * auf, sondern in einer eigenen Liste.
+   */
+  isRecipe?: boolean
+  /**
+   * Wie viele Portionen das **komplette** Rezept ergibt. Die Zutatenmengen beschreiben immer
+   * den ganzen Ansatz; wer eine von zwei Portionen isst, bekommt sie halbiert ins Log.
+   * Fehlt der Wert (Altbestand) oder ist er unbrauchbar, gilt eine Portion - dann ist die
+   * eingegebene Portionszahl direkt der Faktor.
+   */
+  servings?: number
 }
 
 export const MEAL_TYPES = [

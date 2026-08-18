@@ -140,8 +140,19 @@ function tableCells(contentLines: string[], firstColumnHeader: string): string[]
 
 /** "## Plan: Push A" bzw. das alte "## Aktueller Plan: …" - Trenner zwischen Plan-Phasen. */
 function planHeading(line: string): string | null {
-  const match = line.match(/^##\s+(?:Aktueller\s+)?Plan:\s*(.+?)\s*$/i)
+  const match = line.match(/^##\s+(?:Aktueller\s+)?(?:Plan|Rezept):\s*(.+?)\s*$/i)
   return match ? match[1] : null
+}
+
+/** "## Rezept: Protein-Eis Schoko" - ein Gericht statt einer Tagesplan-Phase. */
+function isRecipeHeading(line: string): boolean {
+  return /^##\s+Rezept:/i.test(line.trim())
+}
+
+/** "**Ergibt:** 2 Portionen" - die Ausbeute des kompletten Rezepts. */
+function servingsLine(line: string): number | undefined {
+  const match = line.match(/^\*\*Ergibt:\*\*\s*([\d.,]+)\s*Portion/i)
+  return match ? parseNumber(match[1]) : undefined
 }
 
 /** Eine "## …"-Überschrift (nicht "### …"). */
@@ -537,6 +548,10 @@ export interface ParsedMealItem {
 export interface ParsedMealPhase {
   /** `undefined`, wenn die Datei keine "## Plan:"-Überschrift hat (z.B. ein Tageslog). */
   phaseName?: string
+  /** Aus "## Rezept: …" statt "## Plan: …" - ein Gericht, kein Tagesablauf. */
+  isRecipe?: boolean
+  /** Aus "**Ergibt:** 2 Portionen" - nur bei Rezepten gesetzt. */
+  servings?: number
   items: ParsedMealItem[]
 }
 
@@ -567,7 +582,7 @@ export function parseMealPhases(content: string): ParsedMealPhase[] {
   for (const line of stripFrontmatter(content)) {
     const heading = planHeading(line)
     if (heading) {
-      current = { phaseName: heading, items: [] }
+      current = { phaseName: heading, items: [], ...(isRecipeHeading(line) ? { isRecipe: true } : {}) }
       phases.push(current)
       mealType = undefined
       blocked = false
@@ -582,6 +597,12 @@ export function parseMealPhases(content: string): ParsedMealPhase[] {
       continue
     }
     if (blocked) continue
+
+    const servings = servingsLine(line)
+    if (servings !== undefined && current) {
+      current.servings = servings
+      continue
+    }
 
     const meal = subHeading(line)
     if (meal) {

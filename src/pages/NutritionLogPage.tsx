@@ -5,9 +5,9 @@ import { db } from '../db/db'
 import { getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import { macroLine, sumMacros, type Sums } from '../lib/macros'
-import type { Athlete, FoodItem, MealType, NutritionLogItem } from '../models/types'
+import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Field, Select } from '../components/ui'
+import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
 import { type SearchPickerItem } from '../components/SearchPicker'
 import CollapsibleCard from '../components/CollapsibleCard'
 import FoodPortionFields from '../components/FoodPortionFields'
@@ -18,6 +18,7 @@ import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
 import { useCoachMode } from '../lib/detailLevel'
+import { SERVING_PRESETS, formatServings, recipeFactor, scaleGrams, servingsLabel, servingsOf } from '../lib/recipes'
 
 type Ctx = { athlete: Athlete }
 
@@ -64,6 +65,10 @@ export default function NutritionLogPage() {
     unconfirmed: f.unconfirmed,
   }))
   const planMap = new Map((nutritionPlans ?? []).map((p) => [p.id, p]))
+  // Ein Rezept ist kein Tagesablauf - es gehört nicht in die Planauswahl, sondern in den
+  // Einfüge-Block darunter.
+  const dayPlans = (nutritionPlans ?? []).filter((p) => !p.isRecipe)
+  const recipes = (nutritionPlans ?? []).filter((p) => p.isRecipe)
 
   const target = calculate({
     gender: athlete.gender,
@@ -166,6 +171,39 @@ export default function NutritionLogPage() {
     })
   }
 
+  /**
+   * Zutaten eines Rezepts anteilig ins Log übernehmen - als **einzelne** Zeilen, nicht als ein
+   * Sammeleintrag: So stimmen die Makros aufs Gramm, und hinterher lässt sich jede Zutat noch
+   * ändern, abhaken oder entfernen. Anders als beim Tagesplan wird nicht auf Dubletten geprüft;
+   * dasselbe Rezept zweimal einzufügen heißt hier, es zweimal gegessen zu haben.
+   */
+  async function addRecipeToLog(recipe: NutritionPlan, mealType: MealType, servings: number) {
+    const factor = recipeFactor(recipe, servings)
+    if (!(factor > 0)) return
+    const meals = await db.planMeals.where('planId').equals(recipe.id).sortBy('order')
+    if (meals.length === 0) return
+
+    const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
+    await db.transaction('rw', db.nutritionLogItems, async () => {
+      const existing = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).toArray()
+      let order = nextOrder(existing)
+      for (const meal of meals) {
+        const grams = scaleGrams(meal.grams, factor)
+        // Eine auf 0 g geschrumpfte Zutat (1 g Salz bei einem Zehntel Rezept) wäre eine Zeile
+        // ohne Inhalt - die bleibt weg.
+        if (grams <= 0) continue
+        await db.nutritionLogItems.add({
+          id: crypto.randomUUID(),
+          nutritionLogId: log.id,
+          mealType,
+          foodItemId: meal.foodItemId,
+          grams,
+          order: order++,
+        })
+      }
+    })
+  }
+
   async function setNotes(notes: string) {
     const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
     await db.nutritionLogs.update(log.id, { notes })
@@ -222,7 +260,7 @@ export default function NutritionLogPage() {
         <Field label="Ernährungsplan-Phase (optional)">
           <Select value={currentLog?.nutritionPlanId ?? ''} onChange={(e) => setNutritionPlanId(e.target.value)}>
             <option value="">– kein Plan zugeordnet –</option>
-            {nutritionPlans?.map((p) => (
+            {dayPlans.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.phaseName}
               </option>
@@ -259,6 +297,15 @@ export default function NutritionLogPage() {
             </div>
           ))}
         </div>
+
+        {recipes.length > 0 && (
+          <RecipeInserter
+            recipes={recipes}
+            foodMap={foodMap}
+            defaultMealType={suggestedMealType}
+            onInsert={addRecipeToLog}
+          />
+        )}
 
         {/* Die Mahlzeit wird vor dem Anlegen gewählt - vorher landete jede neue Zeile in der
             per Uhrzeit geratenen Mahlzeit und musste per Auswahlfeld korrigiert werden. */}
@@ -312,6 +359,101 @@ export default function NutritionLogPage() {
         onSelect={setSelectedDate}
         emptyText="📅 Noch keine Ernährungstage aufgezeichnet."
       />
+    </div>
+  )
+}
+
+/**
+ * Rezept portionsweise ins Tageslog übernehmen. Die Vorschau zeigt vor dem Einfügen, was die
+ * gewählte Portionszahl tatsächlich beiträgt - sonst müsste man erst einfügen, um es zu sehen.
+ */
+function RecipeInserter({
+  recipes,
+  foodMap,
+  defaultMealType,
+  onInsert,
+}: {
+  recipes: NutritionPlan[]
+  foodMap: Map<string, FoodItem>
+  defaultMealType: MealType
+  onInsert: (recipe: NutritionPlan, mealType: MealType, servings: number) => Promise<void>
+}) {
+  const [recipeId, setRecipeId] = useState('')
+  const [mealType, setMealType] = useState<MealType>(defaultMealType)
+  const [servings, setServings] = useState<number | undefined>(1)
+
+  // Kein fester Startwert im State: Wird das gewählte Rezept gelöscht oder in einen Tagesplan
+  // zurückverwandelt, greift wieder das erste der Liste.
+  const recipe = recipes.find((r) => r.id === recipeId) ?? recipes[0]
+
+  const meals = useLiveQuery(
+    () => (recipe ? db.planMeals.where('planId').equals(recipe.id).sortBy('order') : []),
+    [recipe?.id],
+  )
+
+  if (!recipe) return null
+
+  const factor = recipeFactor(recipe, servings ?? 0)
+  const preview = sumMacros(
+    (meals ?? []).map((m) => macrosForPortion(foodMap.get(m.foodItemId), scaleGrams(m.grams, factor))),
+  )
+  const count = meals?.length ?? 0
+  const canInsert = count > 0 && (servings ?? 0) > 0
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
+      <div className="text-xs font-semibold uppercase tracking-wide text-fg">Rezept einfügen</div>
+
+      <Field label="Rezept">
+        <Select value={recipe.id} onChange={(e) => setRecipeId(e.target.value)}>
+          {recipes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.phaseName}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field label="Mahlzeit">
+        <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
+          {MEAL_TYPES.map((mt) => (
+            <option key={mt} value={mt}>
+              {mt}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <Field label="Portionen">
+        <div className="flex items-center gap-2">
+          <DecimalInput value={servings} onChange={setServings} aria-label="Portionen" className="flex-1" />
+          {SERVING_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => setServings(preset)}
+              aria-pressed={servings === preset}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition active:scale-95 ${
+                servings === preset
+                  ? 'bg-accent font-medium text-accent-fg'
+                  : 'border border-border bg-surface-2 text-muted hover:text-fg'
+              }`}
+            >
+              {formatServings(preset)}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <p className="text-[11px] text-muted">
+        {count === 0
+          ? 'Dieses Rezept hat noch keine Zutaten.'
+          : `Ganzes Rezept: ${servingsLabel(servingsOf(recipe))} · ${count} ${count === 1 ? 'Zutat' : 'Zutaten'} → ${macroLine(preview)}`}
+      </p>
+
+      <Button variant="secondary" disabled={!canInsert} onClick={() => void onInsert(recipe, mealType, servings ?? 0)}>
+        Einfügen
+      </Button>
     </div>
   )
 }
