@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
+import { findByName } from '../lib/names'
 import { Button, Card, DecimalInput, Field, Input, UnconfirmedBadge } from '../components/ui'
 import { caloriesFromMacros } from '../lib/calculator'
 import type { FoodItem } from '../models/types'
@@ -139,11 +140,16 @@ function NewFoodForm({ onDone }: { onDone: () => void }) {
   const [form, setForm] = useState({ name: '', protein: 0, carbs: 0, fat: 0 })
 
   async function submit() {
-    if (!form.name.trim()) return
+    const name = form.name.trim()
+    if (!name) return
+    if (findByName(await db.foodItems.toArray(), name)) {
+      alert(`„${name}" steht schon in der Datenbank.`)
+      return
+    }
     await db.foodItems.add({
       id: crypto.randomUUID(),
       ...form,
-      name: form.name.trim(),
+      name,
       kcal: caloriesFromMacros(form.protein, form.carbs, form.fat),
     })
     onDone()

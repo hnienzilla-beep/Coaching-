@@ -7,6 +7,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useDragSensors } from '../lib/dragSensors'
 import { shareOrDownloadFile } from '../lib/share'
 import { db, exportAllData, exportAthletes, importAllData, importSelectedAthletes } from '../db/db'
+import { dedupeAfterImport } from '../db/dedupe'
 import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
 import { AccentSwatch, Button, Card } from '../components/ui'
 import NewAthleteForm from '../components/NewAthleteForm'
@@ -95,6 +96,7 @@ export default function AthleteListPage() {
       }
       if (!confirm('Import überschreibt vorhandene Daten mit gleicher ID. Fortfahren?')) return
       await importAllData(text)
+      await dedupeAfterImport()
       alert('Import abgeschlossen.')
     } catch {
       alert('Import fehlgeschlagen. Ist die Datei ein gültiges Backup?')
@@ -215,6 +217,7 @@ export default function AthleteListPage() {
           onConfirm={async (selectedIds) => {
             await importSelectedAthletes(pendingImport.text, selectedIds)
             setPendingImport(null)
+            await dedupeAfterImport()
             alert('Import abgeschlossen.')
           }}
         />

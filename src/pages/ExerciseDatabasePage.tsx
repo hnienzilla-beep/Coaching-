@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
+import { findByName } from '../lib/names'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import { fileToResizedDataUrl } from '../lib/image'
 import type { Exercise, MuscleGroup } from '../models/types'
@@ -170,10 +171,15 @@ function NewExerciseForm({ onDone }: { onDone: () => void }) {
   })
 
   async function submit() {
-    if (!form.name.trim()) return
+    const name = form.name.trim()
+    if (!name) return
+    if (findByName(await db.exercises.toArray(), name)) {
+      alert(`„${name}" steht schon in der Datenbank.`)
+      return
+    }
     await db.exercises.add({
       id: crypto.randomUUID(),
-      name: form.name.trim(),
+      name,
       muscleGroup: form.muscleGroup,
       imageDataUrl: form.imageDataUrl,
     })

@@ -1,4 +1,5 @@
 import { exportAthletes, importAllData } from '../../db/db'
+import { dedupeAfterImport } from '../../db/dedupe'
 import { requireSettings } from './importLog'
 import { readFile, syncFile } from './githubApi'
 import type { VaultTree } from './githubApi'
@@ -75,6 +76,9 @@ export async function restoreFromVaultBackup(): Promise<boolean> {
 
   await withVaultImport(async () => {
     await importAllData(remote.content)
+    // Die Sicherung wird über IDs eingespielt und kann deshalb neben namensgleichen
+    // Bestandseinträgen landen - siehe importAllData.
+    await dedupeAfterImport()
   })
   return true
 }

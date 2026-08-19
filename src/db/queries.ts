@@ -1,5 +1,6 @@
 import { db } from './db'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
+import { byName, nameKey } from '../lib/names'
 import type {
   Athlete,
   BackgroundPhoto,
@@ -420,6 +421,9 @@ export async function importProgress(json: string, athleteId: string): Promise<v
     'rw',
     [db.dailyEntries, db.workoutLogs, db.workoutLogExercises, db.workoutSets, db.exercises, db.nutritionLogs, db.nutritionLogItems, db.foodItems],
     async () => {
+      const exerciseMap = byName(await db.exercises.toArray())
+      const foodMap = byName(await db.foodItems.toArray())
+
       for (const entry of template.dailyEntries) {
         await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, ...entry })
       }
@@ -432,11 +436,16 @@ export async function importProgress(json: string, athleteId: string): Promise<v
           await db.workoutSets.where('workoutLogExerciseId').equals(oldEx.id).delete()
         }
         await db.workoutLogExercises.where('workoutLogId').equals(log.id).delete()
+        // Die Namenskarte wird vor der Schleife aufgebaut und mitgeführt: Ohne das würde jede
+        // frisch angelegte Übung erst beim nächsten Import gefunden - und bis dahin bei jedem
+        // Durchlauf ein weiteres Mal entstehen.
         for (const [i, ex] of day.exercises.entries()) {
-          let exercise = await db.exercises.where('name').equals(ex.exerciseName).first()
+          const key = nameKey(ex.exerciseName)
+          let exercise = exerciseMap.get(key)
           if (!exercise && ex.exerciseFallback) {
-            exercise = { id: crypto.randomUUID(), name: ex.exerciseName, ...ex.exerciseFallback }
+            exercise = { id: crypto.randomUUID(), name: ex.exerciseName.trim(), ...ex.exerciseFallback }
             await db.exercises.add(exercise)
+            exerciseMap.set(key, exercise)
           }
           if (!exercise) continue
           const logExerciseId = crypto.randomUUID()
@@ -452,10 +461,12 @@ export async function importProgress(json: string, athleteId: string): Promise<v
         if (day.notes !== undefined) await db.nutritionLogs.update(log.id, { notes: day.notes })
         await db.nutritionLogItems.where('nutritionLogId').equals(log.id).delete()
         for (const item of day.items) {
-          let food = await db.foodItems.where('name').equals(item.foodName).first()
+          const key = nameKey(item.foodName)
+          let food = foodMap.get(key)
           if (!food && item.foodMacros) {
-            food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
+            food = { id: crypto.randomUUID(), name: item.foodName.trim(), ...item.foodMacros }
             await db.foodItems.add(food)
+            foodMap.set(key, food)
           }
           if (!food) continue
           await db.nutritionLogItems.add({

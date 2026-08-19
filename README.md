@@ -178,7 +178,30 @@ lassen sich neue Lebensmittel vormerken, z.B. von Claude geschätzte Werte:
 - Der Import läuft vor dem Export, neue Einträge stehen also im selben Durchlauf schon
   in `Lebensmittel.md`.
 
-### Vollbackup
+### Namen als Schlüssel, keine Dubletten
+
+IDs werden je Browser-Profil zufällig vergeben. Ein Lebensmittel aus dem Vault, aus einer
+Plan-Vorlage oder von einem zweiten Gerät lässt sich deshalb nur über den **Namen**
+wiederfinden - bei Lebensmitteln, Übungen und Supplementen gleichermaßen. Verglichen wird
+überall mit demselben Schlüssel (`src/lib/names.ts`): ohne Leerzeichen am Rand, ohne
+Groß-/Kleinschreibung. "Skyr", "skyr" und " Skyr " sind derselbe Eintrag.
+
+Beim Start führt `dedupeNamedDatabases()` (`src/db/dedupe.ts`) zusammen, was trotzdem doppelt
+im Bestand liegt. Umgehängt wird vor dem Löschen: Pläne und Tageslogs verweisen über die ID auf
+diese Tabellen, ein blindes Löschen würde Einträge im Log zu "?" machen. Welche Zeile bleibt,
+entscheidet die Datenqualität - ein bestätigtes Lebensmittel schlägt eine Schätzung aus
+`Lebensmittel-Neu.md`, eine Übung mit Bild und gepflegter Muskelgruppe die automatisch
+angelegte. Was nur an der verworfenen Zeile hing (Bild, Muskelgruppe, Favoriten-Stern, Dosis,
+Notiz), wandert vorher auf die bleibende. Bei Gleichstand entscheiden Verweiszahl und ID, damit
+zwei Geräte unabhängig voneinander zum selben Ergebnis kommen.
+
+Der Lauf wiederholt sich bei jedem Start und nach jedem Import - er ist die Selbstheilung für
+den Fall, der die Dubletten überhaupt erzeugt hat: **Eine Sicherung wird über die ID
+eingespielt.** Auf einem Gerät, das seine Seeds schon angelegt hatte, landet sie deshalb neben
+dem vorhandenen Bestand statt darin (aus 297 geseedeten plus 416 gesicherten Lebensmitteln
+werden erst 713, dann wieder 397).
+
+## Vollbackup
 
 Die Markdown-Dateien sind zum Lesen und Bearbeiten in Obsidian gedacht und bilden
 deshalb nicht jedes Feld ab (interne IDs, Reihenfolgen). Diese Lücke schließt
