@@ -24,6 +24,7 @@ import type {
 import { FOOD_SEED } from '../data/foodSeed'
 import { SUPPLEMENT_SEED } from '../data/supplementSeed'
 import { EXERCISE_SEED } from '../data/exerciseSeed'
+import { byName, nameKey } from '../lib/names'
 
 export class CoachDB extends Dexie {
   athletes!: EntityTable<Athlete, 'id'>
@@ -88,8 +89,8 @@ export async function ensureFoodSeed(): Promise<void> {
   // Nachfüll-Logik statt reinem "leer?"-Check: ergänzt neu hinzugekommene FOOD_SEED-Einträge
   // auch bei Bestandsnutzern, ohne eigene/bearbeitete Lebensmittel anzufassen.
   await db.transaction('rw', db.foodItems, async () => {
-    const existingNames = new Set(await db.foodItems.orderBy('name').keys())
-    const missing = FOOD_SEED.filter((f) => !existingNames.has(f.name))
+    const existingNames = new Set((await db.foodItems.toArray()).map((f) => nameKey(f.name)))
+    const missing = FOOD_SEED.filter((f) => !existingNames.has(nameKey(f.name)))
     if (missing.length === 0) return
     await db.foodItems.bulkAdd(
       missing.map((f) => ({
@@ -106,8 +107,8 @@ export async function ensureFoodSeed(): Promise<void> {
 
 export async function ensureSupplementSeed(): Promise<void> {
   await db.transaction('rw', db.supplements, async () => {
-    const existingNames = new Set(await db.supplements.orderBy('name').keys())
-    const missing = SUPPLEMENT_SEED.filter((s) => !existingNames.has(s.name))
+    const existingNames = new Set((await db.supplements.toArray()).map((s) => nameKey(s.name)))
+    const missing = SUPPLEMENT_SEED.filter((s) => !existingNames.has(nameKey(s.name)))
     if (missing.length === 0) return
     await db.supplements.bulkAdd(
       missing.map((s) => ({
@@ -123,8 +124,8 @@ export async function ensureSupplementSeed(): Promise<void> {
 
 export async function ensureExerciseSeed(): Promise<void> {
   await db.transaction('rw', db.exercises, async () => {
-    const existingNames = new Set(await db.exercises.orderBy('name').keys())
-    const missing = EXERCISE_SEED.filter((e) => !existingNames.has(e.name))
+    const existingNames = new Set((await db.exercises.toArray()).map((e) => nameKey(e.name)))
+    const missing = EXERCISE_SEED.filter((e) => !existingNames.has(nameKey(e.name)))
     if (missing.length === 0) return
     await db.exercises.bulkAdd(missing.map((e) => ({ id: crypto.randomUUID(), name: e.name, muscleGroup: e.muscleGroup })))
   })
@@ -272,6 +273,12 @@ export async function exportAllData(): Promise<string> {
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data })
 }
 
+/**
+ * Spielt eine Sicherung ein. `bulkPut` gleicht über die ID ab, und IDs werden je Browser-Profil
+ * zufällig vergeben: Auf einem Gerät, das seine Seeds schon angelegt hatte, landen Lebensmittel,
+ * Übungen und Supplemente daher **neben** dem vorhandenen Bestand statt darin. Aufrufer müssen
+ * anschließend `dedupeNamedDatabases()` laufen lassen.
+ */
 export async function importAllData(json: string): Promise<void> {
   const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
   const tables = backupTables()
@@ -346,6 +353,7 @@ export async function exportAthletes(athleteIds: string[]): Promise<string> {
   return JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), data: filtered })
 }
 
+/** Wie `importAllData`, auf ausgewählte Athleten begrenzt - danach ebenso zusammenführen. */
 export async function importSelectedAthletes(json: string, athleteIds: string[]): Promise<void> {
   const parsed = JSON.parse(json) as { data: Record<string, Record<string, unknown>[]> }
   const filtered = filterDataToAthletes(parsed.data, athleteIds)
@@ -411,11 +419,17 @@ export async function importNutritionPlan(json: string, athleteId: string): Prom
       isRecipe: template.isRecipe,
       servings: template.servings,
     })
+    // Karte einmal vor der Schleife: Ein Nachschlagen je Zeile würde die ganze Tabelle je
+    // Eintrag neu lesen, und frisch angelegte Lebensmittel wären innerhalb desselben Imports
+    // noch nicht auffindbar.
+    const foodMap = byName(await db.foodItems.toArray())
     for (const [index, item] of template.items.entries()) {
-      let food = await db.foodItems.where('name').equals(item.foodName).first()
+      const key = nameKey(item.foodName)
+      let food = foodMap.get(key)
       if (!food && item.foodMacros) {
-        food = { id: crypto.randomUUID(), name: item.foodName, ...item.foodMacros }
+        food = { id: crypto.randomUUID(), name: item.foodName.trim(), ...item.foodMacros }
         await db.foodItems.add(food)
+        foodMap.set(key, food)
       }
       if (!food) continue
       await db.planMeals.add({
@@ -477,11 +491,14 @@ export async function importSupplementPlan(json: string, athleteId: string): Pro
     const order = await db.supplementPlans.where('athleteId').equals(athleteId).count()
     await db.supplementPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
     let itemOrder = 0
+    const supplementMap = byName(await db.supplements.toArray())
     for (const item of template.items) {
-      let supplement = await db.supplements.where('name').equals(item.supplementName).first()
+      const key = nameKey(item.supplementName)
+      let supplement = supplementMap.get(key)
       if (!supplement && item.supplementFallback) {
-        supplement = { id: crypto.randomUUID(), name: item.supplementName, ...item.supplementFallback }
+        supplement = { id: crypto.randomUUID(), name: item.supplementName.trim(), ...item.supplementFallback }
         await db.supplements.add(supplement)
+        supplementMap.set(key, supplement)
       }
       if (!supplement) continue
       await db.supplementPlanItems.add({
@@ -545,11 +562,14 @@ export async function importTrainingPlan(json: string, athleteId: string): Promi
   await db.transaction('rw', db.trainingPlans, db.trainingPlanExercises, db.exercises, async () => {
     const order = await db.trainingPlans.where('athleteId').equals(athleteId).count()
     await db.trainingPlans.add({ id: planId, athleteId, phaseName: template.phaseName, order })
+    const exerciseMap = byName(await db.exercises.toArray())
     for (const item of template.items) {
-      let exercise = await db.exercises.where('name').equals(item.exerciseName).first()
+      const key = nameKey(item.exerciseName)
+      let exercise = exerciseMap.get(key)
       if (!exercise && item.exerciseFallback) {
-        exercise = { id: crypto.randomUUID(), name: item.exerciseName, ...item.exerciseFallback }
+        exercise = { id: crypto.randomUUID(), name: item.exerciseName.trim(), ...item.exerciseFallback }
         await db.exercises.add(exercise)
+        exerciseMap.set(key, exercise)
       }
       if (!exercise) continue
       await db.trainingPlanExercises.add({

@@ -48,12 +48,7 @@ export function requireSettings(): ObsidianSyncSettings {
   return settings
 }
 
-/** Nachschlagewerk über den Namen - so werden Referenzen geräteübergreifend aufgelöst. */
-export function byName<T extends { name: string }>(items: T[]): Map<string, T> {
-  return new Map(items.map((item) => [item.name.trim().toLowerCase(), item]))
-}
-
-/** Schlüssel für `byName`-Karten. */
-export function nameKey(name: string): string {
-  return name.trim().toLowerCase()
-}
+// Der Namensabgleich gilt appweit, nicht nur im Vault-Sync - die Implementierung liegt
+// deshalb in lib/names.ts. Hier nur weitergereicht, damit die Sync-Module ihren gewohnten
+// Import behalten.
+export { byName, nameKey } from '../../lib/names'

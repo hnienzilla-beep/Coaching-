@@ -15,6 +15,7 @@ import {
   ensureWorkoutLogExerciseOrder,
   ensureWorkoutSetMigration,
 } from './db/db'
+import { dedupeNamedDatabases } from './db/dedupe'
 import AthleteListPage from './pages/AthleteListPage'
 import StartRedirect from './pages/StartRedirect'
 import AthleteLayout from './pages/AthleteLayout'
@@ -34,18 +35,45 @@ function App() {
   // keine Startseite mehr, deshalb laufen sie hier - insbesondere `ensureAthleteOrder`
   // vergibt das `order`, nach dem der Start-Athlet bestimmt wird.
   useEffect(() => {
-    watchDatabaseChanges()
-    startAutoSync()
+    // Jeder Schritt für sich abgesichert: Vorher liefen alle als lose Aufrufe nebeneinander,
+    // jetzt hängen sie in einer Kette - ohne das würde ein einzelner Fehlschlag alle
+    // folgenden Migrationen überspringen und als unbehandelte Rejection enden.
+    const step = async (run: () => Promise<unknown>): Promise<void> => {
+      try {
+        await run()
+      } catch (error) {
+        console.error('Datenvorbereitung fehlgeschlagen:', error)
+      }
+    }
+
+    async function prepareData() {
+      // Zuerst die Reihenfolge-Migrationen: Sie sind billig, und `ensureAthleteOrder` vergibt
+      // das `order`, nach dem `StartRedirect` den Start-Athleten auswählt - das darf nicht
+      // hinter dem Seed von 300 Lebensmitteln warten.
+      await Promise.all(
+        [
+          ensureAthleteOrder,
+          ensureTrainingPlanExerciseOrder,
+          ensureWorkoutSetMigration,
+          ensureWorkoutLogExerciseOrder,
+          ensurePlanMealOrder,
+          ensureSupplementPlanItemOrder,
+        ].map(step),
+      )
+
+      // Seeds und Aufräumen laufen *vor* dem Auto-Sync. Vorher starteten beide gleichzeitig -
+      // Seed und Vault-Import konnten dasselbe Lebensmittel nebeneinander anlegen, weil jeder
+      // in seiner eigenen Transaktion einen Bestand vorfand, in dem es noch fehlte. Genau
+      // daher die Dubletten.
+      await Promise.all([ensureFoodSeed, ensureSupplementSeed, ensureExerciseSeed].map(step))
+      await step(dedupeNamedDatabases)
+    }
+
     startRestTimerRuntime()
-    ensureFoodSeed()
-    ensureSupplementSeed()
-    ensureExerciseSeed()
-    ensureTrainingPlanExerciseOrder()
-    ensureWorkoutSetMigration()
-    ensureWorkoutLogExerciseOrder()
-    ensurePlanMealOrder()
-    ensureSupplementPlanItemOrder()
-    ensureAthleteOrder()
+    void prepareData().finally(() => {
+      watchDatabaseChanges()
+      startAutoSync()
+    })
   }, [])
 
   return (

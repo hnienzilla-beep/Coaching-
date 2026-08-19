@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
+import { findByName } from '../lib/names'
 import { Button, Card, Field, Input, Select } from '../components/ui'
 import type { Supplement, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
@@ -127,10 +128,15 @@ function NewSupplementForm({ onDone }: { onDone: () => void }) {
   })
 
   async function submit() {
-    if (!form.name.trim()) return
+    const name = form.name.trim()
+    if (!name) return
+    if (findByName(await db.supplements.toArray(), name)) {
+      alert(`„${name}" steht schon in der Datenbank.`)
+      return
+    }
     await db.supplements.add({
       id: crypto.randomUUID(),
-      name: form.name.trim(),
+      name,
       defaultDose: form.defaultDose,
       defaultTiming: form.defaultTiming,
       notes: form.notes || undefined,
