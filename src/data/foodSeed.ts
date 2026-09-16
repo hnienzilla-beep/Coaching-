@@ -1,4 +1,6 @@
 // Startbestand aus der Excel-Lebensmitteldatenbank (Werte je 100 g), vom Nutzer erweiterbar.
+import { FAST_FOOD_SEED } from './fastFoodSeed'
+
 export interface FoodSeed {
   name: string
   kcal: number
@@ -305,4 +307,8 @@ export const FOOD_SEED: FoodSeed[] = [
   { name: "Marzipan", kcal: 459, protein: 8.9, carbs: 46.0, fat: 26.0 },
   { name: "Rosinenbrot", kcal: 265, protein: 7.5, carbs: 50.0, fat: 3.5 },
   { name: "Rice Pudding (ESN, Pulver)", kcal: 373, protein: 7.7, carbs: 83.0, fat: 0.7 },
+
+  // Schnellrestaurant-Ketten - eigene Datei, weil die Werte aus den Nährwerttabellen der
+  // Hersteller stammen und nicht aus der Excel-Datenbank.
+  ...FAST_FOOD_SEED,
 ]
