@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getLastExercisePerformance, getOrCreateWorkoutLog, todayIso } from '../db/queries'
-import type { Athlete, TrainingPlanExercise, WorkoutSet } from '../models/types'
+import type { Athlete, TrainingPlanExercise, WorkoutLog, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
 import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
@@ -42,6 +42,15 @@ async function createSetsFromPlanExercise(
       weightKg: lastSet?.weightKg ?? pe.targetWeightKg,
     })
   }
+}
+
+/**
+ * Startet den Trainingstimer, sobald zum ersten Mal etwas ins Log kommt (Plan zugeordnet oder
+ * Übung hinzugefügt) - einen eigenen Startknopf gibt es nicht mehr.
+ */
+async function ensureStarted(log: WorkoutLog): Promise<void> {
+  if (log.startedAt || log.completedAt) return
+  await db.workoutLogs.update(log.id, { startedAt: new Date().toISOString() })
 }
 
 export default function WorkoutLogPage() {
@@ -105,6 +114,7 @@ export default function WorkoutLogPage() {
 
   async function addExerciseRow() {
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
+    await ensureStarted(log)
     const existing = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
     // Leere exerciseId: die Zeile startet im Auswahlmodus, statt still die erste Übung des
     // Alphabets zu setzen, die dann jemand übersieht.
@@ -125,6 +135,7 @@ export default function WorkoutLogPage() {
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
     await db.workoutLogs.update(log.id, { trainingPlanId: planId || undefined })
     if (!planId) return
+    await ensureStarted(log)
 
     const planRows = await db.trainingPlanExercises.where('planId').equals(planId).sortBy('order')
     const existingRows = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
@@ -183,12 +194,7 @@ export default function WorkoutLogPage() {
         deleteConfirmText="Trainingseinheit dieses Tages mit allen Sätzen löschen?"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <WorkoutTimer
-            athleteId={athlete.id}
-            date={selectedDate}
-            startedAt={currentLog?.startedAt}
-            completedAt={currentLog?.completedAt}
-          />
+          <WorkoutTimer startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
           {currentLog && <RestTimer />}
         </div>
       </LogDayHeader>

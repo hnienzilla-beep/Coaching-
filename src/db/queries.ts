@@ -232,7 +232,7 @@ export async function upsertDailyEntry(entry: DailyEntry): Promise<void> {
   triggerAutoSync()
 }
 
-// Übernimmt die Tagessumme aus dem Ernährungslog (abgehakte Einträge) in die
+// Übernimmt die Tagessumme aus dem Ernährungslog (alle Einträge) in die
 // Tracking-Felder, ohne andere Felder (Gewicht, Körpermaße, Notizen) anzutasten.
 export async function syncNutritionTotalsToDailyEntry(
   athleteId: string,

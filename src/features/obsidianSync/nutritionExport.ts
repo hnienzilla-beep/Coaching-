@@ -162,7 +162,7 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
   const foods = await db.foodItems.bulkGet(items.map((i) => i.foodItemId))
   const foodMap = new Map(items.map((i, idx) => [i.id, foods[idx]]))
 
-  // Wie in der App zählen nur die abgehakten ("gegessenen") Einträge in die Tagesbilanz.
+  // Wie in der App zählt jeder Eintrag als gegessen.
   const eaten: Sums[] = []
   const bodyLines: string[] = []
 
@@ -173,8 +173,8 @@ async function buildErnaehrungLog(date: string): Promise<string | null> {
     for (const item of itemsOfType) {
       const food = foodMap.get(item.id)
       const sums = macrosForPortion(food, item.grams)
-      if (item.done) eaten.push(sums)
-      bodyLines.push(`- ${item.done ? '[x]' : '[ ]'} ${food?.name ?? '?'} – ${item.grams}g (${round(sums.kcal)} kcal)`)
+      eaten.push(sums)
+      bodyLines.push(`- ${food?.name ?? '?'} – ${item.grams}g (${round(sums.kcal)} kcal)`)
     }
     bodyLines.push('')
   }

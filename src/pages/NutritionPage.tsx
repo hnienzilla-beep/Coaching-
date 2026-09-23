@@ -420,7 +420,7 @@ export default function NutritionPage() {
             ) : (
               <>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Bilanz der Phase</h2>
-                <MacroBars done={sums} planned={sums} target={target} legend={null} remainingText={planRemainingText} />
+                <MacroBars sums={sums} target={target} remainingText={planRemainingText} />
                 {coachMode && (
                   <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
                     <MacroSumTable sums={sums} target={target} />

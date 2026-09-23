@@ -569,7 +569,7 @@ function toMealType(raw: string): MealType | undefined {
 
 /**
  * Liest Mahlzeiten unter "### Frühstück":
- * "- Haferflocken – 80g (300 kcal)" (Plan) bzw. "- [x] Haferflocken – 80g (300 kcal)" (Log),
+ * "- Haferflocken – 80g (300 kcal)" - ältere Logs tragen noch ein Häkchen ("- [x] …"),
  * gruppiert nach Plan-Phase ("## Plan: …"). Die Kalorienangabe in Klammern wird ignoriert -
  * sie wird aus den Makros neu berechnet.
  */
@@ -623,7 +623,7 @@ export function parseMealPhases(content: string): ParsedMealPhase[] {
       mealType,
       name: item[2].trim(),
       grams,
-      // Ohne Checkbox (Ernährungsplan) gilt der Eintrag als geplant, nicht als gegessen.
+      // Nur noch für ältere Logs mit Häkchen relevant - die App wertet `done` nicht mehr aus.
       done: item[1] !== undefined && item[1].toLowerCase() === 'x',
     })
   }

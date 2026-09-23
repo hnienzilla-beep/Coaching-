@@ -169,7 +169,7 @@ export interface WorkoutLog {
   date: string // ISO date, ein Eintrag pro Tag
   trainingPlanId?: string // welcher geplante Trainingstag absolviert wurde
   notes?: string
-  startedAt?: string // ISO-Zeitstempel, gesetzt über den "Training starten"-Button
+  startedAt?: string // ISO-Zeitstempel, automatisch gesetzt beim Zuordnen eines Plans bzw. Hinzufügen einer Übung
   completedAt?: string // ISO-Zeitstempel, gesetzt über den "Training beenden"-Button
 }
 
@@ -207,5 +207,5 @@ export interface NutritionLogItem {
   foodItemId: string
   grams: number
   order: number
-  done?: boolean // "gegessen"-Häkchen
+  done?: boolean // veraltet: früheres "gegessen"-Häkchen, wird nicht mehr ausgewertet
 }
