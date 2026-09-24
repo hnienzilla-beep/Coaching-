@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/decimalInput'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -82,12 +83,11 @@ export function DecimalInput({
   onChange: (n: number | undefined) => void
   className?: string
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
-  const [text, setText] = useState(value !== undefined ? String(value) : '')
+  const [text, setText] = useState(formatDecimalInput(value))
 
   useEffect(() => {
-    const numeric = text === '' || text === '-' ? undefined : Number(text.replace(',', '.'))
-    if (numeric !== value) {
-      setText(value !== undefined ? String(value) : '')
+    if (parseDecimalInput(text) !== value) {
+      setText(formatDecimalInput(value))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
@@ -100,10 +100,9 @@ export function DecimalInput({
       value={text}
       onChange={(e) => {
         const raw = e.target.value
-        if (!/^-?\d*[.,]?\d*$/.test(raw)) return
+        if (!isDecimalInput(raw)) return
         setText(raw)
-        const normalized = raw.replace(',', '.')
-        onChange(normalized === '' || normalized === '-' ? undefined : Number(normalized))
+        onChange(parseDecimalInput(raw))
       }}
       className={`w-full min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent ${className}`}
     />

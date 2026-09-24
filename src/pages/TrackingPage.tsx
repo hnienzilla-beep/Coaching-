@@ -257,6 +257,13 @@ function DayEditor({
 
   function persist(patch: Partial<DailyEntry>) {
     const updated = { ...current, ...patch, athleteId, date }
+    // Sicherheitsnetz: unbrauchbare Zahlen (NaN aus einer alten Eingabe) werden nicht
+    // gespeichert - sonst kippen Diagramme und Durchschnitte auf NaN.
+    for (const [key, val] of Object.entries(updated)) {
+      if (typeof val === 'number' && !Number.isFinite(val)) {
+        delete (updated as Record<string, unknown>)[key]
+      }
+    }
     void upsertDailyEntry(updated)
     setSavedAt(Date.now())
   }
