@@ -85,23 +85,21 @@ export default function NutritionLogPage() {
   const rows: Row[] = (items ?? []).map((item) => ({ item, ...macrosForPortion(foodMap.get(item.foodItemId), item.grams) }))
 
   const sums = sumMacros(rows)
-  const doneSums = sumMacros(rows.filter((r) => r.item.done))
 
-  // Tracking-Synchronisierung: nur die tatsächlich abgehakten ("gegessenen") Einträge zählen,
-  // andere Tracking-Felder (Gewicht, Körpermaße) bleiben unangetastet.
+  // Tracking-Synchronisierung: jeder Eintrag im Log gilt als gegessen, andere Tracking-Felder
+  // (Gewicht, Körpermaße) bleiben unangetastet.
   //
-  // Vorausgeplante Tage bleiben außen vor: Am Tracking hängen 7-Tage-Trend, Gewichtsverlauf
-  // und `Gewicht.md`, und ein Tag, an dem noch nichts gegessen sein *kann*, gehört dort nicht
-  // als 0-kcal-Zeile hinein. Sobald der Tag da ist und abgehakt wird, läuft der Abgleich normal.
+  // Tage in der Zukunft bleiben außen vor (Altdaten aus der Zeit, als sich Essen vorausplanen
+  // ließ): Am Tracking hängen 7-Tage-Trend, Gewichtsverlauf und `Gewicht.md`.
   useEffect(() => {
     if (!currentLog || selectedDate > todayIso()) return
     void syncNutritionTotalsToDailyEntry(athlete.id, selectedDate, {
-      calories: doneSums.kcal,
-      protein: doneSums.protein,
-      carbs: doneSums.carbs,
-      fat: doneSums.fat,
+      calories: sums.kcal,
+      protein: sums.protein,
+      carbs: sums.carbs,
+      fat: sums.fat,
     })
-  }, [currentLog, athlete.id, selectedDate, doneSums.kcal, doneSums.protein, doneSums.carbs, doneSums.fat])
+  }, [currentLog, athlete.id, selectedDate, sums.kcal, sums.protein, sums.carbs, sums.fat])
 
   const groups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.item.mealType === mealType)
@@ -178,7 +176,7 @@ export default function NutritionLogPage() {
   /**
    * Zutaten eines Rezepts anteilig ins Log übernehmen - als **einzelne** Zeilen, nicht als ein
    * Sammeleintrag: So stimmen die Makros aufs Gramm, und hinterher lässt sich jede Zutat noch
-   * ändern, abhaken oder entfernen. Anders als beim Tagesplan wird nicht auf Dubletten geprüft;
+   * ändern oder entfernen. Anders als beim Tagesplan wird nicht auf Dubletten geprüft;
    * dasselbe Rezept zweimal einzufügen heißt hier, es zweimal gegessen zu haben.
    */
   async function addRecipeToLog(recipe: NutritionPlan, mealType: MealType, servings: number) {
@@ -232,9 +230,8 @@ export default function NutritionLogPage() {
   function historySummary(logId: string, planId?: string): string {
     const dayItems = (allItems ?? []).filter((i) => i.nutritionLogId === logId)
     const dayRows = dayItems.map((item) => macrosForPortion(foodMap.get(item.foodItemId), item.grams))
-    const doneKcal = sumMacros(dayItems.filter((i) => i.done).map((item) => macrosForPortion(foodMap.get(item.foodItemId), item.grams))).kcal
     const totalKcal = sumMacros(dayRows).kcal
-    const kcalPart = doneKcal > 0 ? `${Math.round(doneKcal)} kcal` : totalKcal > 0 ? `geplant ${Math.round(totalKcal)} kcal` : ''
+    const kcalPart = totalKcal > 0 ? `${Math.round(totalKcal)} kcal` : ''
     return [kcalPart, planId ? planMap.get(planId)?.phaseName : undefined].filter(Boolean).join(' · ')
   }
 
@@ -248,14 +245,11 @@ export default function NutritionLogPage() {
         status={status}
         onDelete={currentLog ? deleteLog : undefined}
         deleteConfirmText="Ernährungstag mit allen Einträgen löschen?"
-        // Anders als beim Training: Essen lässt sich im Voraus planen, ein Training nicht
-        // im Voraus protokollieren.
-        allowFuture
       />
 
       <Card className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Tagesbilanz</h2>
-        <MacroBars done={doneSums} planned={sums} target={target} evaluate={!!currentLog?.completedAt} />
+        <MacroBars sums={sums} target={target} evaluate={!!currentLog?.completedAt} />
         {coachMode && (
           <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
             <MacroSumTable sums={sums} target={target} />
@@ -483,18 +477,8 @@ function LoggedFoodRow({
   }
 
   return (
-    <div className={`flex flex-col gap-2 rounded-lg border border-border p-2 ${item.done ? 'opacity-60' : ''}`}>
+    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => update({ done: !item.done })}
-          aria-label={item.done ? `${foodName ?? 'Eintrag'} als nicht gegessen markieren` : `${foodName ?? 'Eintrag'} als gegessen markieren`}
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm ${
-            item.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
-          }`}
-        >
-          ✓
-        </button>
         <button type="button" onClick={() => setEditing((v) => !v)} aria-expanded={editing} className="min-w-0 flex-1 text-left">
           <span className="block truncate text-sm text-fg">{foodName ?? 'Lebensmittel wählen …'}</span>
           {/* Erst hier steht, was die Portion tatsächlich beiträgt - bisher gab es die

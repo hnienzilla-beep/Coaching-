@@ -388,15 +388,12 @@ export async function importErnaehrungLog(date: string, content: string): Promis
             foodItemId: food.id,
             grams: item.grams,
             order: order++,
-            done: item.done,
           })
           changed++
-          if (item.done) {
-            const factor = item.grams / 100
-            protein += food.protein * factor
-            carbs += food.carbs * factor
-            fat += food.fat * factor
-          }
+          const factor = item.grams / 100
+          protein += food.protein * factor
+          carbs += food.carbs * factor
+          fat += food.fat * factor
         }
         const calories = caloriesFromMacros(protein, carbs, fat)
 

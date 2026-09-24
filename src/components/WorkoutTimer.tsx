@@ -1,21 +1,14 @@
 import { useEffect, useState } from 'react'
-import { db } from '../db/db'
-import { getOrCreateWorkoutLog } from '../db/queries'
 import { formatDuration } from '../lib/calculator'
-import { Button } from './ui'
 
 /**
- * Trainingsdauer als schmale Zeile im Tageskopf - vorher eine eigene Karte im
- * eingeklappten "Werkzeuge"-Block, wo der Startknopf praktisch unauffindbar war.
+ * Trainingsdauer als schmale Zeile im Tageskopf. Gestartet wird automatisch, sobald ein
+ * Trainingstag zugeordnet oder eine Übung hinzugefügt wird - bis dahin bleibt die Zeile leer.
  */
 export default function WorkoutTimer({
-  athleteId,
-  date,
   startedAt,
   completedAt,
 }: {
-  athleteId: string
-  date: string
   startedAt?: string
   completedAt?: string
 }) {
@@ -36,18 +29,7 @@ export default function WorkoutTimer({
     }
   }, [startedAt, completedAt])
 
-  async function start() {
-    const log = await getOrCreateWorkoutLog(athleteId, date)
-    await db.workoutLogs.update(log.id, { startedAt: new Date().toISOString() })
-  }
-
-  if (!startedAt) {
-    return (
-      <Button variant="primary" onClick={start} className="w-full">
-        ▶ Training starten
-      </Button>
-    )
-  }
+  if (!startedAt) return null
 
   const endMs = completedAt ? new Date(completedAt).getTime() : now
   const elapsedSeconds = Math.max(0, Math.floor((endMs - new Date(startedAt).getTime()) / 1000))
