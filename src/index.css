@@ -259,7 +259,7 @@ textarea {
 }
 
 /* Einblenden beim Scrollen (siehe lib/scrollReveal.ts). Nur aktiv, wenn das Skript läuft. */
-.reveal-ready .reveal:not(.revealed) {
+.reveal-ready .reveal:not([data-revealed]) {
   opacity: 0;
   transform: translateY(24px);
 }
@@ -268,11 +268,11 @@ textarea {
     opacity 500ms ease-out,
     transform 550ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.reveal-ready .reveal.reveal-instant {
+.reveal-ready .reveal[data-reveal-instant] {
   transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .reveal-ready .reveal:not(.revealed) {
+  .reveal-ready .reveal:not([data-revealed]) {
     transform: none;
   }
 }
