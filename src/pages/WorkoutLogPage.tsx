@@ -202,84 +202,87 @@ export default function WorkoutLogPage() {
         )}
       </LogDayHeader>
 
-      {currentLog && setsTotal > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          <StatBadge label="Sätze" value={`${setsDone} / ${setsTotal}`} tone={setsDone === setsTotal ? 'ok' : 'default'} />
-          <StatBadge label="Volumen" value={`${Math.round(volumeKg).toLocaleString('de-DE')} kg`} />
-          {/* Die laufende Dauer steht schon im Tageskopf - hier zählt, wie viel Programm
-              noch vor einem liegt. */}
-          <StatBadge label="Übungen" value={`${sortedRows.length}`} />
-        </div>
-      )}
-
-      <Card className="flex flex-col gap-3">
-        <Field label="Trainingstag (optional)">
-          <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
-            <option value="">– kein Plan zugeordnet –</option>
-            {trainingPlans?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.phaseName}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        {sortedRows.length === 0 && (
-          <p className="text-sm text-muted">
-            🏋️ Noch keine Übungen für diesen Tag. Wähle oben einen Trainingstag – dann werden die geplanten Übungen samt
-            letzter Gewichte übernommen – oder füge eine einzelne Übung hinzu.
-          </p>
-        )}
-
-        <div className="flex flex-col gap-2">
-          {sortedRows.map((row) => (
-            <WorkoutExerciseRow
-              key={row.id}
-              rowId={row.id}
-              exerciseId={row.exerciseId}
-              exerciseName={exerciseMap.get(row.exerciseId)?.name}
-              notes={row.notes}
-              pickerItems={pickerItems}
-              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
-              imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
-              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
-              athleteId={athlete.id}
-              date={selectedDate}
-              onDelete={() => deleteExerciseRow(row.id)}
-            />
-          ))}
-        </div>
-
-        <Button variant="secondary" onClick={addExerciseRow}>
-          + Übung hinzufügen
-        </Button>
-
-        <Field label="Notizen zum Training">
-          <textarea
-            value={currentLog?.notes ?? ''}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Wie lief die Einheit?"
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-          />
-        </Field>
-
-        {currentLog?.completedAt ? (
-          <div className="flex flex-col items-center gap-1">
-            <p className="text-center text-sm text-ok">
-              ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
-              {elapsed !== undefined ? ` · Dauer: ${formatDuration(elapsed)}` : ''}
-            </p>
-            <Button variant="ghost" onClick={reopenWorkout}>
-              Wieder öffnen
-            </Button>
+      {/* Beim Tageswechsel neu eingeblendet - so sieht man, dass sich der Inhalt geändert hat. */}
+      <div key={selectedDate} className="anim-page flex flex-col gap-4">
+        {currentLog && setsTotal > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            <StatBadge label="Sätze" value={`${setsDone} / ${setsTotal}`} tone={setsDone === setsTotal ? 'ok' : 'default'} />
+            <StatBadge label="Volumen" value={`${Math.round(volumeKg).toLocaleString('de-DE')} kg`} />
+            {/* Die laufende Dauer steht schon im Tageskopf - hier zählt, wie viel Programm
+                noch vor einem liegt. */}
+            <StatBadge label="Übungen" value={`${sortedRows.length}`} />
           </div>
-        ) : (
-          <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
-            Training beenden
-          </Button>
         )}
-      </Card>
+
+        <Card className="flex flex-col gap-3">
+          <Field label="Trainingstag (optional)">
+            <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
+              <option value="">– kein Plan zugeordnet –</option>
+              {trainingPlans?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.phaseName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          {sortedRows.length === 0 && (
+            <p className="text-sm text-muted">
+              🏋️ Noch keine Übungen für diesen Tag. Wähle oben einen Trainingstag – dann werden die geplanten Übungen samt
+              letzter Gewichte übernommen – oder füge eine einzelne Übung hinzu.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {sortedRows.map((row) => (
+              <WorkoutExerciseRow
+                key={row.id}
+                rowId={row.id}
+                exerciseId={row.exerciseId}
+                exerciseName={exerciseMap.get(row.exerciseId)?.name}
+                notes={row.notes}
+                pickerItems={pickerItems}
+                muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+                imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
+                planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+                athleteId={athlete.id}
+                date={selectedDate}
+                onDelete={() => deleteExerciseRow(row.id)}
+              />
+            ))}
+          </div>
+
+          <Button variant="secondary" onClick={addExerciseRow}>
+            + Übung hinzufügen
+          </Button>
+
+          <Field label="Notizen zum Training">
+            <textarea
+              value={currentLog?.notes ?? ''}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Wie lief die Einheit?"
+              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            />
+          </Field>
+
+          {currentLog?.completedAt ? (
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-center text-sm text-ok">
+                ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
+                {elapsed !== undefined ? ` · Dauer: ${formatDuration(elapsed)}` : ''}
+              </p>
+              <Button variant="ghost" onClick={reopenWorkout}>
+                Wieder öffnen
+              </Button>
+            </div>
+          ) : (
+            <Button variant="primary" onClick={completeWorkout} disabled={!currentLog}>
+              Training beenden
+            </Button>
+          )}
+        </Card>
+      </div>
 
       <LogHistoryList
         entries={(logs ?? []).map((log) => {

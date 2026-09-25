@@ -115,7 +115,7 @@ export default function AthleteListPage() {
   }, [accentPickerOpen])
 
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
+    <div className="anim-page mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
       <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-3">
           <Link to="/" className="text-muted" aria-label="Zurück zum Athleten">

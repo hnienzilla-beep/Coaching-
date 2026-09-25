@@ -24,7 +24,7 @@ export default function StartRedirect() {
 
   if (athletes.length === 0) {
     return (
-      <div className="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="anim-page mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
         <div>
           <h1 className="text-xl font-bold text-fg">Willkommen</h1>
           <p className="text-sm text-muted">Leg deinen ersten Athleten an, dann kann es losgehen.</p>

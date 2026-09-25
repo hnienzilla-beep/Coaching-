@@ -42,7 +42,7 @@ export default function UpdatePrompt() {
     <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
       <div
         role="alert"
-        className="pointer-events-auto flex w-full max-w-md flex-col gap-3 rounded-2xl border border-border bg-surface-2 px-4 py-3 shadow-2xl shadow-black/50"
+        className="anim-pop pointer-events-auto flex w-full max-w-md flex-col gap-3 rounded-2xl border border-border bg-surface-2 px-4 py-3 shadow-2xl shadow-black/50"
       >
         <div>
           <p className="text-sm font-semibold text-fg">Neues Update verfügbar</p>
