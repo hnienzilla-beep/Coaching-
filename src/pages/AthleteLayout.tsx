@@ -49,7 +49,6 @@ export default function AthleteLayout() {
   // Wischen: einen Schritt weiter bzw. zurück in der Reihe aller Ansichten (lib/swipeNavigation).
   const mainRef = useRef<HTMLElement>(null)
   const swipeContentRef = useRef<HTMLDivElement>(null)
-  const swipeHintRef = useRef<HTMLDivElement>(null)
   const currentView = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
   const activeTab = TABS.findIndex((t) => t.to === (pathname.split('/')[3] ?? ''))
   const swipeTarget = (direction: 'next' | 'prev') =>
@@ -57,7 +56,6 @@ export default function AthleteLayout() {
   useSwipeNavigation({
     area: mainRef,
     content: swipeContentRef,
-    hint: swipeHintRef,
     ready: !!athlete,
     targetLabel: (direction) => swipeTarget(direction)?.label ?? null,
     onSwipe: (direction) => {
@@ -330,13 +328,6 @@ export default function AthleteLayout() {
           )}
         </div>
       </header>
-
-      {/* Hinweis beim Wischen, wohin es geht - Position, Text und Deckkraft setzt der Wisch-Hook. */}
-      <div
-        ref={swipeHintRef}
-        aria-hidden="true"
-        className="pointer-events-none fixed top-1/2 z-30 rounded-full border border-border bg-surface/90 px-3 py-1.5 text-xs font-medium text-fg opacity-0 shadow-lg shadow-black/40 backdrop-blur"
-      />
 
       {/* overflow-x-hidden: Beim Mitziehen ragt der Inhalt seitlich hinaus - ohne das könnte
           Safari waagerecht scrollen oder federn. */}
