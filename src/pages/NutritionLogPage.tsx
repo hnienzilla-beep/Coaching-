@@ -4,21 +4,20 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
-import { macroLine, sumMacros, type Sums } from '../lib/macros'
+import { GRAM_PRESETS, macroLine, sumMacros, type Sums } from '../lib/macros'
 import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
-import { type SearchPickerItem } from '../components/SearchPicker'
+import { Button, Card, Field, ListRow, MacroChips, SectionHeader, Select } from '../components/ui'
+import AddFoodSheet, { AmountInput } from '../components/AddFoodSheet'
 import CollapsibleCard from '../components/CollapsibleCard'
-import FoodPortionFields from '../components/FoodPortionFields'
-import GroupAddChips from '../components/GroupAddChips'
 import MacroBars from '../components/MacroBars'
 import MacroSumTable from '../components/MacroSumTable'
+import Sheet from '../components/Sheet'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
 import { useCoachMode } from '../lib/detailLevel'
-import { SERVING_PRESETS, formatServings, recipeFactor, scaleGrams, servingsLabel, servingsOf } from '../lib/recipes'
+import { scaleGrams } from '../lib/recipes'
 
 type Ctx = { athlete: Athlete }
 
@@ -57,13 +56,6 @@ export default function NutritionLogPage() {
   )
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems: SearchPickerItem[] = (foods ?? []).map((f) => ({
-    id: f.id,
-    label: f.name,
-    sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
-    favorite: f.favorite,
-    unconfirmed: f.unconfirmed,
-  }))
   const planMap = new Map((nutritionPlans ?? []).map((p) => [p.id, p]))
   // Ein Rezept ist kein Tagesablauf - es gehört nicht in die Planauswahl, sondern in den
   // Einfüge-Block darunter.
@@ -106,21 +98,20 @@ export default function NutritionLogPage() {
     return { mealType, rows: groupRows, sum: sumMacros(groupRows) }
   }).filter((g) => g.rows.length > 0)
 
-  const usedMealTypes = new Set(groups.map((g) => g.mealType))
   const suggestedMealType = mealTypeForTime()
 
   const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
   const status: LogDayStatus = !currentLog ? 'none' : currentLog.completedAt ? 'done' : 'open'
 
-  async function addFoodRow(mealType: MealType) {
+  async function addFood(foodItemId: string, grams: number, mealType: MealType) {
     const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
     const existing = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).toArray()
     await db.nutritionLogItems.add({
       id: crypto.randomUUID(),
       nutritionLogId: log.id,
       mealType,
-      foodItemId: '',
-      grams: 100,
+      foodItemId,
+      grams,
       order: nextOrder(existing),
     })
   }
@@ -179,8 +170,7 @@ export default function NutritionLogPage() {
    * ändern oder entfernen. Anders als beim Tagesplan wird nicht auf Dubletten geprüft;
    * dasselbe Rezept zweimal einzufügen heißt hier, es zweimal gegessen zu haben.
    */
-  async function addRecipeToLog(recipe: NutritionPlan, mealType: MealType, servings: number) {
-    const factor = recipeFactor(recipe, servings)
+  async function addRecipeToLog(recipe: NutritionPlan, factor: number, mealType: MealType) {
     if (!(factor > 0)) return
     const meals = await db.planMeals.where('planId').equals(recipe.id).sortBy('order')
     if (meals.length === 0) return
@@ -235,6 +225,9 @@ export default function NutritionLogPage() {
     return [kcalPart, planId ? planMap.get(planId)?.phaseName : undefined].filter(Boolean).join(' · ')
   }
 
+  const [addMeal, setAddMeal] = useState<MealType | null>(null)
+  const [editRow, setEditRow] = useState<Row | null>(null)
+
   return (
     <div className="flex flex-col gap-4">
       <LogDayHeader
@@ -248,7 +241,6 @@ export default function NutritionLogPage() {
       />
 
       <Card className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Tagesbilanz</h2>
         <MacroBars sums={sums} target={target} evaluate={!!currentLog?.completedAt} />
         {coachMode && (
           <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
@@ -257,10 +249,55 @@ export default function NutritionLogPage() {
         )}
       </Card>
 
-      <Card className="flex flex-col gap-3">
-        <Field label="Ernährungsplan-Phase (optional)">
+      <Button variant="primary" onClick={() => setAddMeal(suggestedMealType)} className="py-3">
+        + Essen hinzufügen
+      </Button>
+
+      {groups.length === 0 ? (
+        <p className="px-1 text-center text-sm text-muted">
+          Noch nichts für diesen Tag erfasst. Füge Essen hinzu oder übernimm unten einen Plan.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {groups.map((group) => (
+            <section key={group.mealType} className="flex flex-col gap-1.5">
+              <SectionHeader
+                title={group.mealType}
+                meta={`${Math.round(group.sum.kcal)} kcal`}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setAddMeal(group.mealType)}
+                    aria-label={`Essen zu ${group.mealType} hinzufügen`}
+                    className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
+                  >
+                    +
+                  </button>
+                }
+              />
+              {group.rows.map((row) => (
+                <ListRow
+                  key={row.item.id}
+                  title={foodMap.get(row.item.foodItemId)?.name ?? 'Unbekanntes Lebensmittel'}
+                  subtitle={
+                    <>
+                      {formatGrams(row.item.grams)} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+                    </>
+                  }
+                  value={`${Math.round(row.kcal)} kcal`}
+                  onClick={() => setEditRow(row)}
+                  ariaLabel={`${foodMap.get(row.item.foodItemId)?.name ?? 'Eintrag'} bearbeiten`}
+                />
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+
+      <CollapsibleCard title="Plan, Notizen & mehr" defaultExpanded={!!currentLog?.notes}>
+        <Field label="Ernährungsplan übernehmen">
           <Select value={currentLog?.nutritionPlanId ?? ''} onChange={(e) => setNutritionPlanId(e.target.value)}>
-            <option value="">– kein Plan zugeordnet –</option>
+            <option value="">– kein Plan –</option>
             {dayPlans.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.phaseName}
@@ -268,55 +305,6 @@ export default function NutritionLogPage() {
             ))}
           </Select>
         </Field>
-
-        {groups.length === 0 && (
-          <p className="text-sm text-muted">
-            🍽️ Noch nichts für diesen Tag protokolliert. Wähle unten eine Mahlzeit – oder übernimm oben eine Plan-Phase.
-          </p>
-        )}
-
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <div key={group.mealType} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.mealType}</div>
-                <Button variant="ghost" onClick={() => addFoodRow(group.mealType)} aria-label={`Lebensmittel zu ${group.mealType} hinzufügen`}>
-                  + Lebensmittel
-                </Button>
-              </div>
-              <div className="text-[11px] text-muted">{macroLine(group.sum)}</div>
-              <div className="flex flex-col gap-1.5">
-                {group.rows.map((row) => (
-                  <LoggedFoodRow
-                    key={row.item.id}
-                    row={row}
-                    foodName={foodMap.get(row.item.foodItemId)?.name}
-                    pickerItems={foodPickerItems}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {recipes.length > 0 && (
-          <RecipeInserter
-            recipes={recipes}
-            foodMap={foodMap}
-            defaultMealType={suggestedMealType}
-            onInsert={addRecipeToLog}
-          />
-        )}
-
-        {/* Die Mahlzeit wird vor dem Anlegen gewählt - vorher landete jede neue Zeile in der
-            per Uhrzeit geratenen Mahlzeit und musste per Auswahlfeld korrigiert werden. */}
-        <GroupAddChips
-          label="Mahlzeit hinzufügen"
-          options={MEAL_TYPES}
-          used={usedMealTypes}
-          onAdd={addFoodRow}
-          highlight={suggestedMealType}
-        />
 
         <Field label="Notizen zum Tag">
           <textarea
@@ -328,27 +316,25 @@ export default function NutritionLogPage() {
           />
         </Field>
 
-        {currentLog?.completedAt ? (
-          <div className="flex flex-col items-center gap-1">
-            <p className="text-center text-sm text-ok">
-              ✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}
-            </p>
-            <Button variant="ghost" onClick={reopenLog}>
-              Wieder öffnen
-            </Button>
-          </div>
-        ) : (
-          <Button variant="primary" onClick={completeLog} disabled={!currentLog}>
-            Ernährung abschließen
-          </Button>
-        )}
-
         {coachMode && currentLog && items && items.length > 0 && (
-          <Button variant="ghost" onClick={saveLogAsPlan}>
+          <Button variant="secondary" onClick={saveLogAsPlan}>
             Als Ernährungsplan speichern
           </Button>
         )}
-      </Card>
+      </CollapsibleCard>
+
+      {currentLog?.completedAt ? (
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-center text-sm text-ok">✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}</p>
+          <Button variant="ghost" onClick={reopenLog}>
+            Wieder öffnen
+          </Button>
+        </div>
+      ) : (
+        <Button variant="secondary" onClick={completeLog} disabled={!currentLog}>
+          Tag abschließen
+        </Button>
+      )}
 
       <LogHistoryList
         entries={(logs ?? []).map((log) => ({
@@ -360,61 +346,75 @@ export default function NutritionLogPage() {
         onSelect={setSelectedDate}
         emptyText="📅 Noch keine Ernährungstage aufgezeichnet."
       />
+
+      <AddFoodSheet
+        open={addMeal !== null}
+        onClose={() => setAddMeal(null)}
+        title="Essen hinzufügen"
+        foods={foods ?? []}
+        recipes={recipes}
+        mealType={addMeal ?? suggestedMealType}
+        onAddFood={addFood}
+        onAddRecipe={addRecipeToLog}
+      />
+
+      <EditLogItemSheet row={editRow} foodName={editRow ? foodMap.get(editRow.item.foodItemId)?.name : undefined} onClose={() => setEditRow(null)} />
     </div>
   )
 }
 
-/**
- * Rezept portionsweise ins Tageslog übernehmen. Die Vorschau zeigt vor dem Einfügen, was die
- * gewählte Portionszahl tatsächlich beiträgt - sonst müsste man erst einfügen, um es zu sehen.
- */
-function RecipeInserter({
-  recipes,
-  foodMap,
-  defaultMealType,
-  onInsert,
-}: {
-  recipes: NutritionPlan[]
-  foodMap: Map<string, FoodItem>
-  defaultMealType: MealType
-  onInsert: (recipe: NutritionPlan, mealType: MealType, servings: number) => Promise<void>
-}) {
-  const [recipeId, setRecipeId] = useState('')
-  const [mealType, setMealType] = useState<MealType>(defaultMealType)
-  const [servings, setServings] = useState<number | undefined>(1)
+function formatGrams(grams: number): string {
+  return grams.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+}
 
-  // Kein fester Startwert im State: Wird das gewählte Rezept gelöscht oder in einen Tagesplan
-  // zurückverwandelt, greift wieder das erste der Liste.
-  const recipe = recipes.find((r) => r.id === recipeId) ?? recipes[0]
+/** Menge und Mahlzeit eines Eintrags ändern oder ihn entfernen. */
+function EditLogItemSheet({ row, foodName, onClose }: { row: Row | null; foodName?: string; onClose: () => void }) {
+  const [grams, setGrams] = useState<number | undefined>(row?.item.grams)
+  const [mealType, setMealType] = useState<MealType | undefined>(row?.item.mealType)
 
-  const meals = useLiveQuery(
-    () => (recipe ? db.planMeals.where('planId').equals(recipe.id).sortBy('order') : []),
-    [recipe?.id],
-  )
+  useEffect(() => {
+    setGrams(row?.item.grams)
+    setMealType(row?.item.mealType)
+  }, [row])
 
-  if (!recipe) return null
+  if (!row) return null
+  const perGram = row.item.grams > 0 ? 1 / row.item.grams : 0
+  const preview = {
+    kcal: row.kcal * perGram * (grams ?? 0),
+    protein: row.protein * perGram * (grams ?? 0),
+    carbs: row.carbs * perGram * (grams ?? 0),
+    fat: row.fat * perGram * (grams ?? 0),
+  }
 
-  const factor = recipeFactor(recipe, servings ?? 0)
-  const preview = sumMacros(
-    (meals ?? []).map((m) => macrosForPortion(foodMap.get(m.foodItemId), scaleGrams(m.grams, factor))),
-  )
-  const count = meals?.length ?? 0
-  const canInsert = count > 0 && (servings ?? 0) > 0
+  async function save() {
+    if (!row || !grams || grams <= 0) return
+    await db.nutritionLogItems.update(row.item.id, { grams, mealType })
+    onClose()
+  }
+
+  async function remove() {
+    if (!row) return
+    await db.nutritionLogItems.delete(row.item.id)
+    onClose()
+  }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
-      <div className="text-xs font-semibold uppercase tracking-wide text-fg">Rezept einfügen</div>
-
-      <Field label="Rezept">
-        <Select value={recipe.id} onChange={(e) => setRecipeId(e.target.value)}>
-          {recipes.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.phaseName}
-            </option>
-          ))}
-        </Select>
-      </Field>
-
+    <Sheet
+      open
+      title={foodName ?? 'Eintrag bearbeiten'}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          <Button variant="danger" onClick={() => void remove()}>
+            Entfernen
+          </Button>
+          <Button variant="primary" className="flex-1" disabled={!grams || grams <= 0} onClick={() => void save()}>
+            Speichern
+          </Button>
+        </div>
+      }
+    >
+      <AmountInput value={grams} onChange={setGrams} presets={GRAM_PRESETS} unit="g" label="Menge in Gramm" />
       <Field label="Mahlzeit">
         <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
           {MEAL_TYPES.map((mt) => (
@@ -424,99 +424,7 @@ function RecipeInserter({
           ))}
         </Select>
       </Field>
-
-      <Field label="Portionen">
-        <div className="flex items-center gap-2">
-          <DecimalInput value={servings} onChange={setServings} aria-label="Portionen" className="flex-1" />
-          {SERVING_PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => setServings(preset)}
-              aria-pressed={servings === preset}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm transition active:scale-95 ${
-                servings === preset
-                  ? 'bg-accent font-medium text-accent-fg'
-                  : 'border border-border bg-surface-2 text-muted hover:text-fg'
-              }`}
-            >
-              {formatServings(preset)}
-            </button>
-          ))}
-        </div>
-      </Field>
-
-      <p className="text-[11px] text-muted">
-        {count === 0
-          ? 'Dieses Rezept hat noch keine Zutaten.'
-          : `Ganzes Rezept: ${servingsLabel(servingsOf(recipe))} · ${count} ${count === 1 ? 'Zutat' : 'Zutaten'} → ${macroLine(preview)}`}
-      </p>
-
-      <Button variant="secondary" disabled={!canInsert} onClick={() => void onInsert(recipe, mealType, servings ?? 0)}>
-        Einfügen
-      </Button>
-    </div>
-  )
-}
-
-function LoggedFoodRow({
-  row,
-  foodName,
-  pickerItems,
-}: {
-  row: Row
-  foodName?: string
-  pickerItems: SearchPickerItem[]
-}) {
-  const { item } = row
-  // Neue Zeilen haben noch kein Lebensmittel - sie öffnen direkt die Suche.
-  const [editing, setEditing] = useState(item.foodItemId === '')
-
-  function update(patch: Partial<NutritionLogItem>) {
-    void db.nutritionLogItems.update(item.id, patch)
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border p-2">
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setEditing((v) => !v)} aria-expanded={editing} className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-sm text-fg">{foodName ?? 'Lebensmittel wählen …'}</span>
-          {/* Erst hier steht, was die Portion tatsächlich beiträgt - bisher gab es die
-              Nährwerte nur als Summe über die ganze Mahlzeit. */}
-          <span className="block truncate text-[11px] text-muted">
-            {item.grams} g · {macroLine(row)}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => db.nutritionLogItems.delete(item.id)}
-          aria-label={`${foodName ?? 'Eintrag'} entfernen`}
-          className="shrink-0 px-1 py-2 text-sm text-muted hover:text-danger"
-        >
-          🗑
-        </button>
-      </div>
-
-      {editing && (
-        <div className="flex flex-col gap-2 border-t border-border pt-2">
-          <FoodPortionFields
-            pickerItems={pickerItems}
-            foodItemId={item.foodItemId}
-            grams={item.grams}
-            onChange={update}
-          />
-
-          <Field label="Mahlzeit">
-            <Select value={item.mealType} onChange={(e) => update({ mealType: e.target.value as MealType })}>
-              {MEAL_TYPES.map((mt) => (
-                <option key={mt} value={mt}>
-                  {mt}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-      )}
-    </div>
+      {row.item.grams > 0 && <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-sm tabular-nums text-fg">{macroLine(preview)}</p>}
+    </Sheet>
   )
 }

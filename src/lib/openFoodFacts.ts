@@ -1,12 +1,16 @@
 // Online-Lebensmittelsuche über Open Food Facts (freie Datenbank, CORS-fähig, kein API-Key).
 // FDDB bietet keine freie Schnittstelle an - Open Food Facts deckt deutsche Markenprodukte
 // gut ab und liefert die Nährwerte bereits je 100 g, also im Format dieser App.
+//
+// Bewusst die klassische Volltextsuche der deutschen Instanz: Die neuere Such-API
+// (search.openfoodfacts.org) erlaubt keine Browser-Anfragen von fremden Seiten (kein CORS),
+// und die weltweite Instanz sortiert französische Produkte vor deutsche.
 
 import { caloriesFromMacros } from './calculator'
 import { findByName } from './names'
 import type { FoodItem } from '../models/types'
 
-const SEARCH_URL = 'https://search.openfoodfacts.org/search'
+const SEARCH_URL = 'https://de.openfoodfacts.org/cgi/search.pl'
 
 /** Ein Suchtreffer, schon auf das Datenmodell der App zugeschnitten (Werte je 100 g). */
 export interface OnlineFood {
@@ -77,18 +81,21 @@ export function onlineFoodName(food: Pick<OnlineFood, 'name' | 'brand'>): string
  */
 export async function searchOpenFoodFacts(query: string, signal?: AbortSignal): Promise<OnlineFood[]> {
   const params = new URLSearchParams({
-    q: query,
-    langs: 'de',
+    search_terms: query,
+    search_simple: '1',
+    action: 'process',
+    json: '1',
+    lc: 'de',
     page_size: '25',
     fields: 'code,product_name,product_name_de,brands,nutriments',
   })
   const res = await fetch(`${SEARCH_URL}?${params}`, { signal })
   if (!res.ok) throw new Error(`Open Food Facts: HTTP ${res.status}`)
-  const data = (await res.json()) as { hits?: OffHit[] }
+  const data = (await res.json()) as { products?: OffHit[] }
 
   const seen = new Set<string>()
   const result: OnlineFood[] = []
-  for (const hit of data.hits ?? []) {
+  for (const hit of data.products ?? []) {
     const food = mapHit(hit)
     if (!food) continue
     const key = `${onlineFoodName(food).toLowerCase()}|${food.protein}|${food.carbs}|${food.fat}`
