@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
+import { SWIPE_VIEWS, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ACCENT_COLORS, clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
@@ -31,8 +32,24 @@ const APP_BUILD_LABEL = new Date(__APP_BUILD__).toLocaleString('de-DE', {
 
 export default function AthleteLayout() {
   const { athleteId } = useParams()
-  const { pathname } = useLocation()
+  const { pathname, state } = useLocation()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+
+  // Wischen: einen Schritt weiter bzw. zurück in der Reihe aller Ansichten (lib/swipeNavigation).
+  const swipeHandlers = useSwipeNavigation((direction) => {
+    if (!athleteId) return
+    const current = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
+    const target = SWIPE_VIEWS[current + (direction === 'next' ? 1 : -1)]
+    if (current === -1 || !target) return
+    const path = `/athlete/${athleteId}${target.path ? `/${target.path}` : ''}${target.view ? `?view=${target.view}` : ''}`
+    navigate(path, { state: { swipe: direction } })
+  })
+  // Reiter mit Unter-Ansichten animieren ihren Inhalt beim Wischen selbst - hier nicht noch
+  // einmal, sonst liefe die Bewegung doppelt.
+  const swipe = (state as { swipe?: unknown } | null)?.swipe
+  const hasSubViews = /\/(ernaehrung|training)$/.test(pathname)
+  const outerAnimation = swipe && hasSubViews ? '' : swipeAnimationClass(swipe)
   const detailLevel = useDetailLevel()
   const [theme, setTheme] = useTheme()
 
@@ -302,9 +319,10 @@ export default function AthleteLayout() {
         </div>
       </header>
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
-        {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet. */}
-        <div key={pathname} className="anim-page">
+      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6" {...swipeHandlers}>
+        {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet - beim
+            Wischen gleitet die Ansicht aus der Wischrichtung herein. */}
+        <div key={pathname} className={outerAnimation}>
           <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
         </div>
       </main>

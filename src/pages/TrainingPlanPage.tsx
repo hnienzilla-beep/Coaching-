@@ -304,6 +304,7 @@ function SortableRow({ row, exercise, onEdit }: { row: TrainingPlanExercise; exe
         value={prescription(row)}
         onClick={onEdit}
         ariaLabel={`${exercise?.name ?? 'Übung'} bearbeiten`}
+        onSwipeDelete={() => db.trainingPlanExercises.delete(row.id)}
       />
     </div>
   )
