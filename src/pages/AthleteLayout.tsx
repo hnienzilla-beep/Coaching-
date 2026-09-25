@@ -36,8 +36,20 @@ export default function AthleteLayout() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
+  const detailLevel = useDetailLevel()
+  const [theme, setTheme] = useTheme()
+
+  // `?? null` unterscheidet "lädt noch" (undefined) von "gibt es nicht" (null) - ohne das
+  // blitzte der Fehlerzweig bei jedem Laden kurz auf.
+  const athlete = useLiveQuery(
+    async () => (athleteId ? ((await db.athletes.get(athleteId)) ?? null) : null),
+    [athleteId],
+  )
+
   // Wischen: einen Schritt weiter bzw. zurück in der Reihe aller Ansichten (lib/swipeNavigation).
-  const swipeHandlers = useSwipeNavigation((direction) => {
+  const mainRef = useRef<HTMLElement>(null)
+  const swipeContentRef = useRef<HTMLDivElement>(null)
+  useSwipeNavigation(mainRef, swipeContentRef, !!athlete, (direction) => {
     if (!athleteId) return
     const current = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
     const target = SWIPE_VIEWS[current + (direction === 'next' ? 1 : -1)]
@@ -50,15 +62,6 @@ export default function AthleteLayout() {
   const swipe = (state as { swipe?: unknown } | null)?.swipe
   const hasSubViews = /\/(ernaehrung|training)$/.test(pathname)
   const outerAnimation = swipe && hasSubViews ? '' : swipeAnimationClass(swipe)
-  const detailLevel = useDetailLevel()
-  const [theme, setTheme] = useTheme()
-
-  // `?? null` unterscheidet "lädt noch" (undefined) von "gibt es nicht" (null) - ohne das
-  // blitzte der Fehlerzweig bei jedem Laden kurz auf.
-  const athlete = useLiveQuery(
-    async () => (athleteId ? ((await db.athletes.get(athleteId)) ?? null) : null),
-    [athleteId],
-  )
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
 
@@ -70,7 +73,6 @@ export default function AthleteLayout() {
   const athletePickerRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const backgroundPhotoInputRef = useRef<HTMLInputElement>(null)
-  const mainRef = useRef<HTMLElement>(null)
 
   const sortedAthletes = sortAthletes(athletes ?? [])
   const canManageAthletes = detailLevel !== 'einfach'
@@ -319,11 +321,15 @@ export default function AthleteLayout() {
         </div>
       </header>
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6" {...swipeHandlers}>
+      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
         {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet - beim
             Wischen gleitet die Ansicht aus der Wischrichtung herein. */}
+        {/* Eigene Hülle für das Mitziehen beim Wischen - auf dem animierten Element darunter
+            würde die Animation die Verschiebung überschreiben. */}
+        <div ref={swipeContentRef}>
         <div key={pathname} className={outerAnimation}>
           <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
+        </div>
         </div>
       </main>
 
