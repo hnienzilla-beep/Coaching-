@@ -195,7 +195,7 @@ export default function AddFoodSheet({
           </ResultSection>
         )}
 
-        <ResultSection title={q ? 'Meine Lebensmittel' : 'Favoriten & zuletzt angelegt'}>
+        <ResultSection title="Meine Lebensmittel">
           {localMatches.length === 0 && <p className="px-1 text-sm text-muted">Keine Treffer in deiner Datenbank.</p>}
           {localMatches.map((f) => (
             <ListRow
@@ -217,7 +217,14 @@ export default function AddFoodSheet({
         {online.active && (
           <ResultSection title="Online · Open Food Facts">
             {online.loading && <p className="px-1 text-sm text-muted">Suche online …</p>}
-            {online.error && <p className="px-1 text-sm text-muted">Online-Suche gerade nicht erreichbar.</p>}
+            {online.error && (
+              <p className="px-1 text-sm text-muted">
+                Online-Suche gerade nicht erreichbar.{' '}
+                <button type="button" onClick={online.retry} className="underline hover:text-fg">
+                  Nochmal versuchen
+                </button>
+              </p>
+            )}
             {!online.loading && !online.error && onlineMatches.length === 0 && (
               <p className="px-1 text-sm text-muted">Keine weiteren Online-Treffer.</p>
             )}
