@@ -231,87 +231,90 @@ export default function NutritionLogPage() {
         deleteConfirmText="Ernährungstag mit allen Einträgen löschen?"
       />
 
-      {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
-      <DailySummary sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} />
-      {coachMode && (
-        <CollapsibleCard title="Details (Ist / Ziel / Differenz)" defaultExpanded={false}>
-          <MacroSumTable sums={sums} target={target} />
-        </CollapsibleCard>
-      )}
-
-      <Button variant="primary" onClick={() => setAddMeal(suggestedMealType)} className="py-3">
-        + Essen hinzufügen
-      </Button>
-
-      {groups.length === 0 ? (
-        <p className="px-1 text-center text-sm text-muted">
-          Noch nichts für diesen Tag erfasst. Füge Essen hinzu oder übernimm unten einen Plan.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <section key={group.mealType} className="flex flex-col gap-1.5">
-              <SectionHeader
-                title={group.mealType}
-                meta={`${Math.round(group.sum.kcal)} kcal`}
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setAddMeal(group.mealType)}
-                    aria-label={`Essen zu ${group.mealType} hinzufügen`}
-                    className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
-                  >
-                    +
-                  </button>
-                }
-              />
-              {group.rows.map((row) => (
-                <ListRow
-                  key={row.item.id}
-                  title={foodMap.get(row.item.foodItemId)?.name ?? 'Unbekanntes Lebensmittel'}
-                  subtitle={
-                    <>
-                      {formatGrams(row.item.grams)} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
-                    </>
-                  }
-                  value={`${Math.round(row.kcal)} kcal`}
-                  onClick={() => setEditRow(row)}
-                  ariaLabel={`${foodMap.get(row.item.foodItemId)?.name ?? 'Eintrag'} bearbeiten`}
-                />
-              ))}
-            </section>
-          ))}
-        </div>
-      )}
-
-      <CollapsibleCard title="Plan, Notizen & mehr" defaultExpanded={!!currentLog?.notes}>
-        <Field label="Ernährungsplan übernehmen">
-          <Select value={currentLog?.nutritionPlanId ?? ''} onChange={(e) => setNutritionPlanId(e.target.value)}>
-            <option value="">– kein Plan –</option>
-            {dayPlans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.phaseName}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Notizen zum Tag">
-          <textarea
-            value={currentLog?.notes ?? ''}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Auffälligkeiten, Heißhunger, Abweichungen …"
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-          />
-        </Field>
-
-        {coachMode && currentLog && items && items.length > 0 && (
-          <Button variant="secondary" onClick={saveLogAsPlan}>
-            Als Ernährungsplan speichern
-          </Button>
+      {/* Beim Tageswechsel neu eingeblendet - so sieht man, dass sich der Inhalt geändert hat. */}
+      <div key={selectedDate} className="anim-page flex flex-col gap-4">
+        {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
+        <DailySummary sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} />
+        {coachMode && (
+          <CollapsibleCard title="Details (Ist / Ziel / Differenz)" defaultExpanded={false}>
+            <MacroSumTable sums={sums} target={target} />
+          </CollapsibleCard>
         )}
-      </CollapsibleCard>
+
+        <Button variant="primary" onClick={() => setAddMeal(suggestedMealType)} className="py-3">
+          + Essen hinzufügen
+        </Button>
+
+        {groups.length === 0 ? (
+          <p className="px-1 text-center text-sm text-muted">
+            Noch nichts für diesen Tag erfasst. Füge Essen hinzu oder übernimm unten einen Plan.
+          </p>
+        ) : (
+          <div className="anim-list flex flex-col gap-4">
+            {groups.map((group) => (
+              <section key={group.mealType} className="flex flex-col gap-1.5">
+                <SectionHeader
+                  title={group.mealType}
+                  meta={`${Math.round(group.sum.kcal)} kcal`}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => setAddMeal(group.mealType)}
+                      aria-label={`Essen zu ${group.mealType} hinzufügen`}
+                      className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
+                    >
+                      +
+                    </button>
+                  }
+                />
+                {group.rows.map((row) => (
+                  <ListRow
+                    key={row.item.id}
+                    title={foodMap.get(row.item.foodItemId)?.name ?? 'Unbekanntes Lebensmittel'}
+                    subtitle={
+                      <>
+                        {formatGrams(row.item.grams)} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+                      </>
+                    }
+                    value={`${Math.round(row.kcal)} kcal`}
+                    onClick={() => setEditRow(row)}
+                    ariaLabel={`${foodMap.get(row.item.foodItemId)?.name ?? 'Eintrag'} bearbeiten`}
+                  />
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
+
+        <CollapsibleCard title="Plan, Notizen & mehr" defaultExpanded={!!currentLog?.notes}>
+          <Field label="Ernährungsplan übernehmen">
+            <Select value={currentLog?.nutritionPlanId ?? ''} onChange={(e) => setNutritionPlanId(e.target.value)}>
+              <option value="">– kein Plan –</option>
+              {dayPlans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.phaseName}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Notizen zum Tag">
+            <textarea
+              value={currentLog?.notes ?? ''}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Auffälligkeiten, Heißhunger, Abweichungen …"
+              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+            />
+          </Field>
+
+          {coachMode && currentLog && items && items.length > 0 && (
+            <Button variant="secondary" onClick={saveLogAsPlan}>
+              Als Ernährungsplan speichern
+            </Button>
+          )}
+        </CollapsibleCard>
+      </div>
 
       <LogHistoryList
         entries={(logs ?? []).map((log) => ({

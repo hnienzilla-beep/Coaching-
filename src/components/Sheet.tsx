@@ -38,8 +38,8 @@ export default function Sheet({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label="Schließen" onClick={onClose} className="absolute inset-0 bg-black/60" />
-      <div className={`relative flex w-full ${tall ? 'h-[85dvh]' : 'max-h-[88dvh]'} max-w-md flex-col rounded-t-2xl border border-b-0 border-border bg-surface shadow-2xl`}>
+      <button type="button" aria-label="Schließen" onClick={onClose} className="anim-backdrop absolute inset-0 bg-black/60" />
+      <div className={`anim-sheet relative flex w-full ${tall ? 'h-[85dvh]' : 'max-h-[88dvh]'} max-w-md flex-col rounded-t-2xl border border-b-0 border-border bg-surface shadow-2xl`}>
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <h2 className="truncate text-base font-semibold text-fg">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Schließen" className="-mr-1 px-2 py-1 text-lg text-muted hover:text-fg">

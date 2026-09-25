@@ -170,8 +170,15 @@ export function SegmentedControl<T extends string>({
   onChange: (key: T) => void
   size?: 'sm' | 'md'
 }) {
+  const index = Math.max(0, options.findIndex((o) => o.key === value))
   return (
-    <div role="tablist" className="flex gap-1 rounded-xl bg-surface-2 p-1">
+    <div role="tablist" className="relative flex rounded-xl bg-surface-2 p-1">
+      {/* Die Markierung gleitet zum gewählten Eintrag, statt einfach umzuspringen. */}
+      <span
+        aria-hidden="true"
+        className="absolute top-1 bottom-1 left-1 rounded-lg bg-accent transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{ width: `calc((100% - 0.5rem) / ${options.length})`, transform: `translateX(${index * 100}%)` }}
+      />
       {options.map((o) => (
         <button
           key={o.key}
@@ -179,8 +186,8 @@ export function SegmentedControl<T extends string>({
           role="tab"
           aria-selected={value === o.key}
           onClick={() => onChange(o.key)}
-          className={`flex-1 rounded-lg font-medium transition ${size === 'sm' ? 'py-1.5 text-xs' : 'py-2 text-sm'} ${
-            value === o.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
+          className={`relative flex-1 rounded-lg font-medium transition-colors duration-300 ${size === 'sm' ? 'py-1.5 text-xs' : 'py-2 text-sm'} ${
+            value === o.key ? 'text-accent-fg' : 'text-muted hover:text-fg'
           }`}
         >
           {o.label}
@@ -237,7 +244,12 @@ export function ListRow({
   return (
     <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
       {onClick ? (
-        <button type="button" onClick={onClick} aria-label={ariaLabel} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={ariaLabel}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]"
+        >
           {content}
         </button>
       ) : (

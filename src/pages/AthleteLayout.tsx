@@ -293,7 +293,10 @@ export default function AthleteLayout() {
       </header>
 
       <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
-        <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
+        {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet. */}
+        <div key={pathname} className="anim-page">
+          <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
+        </div>
       </main>
 
       {/* Unten bewusst kein Safe-Area-Polster: Die 12px Eigenpolster der Reiter (`py-3`)
