@@ -168,14 +168,15 @@ textarea {
 }
 
 /* ---------------------------------------------------------------------------------------
-   Übergänge. Kurz und dezent (≤ 320 ms), nur transform/opacity - das bleibt auch auf älteren
-   iPhones flüssig. Wer in den Systemeinstellungen "Bewegung reduzieren" gewählt hat,
-   bekommt sie gar nicht (Block ganz unten).
+   Übergänge. Nur transform/opacity - das bleibt auch auf älteren iPhones flüssig. Bewusst
+   deutlich sichtbar: Die erste, sehr dezente Fassung (10 px, 0,28 s) fiel auf dem Handy
+   niemandem auf. Bei "Bewegung reduzieren" bleibt statt Gleiten ein reines Einblenden
+   (Block ganz unten) - so macht es iOS selbst auch.
    --------------------------------------------------------------------------------------- */
 @keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(28px) scale(0.97);
   }
   to {
     opacity: 1;
@@ -204,7 +205,7 @@ textarea {
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(-8px) scale(0.97);
+    transform: translateY(-16px) scale(0.94);
   }
   to {
     opacity: 1;
@@ -212,52 +213,47 @@ textarea {
   }
 }
 
-/* Seiten- und Reiterwechsel: Inhalt gleitet leicht von unten herein. */
+/* Seiten-, Reiter- und Tageswechsel: Inhalt gleitet von unten herein. */
 .anim-page {
-  animation: page-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: page-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Listen: Einträge erscheinen nacheinander statt als Block. Nur die ersten zwölf werden
    verzögert - bei langen Listen wartete man sonst sichtbar auf die unteren Zeilen. */
 .anim-list > * {
-  animation: page-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: page-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.anim-list > :nth-child(2) { animation-delay: 30ms; }
-.anim-list > :nth-child(3) { animation-delay: 60ms; }
-.anim-list > :nth-child(4) { animation-delay: 90ms; }
-.anim-list > :nth-child(5) { animation-delay: 120ms; }
-.anim-list > :nth-child(6) { animation-delay: 150ms; }
-.anim-list > :nth-child(7) { animation-delay: 180ms; }
-.anim-list > :nth-child(8) { animation-delay: 210ms; }
-.anim-list > :nth-child(9) { animation-delay: 240ms; }
-.anim-list > :nth-child(10) { animation-delay: 270ms; }
-.anim-list > :nth-child(11) { animation-delay: 300ms; }
-.anim-list > :nth-child(n + 12) { animation-delay: 320ms; }
+.anim-list > :nth-child(2) { animation-delay: 50ms; }
+.anim-list > :nth-child(3) { animation-delay: 100ms; }
+.anim-list > :nth-child(4) { animation-delay: 150ms; }
+.anim-list > :nth-child(5) { animation-delay: 200ms; }
+.anim-list > :nth-child(6) { animation-delay: 250ms; }
+.anim-list > :nth-child(7) { animation-delay: 300ms; }
+.anim-list > :nth-child(8) { animation-delay: 350ms; }
+.anim-list > :nth-child(9) { animation-delay: 400ms; }
+.anim-list > :nth-child(10) { animation-delay: 450ms; }
+.anim-list > :nth-child(11) { animation-delay: 500ms; }
+.anim-list > :nth-child(n + 12) { animation-delay: 550ms; }
 
 /* Bottom-Sheet fährt von unten ein, der Hintergrund blendet ab. */
 .anim-sheet {
-  animation: sheet-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: sheet-in 400ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 .anim-backdrop {
-  animation: fade-in 220ms ease-out both;
+  animation: fade-in 300ms ease-out both;
 }
 
-/* Hinweise (Update-Banner) springen leicht von oben herein. */
+/* Hinweise und Menüs springen von oben herein. */
 .anim-pop {
-  animation: pop-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pop-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .anim-page,
   .anim-list > *,
   .anim-sheet,
-  .anim-backdrop,
   .anim-pop {
-    animation: none;
-  }
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
+    animation-name: fade-in;
+    animation-duration: 250ms;
   }
 }
