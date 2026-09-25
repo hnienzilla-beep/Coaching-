@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/decimalInput'
+import { useCountUp } from '../lib/countUp'
 import SwipeToDelete from './SwipeToDelete'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
@@ -289,4 +290,18 @@ export function MacroChips({ protein, carbs, fat }: { protein: number; carbs: nu
 /** Kleines Kennzeichen für Einträge aus einer Online-Quelle. */
 export function SourceBadge({ label }: { label: string }) {
   return <span className="ml-1 rounded border border-border px-1 py-px align-middle text-[10px] text-muted">{label}</span>
+}
+
+/**
+ * Zahl, die sich beim Erscheinen hochzählt (siehe `useCountUp`). Deutsches Zahlenformat,
+ * `decimals` Nachkommastellen - ohne Wert steht ein Strich da.
+ */
+export function CountUp({ value, decimals = 0, className }: { value: number | undefined; decimals?: number; className?: string }) {
+  const shown = useCountUp(value ?? 0)
+  if (value === undefined || !Number.isFinite(value)) return <span className={className}>–</span>
+  return (
+    <span className={className}>
+      {shown.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+    </span>
+  )
 }
