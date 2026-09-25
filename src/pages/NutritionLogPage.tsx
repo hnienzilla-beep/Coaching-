@@ -7,11 +7,11 @@ import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../li
 import { sumMacros, type Sums } from '../lib/macros'
 import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, Field, ListRow, MacroChips, SectionHeader, Select } from '../components/ui'
+import { Button, Field, ListRow, MacroChips, SectionHeader, Select } from '../components/ui'
 import AddFoodSheet from '../components/AddFoodSheet'
 import PortionEditSheet from '../components/PortionEditSheet'
 import CollapsibleCard from '../components/CollapsibleCard'
-import MacroBars from '../components/MacroBars'
+import DailySummary from '../components/DailySummary'
 import MacroSumTable from '../components/MacroSumTable'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
@@ -231,15 +231,13 @@ export default function NutritionLogPage() {
         deleteConfirmText="Ernährungstag mit allen Einträgen löschen?"
       />
 
-      <Card className="flex flex-col gap-3">
-        {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
-        <MacroBars sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} />
-        {coachMode && (
-          <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
-            <MacroSumTable sums={sums} target={target} />
-          </CollapsibleCard>
-        )}
-      </Card>
+      {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
+      <DailySummary sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} />
+      {coachMode && (
+        <CollapsibleCard title="Details (Ist / Ziel / Differenz)" defaultExpanded={false}>
+          <MacroSumTable sums={sums} target={target} />
+        </CollapsibleCard>
+      )}
 
       <Button variant="primary" onClick={() => setAddMeal(suggestedMealType)} className="py-3">
         + Essen hinzufügen
