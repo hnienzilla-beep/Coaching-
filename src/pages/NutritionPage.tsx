@@ -439,7 +439,12 @@ export default function NutritionPage() {
             <section key={group.key} className="flex flex-col gap-1.5">
               <SectionHeader
                 title={group.label}
-                meta={`${Math.round(group.sum.kcal)} kcal`}
+                meta={
+                  <>
+                    {Math.round(group.sum.kcal)} kcal ·{' '}
+                    <MacroChips protein={group.sum.protein} carbs={group.sum.carbs} fat={group.sum.fat} />
+                  </>
+                }
                 action={
                   editing ? (
                     <button
@@ -560,7 +565,11 @@ function SortableMealRow({ row, foodName, onEdit, onRemove }: { row: Row; foodNa
           </span>
         }
         title={foodName ?? 'Unbekanntes Lebensmittel'}
-        subtitle={`${meal.grams} g`}
+        subtitle={
+          <>
+            {meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+          </>
+        }
         value={`${Math.round(row.kcal)} kcal`}
         onClick={onEdit}
         ariaLabel={`${foodName ?? 'Eintrag'} bearbeiten`}

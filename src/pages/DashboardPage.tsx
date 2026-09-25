@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { Button, Card, DecimalInput, Field, Input, ListRow, Select } from '../components/ui'
+import { Button, Card, CountUp, DecimalInput, Field, Input, ListRow, Select } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
 import Sheet from '../components/Sheet'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
@@ -12,6 +12,7 @@ import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
 import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
+import { useGrowIn } from '../lib/countUp'
 
 type Ctx = { athlete: Athlete }
 
@@ -50,7 +51,24 @@ export default function DashboardPage() {
     calorieAdjustmentKcal: athlete.calorieAdjustmentKcal,
   })
 
-  const bmi = calculateBmi(athlete.weightKg, athlete.heightCm)
+  const today = todayIso()
+  const todayEntry = (entries ?? []).find((e) => e.date === today)
+  const tracked = {
+    kcal: todayEntry?.calories ?? 0,
+    protein: todayEntry?.protein ?? 0,
+    carbs: todayEntry?.carbs ?? 0,
+    fat: todayEntry?.fat ?? 0,
+  }
+  const remaining = result.targetCalories - tracked.kcal
+  const grown = useGrowIn()
+
+  // Gewicht von heute - sonst das zuletzt gewogene, damit BMI und Kachel nicht leer bleiben.
+  const weightToday = todayEntry?.weightKg
+  const lastWeighed = (entries ?? [])
+    .filter((e) => e.weightKg !== undefined && e.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]?.weightKg
+  const bodyWeight = weightToday ?? lastWeighed
+  const bmi = calculateBmi(bodyWeight ?? athlete.weightKg, athlete.heightCm)
   const bodyFatFromFfmi =
     athlete.ffmi !== undefined ? calculateBodyFatFromFfmi(athlete.ffmi, athlete.weightKg, athlete.heightCm) : undefined
 
@@ -60,35 +78,64 @@ export default function DashboardPage() {
   }, [athlete.id, bodyFatFromFfmi])
 
   const bmiOk = bmi !== undefined && bmi >= 18.5 && bmi <= 24.9
+  const bodyFat = todayEntry?.bodyFatPct ?? bodyFatFromFfmi
 
   return (
     <div className="flex flex-col gap-4">
       <ReminderBanner athleteId={athlete.id} entries={entries ?? []} />
 
-      {/* Die Tagesvorgabe ist die Zahl, gegen die jeder Tag gemessen wird - deshalb ganz oben. */}
+      {/* Heute zuerst: was schon gegessen ist (hervorgehoben) gegen die Vorgabe, darunter die
+          Körperwerte des Tages. Alle Zahlen zählen beim Erscheinen hoch. */}
       <Card className="flex flex-col gap-4">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted">Deine Tagesvorgabe</h2>
+          <h2 className="text-sm font-semibold text-muted">Heute</h2>
           <span className="text-xs text-muted">{athlete.goal}</span>
         </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-bold tabular-nums text-fg">{result.targetCalories.toLocaleString('de-DE')}</span>
-          <span className="text-sm text-muted">kcal</span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-baseline gap-1.5">
+              <CountUp value={tracked.kcal} className="text-4xl font-bold tabular-nums text-accent" />
+              <span className="text-sm text-muted">kcal getrackt</span>
+            </div>
+            <span className="text-right text-sm tabular-nums text-muted">
+              Vorgabe <span className="font-semibold text-fg">{result.targetCalories.toLocaleString('de-DE')}</span> kcal
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className={`h-full rounded-full transition-[width] duration-[900ms] ease-out ${remaining < 0 ? 'bg-danger' : 'bg-accent'}`}
+              style={{ width: `${grown ? percent(tracked.kcal, result.targetCalories) : 0}%` }}
+            />
+          </div>
+          <p className="text-xs tabular-nums text-muted">
+            {remaining >= 0
+              ? `Noch ${Math.round(remaining).toLocaleString('de-DE')} kcal übrig`
+              : `${Math.round(-remaining).toLocaleString('de-DE')} kcal über der Vorgabe`}
+          </p>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Tile label="Protein" value={`${result.proteinG} g`} />
-          <Tile label="Carbs" value={`${result.carbsG} g`} />
-          <Tile label="Fett" value={`${result.fatG} g`} />
+          <MacroTile label="Protein" value={tracked.protein} target={result.proteinG} grown={grown} delay={80} />
+          <MacroTile label="Carbs" value={tracked.carbs} target={result.carbsG} grown={grown} delay={160} />
+          <MacroTile label="Fett" value={tracked.fat} target={result.fatG} grown={grown} delay={240} />
+        </div>
+        <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
+          <Tile
+            label="Gewicht"
+            value={bodyWeight !== undefined ? <><CountUp value={bodyWeight} decimals={1} /> kg</> : '–'}
+            hint={weightToday === undefined && bodyWeight !== undefined ? 'zuletzt' : undefined}
+          />
+          <Tile
+            label="BMI"
+            value={<CountUp value={bmi} decimals={1} />}
+            tone={bmi === undefined ? 'default' : bmiOk ? 'ok' : 'danger'}
+          />
+          <Tile label="KFA" value={bodyFat !== undefined ? <><CountUp value={bodyFat} decimals={1} /> %</> : '–'} />
         </div>
       </Card>
 
-      <div className={`grid gap-2 ${coachMode ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        <Tile label="Ø kcal · 7 Tage" value={avgCalories !== undefined ? avgCalories.toLocaleString('de-DE') : '–'} large />
-        <Tile label="Trainings · 7 Tage" value={`${workoutsThisWeek}`} large />
-        <Tile label="BMI" value={bmi !== undefined ? bmi.toFixed(1) : '–'} tone={bmi === undefined ? 'default' : bmiOk ? 'ok' : 'danger'} large />
-        {coachMode && (
-          <Tile label="KFA (aus FFMI)" value={bodyFatFromFfmi !== undefined ? `${bodyFatFromFfmi.toFixed(1)} %` : '–'} large />
-        )}
+      <div className="grid grid-cols-2 gap-2">
+        <Tile label="Ø kcal · 7 Tage" value={<CountUp value={avgCalories} />} large />
+        <Tile label="Trainings · 7 Tage" value={<CountUp value={workoutsThisWeek} />} large />
       </div>
 
       {athlete.targetWeightKg !== undefined && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
@@ -140,17 +187,46 @@ function Tile({
   value,
   tone = 'default',
   large = false,
+  hint,
 }: {
   label: string
-  value: string
+  value: ReactNode
   tone?: 'default' | 'ok' | 'danger'
   large?: boolean
+  hint?: string
 }) {
   const toneClass = tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-fg'
   return (
     <div className={`reveal flex flex-col gap-0.5 rounded-xl ${large ? 'border border-border bg-surface px-3 py-3' : 'bg-surface-2 px-2.5 py-2'}`}>
-      <span className="text-[11px] text-muted">{label}</span>
+      <span className="text-[11px] text-muted">
+        {label}
+        {hint && <span className="opacity-70"> · {hint}</span>}
+      </span>
       <span className={`${large ? 'text-xl' : 'text-base'} font-semibold tabular-nums ${toneClass}`}>{value}</span>
+    </div>
+  )
+}
+
+function percent(value: number, target: number): number {
+  if (target <= 0) return 0
+  return Math.max(0, Math.min(100, (value / target) * 100))
+}
+
+/** Makro-Kachel der Heute-Karte: getrackt gegen Vorgabe, mit anwachsendem Balken. */
+function MacroTile({ label, value, target, grown, delay }: { label: string; value: number; target: number; grown: boolean; delay: number }) {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl bg-surface-2 px-2.5 py-2">
+      <span className="text-[11px] text-muted">{label}</span>
+      <span className="text-sm tabular-nums">
+        <CountUp value={value} className="font-semibold text-fg" />
+        <span className="text-muted"> / {Math.round(target)} g</span>
+      </span>
+      <div className="h-1.5 overflow-hidden rounded-full bg-bg">
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+          style={{ width: `${grown ? percent(value, target) : 0}%`, transitionDelay: `${delay}ms` }}
+        />
+      </div>
     </div>
   )
 }
@@ -287,6 +363,7 @@ function ProfileSheet({
 }
 
 function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: DailyEntry[] }) {
+  const grown = useGrowIn()
   if (athlete.targetWeightKg === undefined) return null
 
   const weighed = entries.filter((e) => e.weightKg !== undefined).sort((a, b) => a.date.localeCompare(b.date))
@@ -311,10 +388,12 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
     <Card className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold text-muted">Zielgewicht</h2>
-        <span className="text-lg font-semibold tabular-nums text-fg">{pct.toFixed(0)} %</span>
+        <span className="text-lg font-semibold tabular-nums text-fg">
+          <CountUp value={pct} /> %
+        </span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-accent transition-[width] duration-[900ms] ease-out" style={{ width: `${grown ? pct : 0}%` }} />
       </div>
       <p className="text-xs text-muted">
         {currentWeight} kg → {athlete.targetWeightKg} kg · noch {remaining.toFixed(1)} kg

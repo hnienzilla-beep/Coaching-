@@ -5,6 +5,7 @@ import { db } from '../db/db'
 import type { WorkoutSet } from '../models/types'
 import { estimateOneRepMax } from '../lib/calculator'
 import { Select } from './ui'
+import { chartLineAnimation } from '../lib/countUp'
 
 type ChartPoint = { date: string; weight: number; setsLabel: string; oneRm?: number }
 
@@ -69,6 +70,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null)
   const currentExerciseId = selectedExerciseId ?? availableExercises[0]?.id ?? null
 
+  const lineAnimation = chartLineAnimation()
   const chartData = [...topSetByLogExercise.entries()]
     .filter(([logExerciseId]) => logExerciseById.get(logExerciseId)?.exerciseId === currentExerciseId)
     .map(([logExerciseId, topSet]) => {
@@ -100,14 +102,14 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
           </option>
         ))}
       </Select>
-      <div className="h-44">
+      <div key={currentExerciseId} className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
             <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
             <Tooltip content={<StrengthTooltip />} />
-            <Line type="monotone" dataKey="weight" stroke="var(--color-accent)" strokeWidth={2} name="Gewicht (kg)" connectNulls />
+            <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="var(--color-accent)" strokeWidth={2} name="Gewicht (kg)" connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>

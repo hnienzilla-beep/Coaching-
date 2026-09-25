@@ -12,13 +12,14 @@ import {
 } from '../db/queries'
 import type { Athlete, DailyEntry } from '../models/types'
 import { calculateBodyFatFromFfmi, calendarWeekWeightDelta, rollingAverage7, weeklyDelta } from '../lib/calculator'
-import { Card, DecimalInput, Field, Input, Button, SegmentedControl } from '../components/ui'
+import { Card, CountUp, DecimalInput, Field, Input, Button, SegmentedControl } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
 import LogDayHeader from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
 import { shareOrDownloadFile } from '../lib/share'
 import { useSimpleMode } from '../lib/detailLevel'
+import { chartLineAnimation } from '../lib/countUp'
 
 type Ctx = { athlete: Athlete }
 
@@ -72,6 +73,7 @@ export default function TrackingPage() {
   )
   const hasData = selectedEntry !== undefined && (selectedEntry.weightKg !== undefined || selectedEntry.bodyFatPct !== undefined)
 
+  const lineAnimation = chartLineAnimation()
   const axis = { tick: { fontSize: 10, fill: 'var(--color-muted)' } }
   const tooltip = {
     contentStyle: { background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, fontSize: 12 },
@@ -108,7 +110,12 @@ export default function TrackingPage() {
             <p className={`text-xl font-semibold ${calendarWeekComparison.deltaKg < 0 ? 'text-ok' : 'text-fg'}`}>
               {calendarWeekComparison.deltaKg === 0
                 ? 'Gewicht gehalten'
-                : `${calendarWeekComparison.deltaKg < 0 ? '−' : '+'}${Math.abs(calendarWeekComparison.deltaKg).toFixed(1)} kg`}
+                : (
+                    <>
+                      {calendarWeekComparison.deltaKg < 0 ? '−' : '+'}
+                      <CountUp value={Math.abs(calendarWeekComparison.deltaKg)} decimals={1} /> kg
+                    </>
+                  )}
             </p>
             <p className="text-xs text-muted">
               Ø {calendarWeekComparison.thisWeekAvg.toFixed(1)} kg diese Woche · Ø {calendarWeekComparison.lastWeekAvg.toFixed(1)} kg letzte
@@ -146,8 +153,8 @@ export default function TrackingPage() {
               {(simple || chart === 'weight') && (
                 <>
                   {/* Rohgewicht bewusst gedimmt, der geglättete 7-Tage-Schnitt trägt den Akzent. */}
-                  <Line type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name="Gewicht (kg)" connectNulls />
-                  <Line type="monotone" dataKey="weightAvg7" stroke="var(--color-accent)" dot={false} strokeWidth={2.5} name="Ø 7 Tage" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name="Gewicht (kg)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="weightAvg7" stroke="var(--color-accent)" dot={false} strokeWidth={2.5} name="Ø 7 Tage" connectNulls />
                   {athlete.targetWeightKg !== undefined && (
                     <ReferenceLine
                       y={athlete.targetWeightKg}
@@ -159,14 +166,14 @@ export default function TrackingPage() {
                 </>
               )}
               {!simple && chart === 'bodyFat' && (
-                <Line type="monotone" dataKey="bodyFat" stroke="#f472b6" strokeWidth={2} dot={false} name="KFA (%)" connectNulls />
+                <Line {...lineAnimation} type="monotone" dataKey="bodyFat" stroke="#f472b6" strokeWidth={2} dot={false} name="KFA (%)" connectNulls />
               )}
               {!simple && chart === 'measures' && (
                 <>
-                  <Line type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
-                  <Line type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
-                  <Line type="monotone" dataKey="chest" stroke="#e4e4e7" dot={false} name="Brust (cm)" connectNulls />
-                  <Line type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="waist" stroke="#facc15" dot={false} name="Bauch (cm)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="arm" stroke="#22d3ee" dot={false} name="Arm (cm)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="chest" stroke="#e4e4e7" dot={false} name="Brust (cm)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="leg" stroke="#fb923c" dot={false} name="Bein (cm)" connectNulls />
                 </>
               )}
             </LineChart>
@@ -321,7 +328,13 @@ function DayEditor({
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-surface-2 px-3 py-2">
             <p className="text-[11px] text-muted">Ø 7 Tage</p>
-            <p className="text-base font-semibold tabular-nums text-fg">{avg7 !== undefined ? `${avg7.toFixed(1)} kg` : '–'}</p>
+            <p className="text-base font-semibold tabular-nums text-fg">{avg7 !== undefined ? (
+                <>
+                  <CountUp value={avg7} decimals={1} /> kg
+                </>
+              ) : (
+                '–'
+              )}</p>
           </div>
           <div className="rounded-xl bg-surface-2 px-3 py-2">
             <p className="text-[11px] text-muted">Δ zur Vorwoche</p>
