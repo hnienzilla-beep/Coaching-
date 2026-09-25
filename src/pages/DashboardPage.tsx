@@ -95,7 +95,7 @@ export default function DashboardPage() {
           <div className="flex items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-1.5">
               <CountUp value={tracked.kcal} className="text-4xl font-bold tabular-nums text-accent" />
-              <span className="text-sm text-muted">kcal getrackt</span>
+              <span className="text-sm text-muted">kcal</span>
             </div>
             <span className="text-right text-sm tabular-nums text-muted">
               Vorgabe <span className="font-semibold text-fg">{result.targetCalories.toLocaleString('de-DE')}</span> kcal
