@@ -49,13 +49,23 @@ export default function AthleteLayout() {
   // Wischen: einen Schritt weiter bzw. zurück in der Reihe aller Ansichten (lib/swipeNavigation).
   const mainRef = useRef<HTMLElement>(null)
   const swipeContentRef = useRef<HTMLDivElement>(null)
-  useSwipeNavigation(mainRef, swipeContentRef, !!athlete, (direction) => {
-    if (!athleteId) return
-    const current = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
-    const target = SWIPE_VIEWS[current + (direction === 'next' ? 1 : -1)]
-    if (current === -1 || !target) return
-    const path = `/athlete/${athleteId}${target.path ? `/${target.path}` : ''}${target.view ? `?view=${target.view}` : ''}`
-    navigate(path, { state: { swipe: direction } })
+  const swipeHintRef = useRef<HTMLDivElement>(null)
+  const currentView = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
+  const activeTab = TABS.findIndex((t) => t.to === (pathname.split('/')[3] ?? ''))
+  const swipeTarget = (direction: 'next' | 'prev') =>
+    currentView === -1 ? undefined : SWIPE_VIEWS[currentView + (direction === 'next' ? 1 : -1)]
+  useSwipeNavigation({
+    area: mainRef,
+    content: swipeContentRef,
+    hint: swipeHintRef,
+    ready: !!athlete,
+    targetLabel: (direction) => swipeTarget(direction)?.label ?? null,
+    onSwipe: (direction) => {
+      const target = swipeTarget(direction)
+      if (!athleteId || !target) return
+      const path = `/athlete/${athleteId}${target.path ? `/${target.path}` : ''}${target.view ? `?view=${target.view}` : ''}`
+      navigate(path, { state: { swipe: direction } })
+    },
   })
   // Reiter mit Unter-Ansichten animieren ihren Inhalt beim Wischen selbst - hier nicht noch
   // einmal, sonst liefe die Bewegung doppelt.
@@ -321,7 +331,16 @@ export default function AthleteLayout() {
         </div>
       </header>
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto overscroll-contain p-4 pb-6">
+      {/* Hinweis beim Wischen, wohin es geht - Position, Text und Deckkraft setzt der Wisch-Hook. */}
+      <div
+        ref={swipeHintRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed top-1/2 z-30 rounded-full border border-border bg-surface/90 px-3 py-1.5 text-xs font-medium text-fg opacity-0 shadow-lg shadow-black/40 backdrop-blur"
+      />
+
+      {/* overflow-x-hidden: Beim Mitziehen ragt der Inhalt seitlich hinaus - ohne das könnte
+          Safari waagerecht scrollen oder federn. */}
+      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-6">
         {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet - beim
             Wischen gleitet die Ansicht aus der Wischrichtung herein. */}
         {/* Eigene Hülle für das Mitziehen beim Wischen - auf dem animierten Element darunter
@@ -337,15 +356,26 @@ export default function AthleteLayout() {
           reichen als Abstand zum Home-Indikator, dessen Oberkante rund 13px über der
           Unterkante liegt. Der volle Systemabstand (34px) schob die Beschriftungen
           spürbar vom Rand weg, ohne dass es etwas bringt. */}
-      <nav className="grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-1 backdrop-blur-xl">
+      <nav className="relative grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-1 backdrop-blur-xl">
+        {/* Die Markierung gleitet zum aktiven Reiter - beim Antippen wie beim Wischen. */}
+        {activeTab !== -1 && (
+          <span
+            aria-hidden="true"
+            className="absolute top-2 bottom-1 left-2 rounded-lg bg-accent shadow-sm shadow-black/20 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{
+              width: 'calc((100% - 1rem - 3 * 0.375rem) / 4)',
+              transform: `translateX(calc(${activeTab} * (100% + 0.375rem)))`,
+            }}
+          />
+        )}
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
             to={`/athlete/${athleteId}${tab.to ? `/${tab.to}` : ''}`}
             end={tab.end}
             className={({ isActive }) =>
-              `truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition active:scale-95 ${
-                isActive ? 'bg-accent text-accent-fg shadow-sm shadow-black/20' : 'text-muted hover:text-fg'
+              `relative truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition-colors duration-300 active:scale-95 ${
+                isActive ? 'text-accent-fg' : 'text-muted hover:text-fg'
               }`
             }
           >
