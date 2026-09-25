@@ -1,15 +1,18 @@
-import { useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { claimTouch } from '../lib/swipeNavigation'
 
 const DECIDE_AFTER = 8 // px, ab denen feststeht, ob waagerecht gewischt oder senkrecht gescrollt wird
-const DELETE_AT = 110 // px nach links - oder 40 % der Breite, je nachdem was kleiner ist
+const DELETE_AT = 100 // px nach links - oder 40 % der Breite, je nachdem was kleiner ist
+const FLICK_SPEED = 0.5 // px/ms - ein schneller Wisch löscht schon ab der halben Strecke
 
 /**
  * Zeile nach links wegwischen, wie in iOS-Mail: Die Zeile folgt dem Finger, dahinter erscheint
- * "Löschen". Weit genug gezogen gleitet sie hinaus, klappt zusammen und `onDelete` läuft;
- * sonst federt sie zurück. Senkrechtes Scrollen bleibt unberührt (`touch-action: pan-y`), ein
- * Tipp auf die Zeile funktioniert weiter wie gewohnt.
+ * "Löschen". Weit genug (oder schnell genug) gezogen gleitet sie hinaus, klappt zusammen und
+ * `onDelete` läuft; sonst federt sie zurück.
  *
- * Nach rechts passiert hier nichts - diese Richtung gehört dem Wechsel zwischen den Reitern.
+ * Mit nativen Touch-Events: Sobald feststeht, dass waagerecht gewischt wird, blockiert
+ * `preventDefault` das Scrollen der Seite - sonst übernimmt Safari die Geste und bricht sie ab.
+ * Nach rechts passiert hier nichts, diese Richtung gehört dem Wechsel zwischen den Reitern.
  */
 export default function SwipeToDelete({
   onDelete,
@@ -25,99 +28,112 @@ export default function SwipeToDelete({
   children: ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const gesture = useRef<{ x: number; y: number; id: number; horizontal: boolean | null } | null>(null)
   const justSwiped = useRef(false)
   const [dx, setDx] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [height, setHeight] = useState<number | undefined>(undefined)
 
-  function reset() {
-    gesture.current = null
-    setDragging(false)
-    setDx(0)
-  }
+  // Die Listener leben außerhalb von React (nicht-passiv, für preventDefault) - aktuelle Props
+  // holen sie sich über diese Refs.
+  const onDeleteRef = useRef(onDelete)
+  const confirmRef = useRef(confirmText)
+  useEffect(() => {
+    onDeleteRef.current = onDelete
+    confirmRef.current = confirmText
+  })
 
-  function onPointerDown(e: PointerEvent) {
-    if (removing || (e.pointerType === 'mouse' && e.button !== 0)) return
-    // Zuggriffe zum Sortieren behalten ihre eigene Geste.
-    if ((e.target as Element).closest('.touch-none, input, textarea, select')) return
-    gesture.current = { x: e.clientX, y: e.clientY, id: e.pointerId, horizontal: null }
-  }
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let g: { x: number; y: number; t: number; horizontal: boolean | null; dx: number } | null = null
 
-  function onPointerMove(e: PointerEvent) {
-    const g = gesture.current
-    if (!g || g.id !== e.pointerId) return
-    const moveX = e.clientX - g.x
-    const moveY = e.clientY - g.y
-    if (g.horizontal === null) {
-      if (Math.abs(moveX) < DECIDE_AFTER && Math.abs(moveY) < DECIDE_AFTER) return
-      // Nur ein Zug nach links gehört dieser Zeile - nach rechts wird zwischen Reitern gewechselt.
-      g.horizontal = Math.abs(moveX) > Math.abs(moveY) && moveX < 0
-      if (!g.horizontal) {
-        gesture.current = null
+    function snapBack() {
+      g = null
+      setDragging(false)
+      setDx(0)
+    }
+
+    function onStart(e: TouchEvent) {
+      g = null
+      if (e.touches.length !== 1 || (e.target as Element).closest('.touch-none, input, textarea, select')) return
+      const t = e.touches[0]
+      g = { x: t.clientX, y: t.clientY, t: Date.now(), horizontal: null, dx: 0 }
+    }
+
+    function onMove(e: TouchEvent) {
+      if (!g) return
+      const t = e.touches[0]
+      const moveX = t.clientX - g.x
+      const moveY = t.clientY - g.y
+      if (g.horizontal === null) {
+        if (Math.abs(moveX) < DECIDE_AFTER && Math.abs(moveY) < DECIDE_AFTER) return
+        g.horizontal = moveX < 0 && Math.abs(moveX) > Math.abs(moveY)
+        if (!g.horizontal) {
+          g = null
+          return
+        }
+        setDragging(true)
+      }
+      e.preventDefault()
+      claimTouch(e)
+      g.dx = Math.min(0, moveX)
+      setDx(g.dx)
+    }
+
+    function onEnd(e: TouchEvent) {
+      const current = g
+      g = null
+      if (!current?.horizontal || !el) return
+      claimTouch(e)
+      justSwiped.current = true
+      setTimeout(() => (justSwiped.current = false), 80)
+
+      const width = el.offsetWidth
+      const distance = -current.dx
+      const speed = distance / Math.max(1, Date.now() - current.t)
+      const threshold = Math.min(DELETE_AT, width * 0.4)
+      if (distance < threshold && !(distance >= threshold / 2 && speed >= FLICK_SPEED)) {
+        snapBack()
         return
       }
-      try {
-        ref.current?.setPointerCapture(e.pointerId)
-      } catch {
-        // Ohne Capture läuft die Geste trotzdem - nur verlässt der Finger die Zeile dann schneller.
+      if (confirmRef.current && !window.confirm(confirmRef.current)) {
+        snapBack()
+        return
       }
-      setDragging(true)
+      setDragging(false)
+      setHeight(el.offsetHeight)
+      setRemoving(true)
+      setDx(-width)
+      // Erst hinausgleiten, dann zusammenklappen, dann wirklich löschen.
+      requestAnimationFrame(() => requestAnimationFrame(() => setHeight(0)))
+      setTimeout(() => void onDeleteRef.current(), 320)
     }
-    e.stopPropagation()
-    setDx(Math.min(0, moveX))
-  }
 
-  async function onPointerUp(e: PointerEvent) {
-    const g = gesture.current
-    if (!g || !g.horizontal) {
-      gesture.current = null
-      return
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    el.addEventListener('touchcancel', snapBack, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', snapBack)
     }
-    // Die Geste gehörte der Zeile - der Reiterwechsel im Layout soll davon nichts mitbekommen,
-    // und der anschließende Klick darf kein Bearbeiten-Sheet öffnen.
-    e.stopPropagation()
-    justSwiped.current = true
-    setTimeout(() => (justSwiped.current = false), 50)
-
-    const width = ref.current?.offsetWidth ?? 300
-    if (-dx < Math.min(DELETE_AT, width * 0.4)) {
-      reset()
-      return
-    }
-    if (confirmText && !window.confirm(confirmText)) {
-      reset()
-      return
-    }
-    gesture.current = null
-    setDragging(false)
-    setHeight(ref.current?.offsetHeight)
-    setRemoving(true)
-    setDx(-width)
-    // Erst hinausgleiten, dann zusammenklappen, dann wirklich löschen.
-    requestAnimationFrame(() => requestAnimationFrame(() => setHeight(0)))
-    setTimeout(() => void onDelete(), 320)
-  }
+  }, [])
 
   const progress = Math.min(1, -dx / DELETE_AT)
 
   return (
     <div
       ref={ref}
-      data-no-swipe
       className={`relative select-none overflow-hidden ${rounded}`}
       style={{
-        touchAction: 'pan-y',
         height: removing ? height : undefined,
         opacity: removing && height === 0 ? 0 : 1,
         transition: removing ? 'height 260ms ease, opacity 260ms ease, margin 260ms ease' : undefined,
         marginTop: removing && height === 0 ? '-0.375rem' : undefined,
       }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={(e) => void onPointerUp(e)}
-      onPointerCancel={reset}
       onClickCapture={(e) => {
         if (justSwiped.current) {
           e.preventDefault()
