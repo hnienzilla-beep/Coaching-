@@ -10,7 +10,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' statt 'autoUpdate': Eine neue Version wird im Hintergrund geladen, aber erst
+      // aktiviert, wenn man im Hinweis (UpdatePrompt) auf "Neu starten" tippt. Registriert
+      // wird der Service Worker dort selbst, deshalb kein automatisch eingefügtes Skript.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
         name: 'Bodybuilding Coach',

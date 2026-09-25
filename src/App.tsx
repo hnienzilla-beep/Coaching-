@@ -1,3 +1,4 @@
+import UpdatePrompt from './components/UpdatePrompt'
 import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { BackgroundPhotoEffect } from './lib/backgroundPhoto'
@@ -79,6 +80,7 @@ function App() {
   return (
     <HashRouter>
       <BackgroundPhotoEffect />
+      <UpdatePrompt />
       <Routes>
         <Route path="/" element={<StartRedirect />} />
         <Route path="/athleten" element={<AthleteListPage />} />
