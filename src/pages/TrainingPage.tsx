@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import TrainingPlanPage from './TrainingPlanPage'
 import WorkoutLogPage from './WorkoutLogPage'
+import { SegmentedControl } from '../components/ui'
 
 // Das Log steht bewusst vorne und ist die Startansicht: Es ist die Ansicht, die beim
 // Training selbst gebraucht wird, der Plan dagegen selten.
@@ -15,21 +16,11 @@ export default function TrainingPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1.5 rounded-xl bg-surface-2 p-1">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setView(v.key)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-              view === v.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
+      <SegmentedControl options={VIEWS} value={view} onChange={setView} />
+      <div key={view} className="anim-page">
+        {view === 'plan' && <TrainingPlanPage />}
+        {view === 'log' && <WorkoutLogPage />}
       </div>
-      {view === 'plan' && <TrainingPlanPage />}
-      {view === 'log' && <WorkoutLogPage />}
     </div>
   )
 }

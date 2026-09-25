@@ -29,9 +29,11 @@ export default function ErnaehrungPage() {
   return (
     <div className="flex flex-col gap-4">
       <SegmentedControl options={VIEWS} value={view} onChange={setView} />
-      {view === 'plan' && <NutritionPage />}
-      {view === 'log' && <NutritionLogPage />}
-      {view === 'supplements' && <SupplementPlanPage />}
+      <div key={view} className="anim-page">
+        {view === 'plan' && <NutritionPage />}
+        {view === 'log' && <NutritionLogPage />}
+        {view === 'supplements' && <SupplementPlanPage />}
+      </div>
     </div>
   )
 }
