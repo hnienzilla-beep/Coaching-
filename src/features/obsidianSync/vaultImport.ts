@@ -287,8 +287,12 @@ export async function importErnaehrungsplan(content: string): Promise<ImportResu
         // "## Rezept:" statt "## Plan:" macht die Phase zum Gericht; ohne "**Ergibt:**" bleibt
         // es bei einer Portion, dann ist die Portionszahl im Log direkt der Faktor.
         const recipeFields = phase.isRecipe
-          ? { isRecipe: true, servings: phase.servings && phase.servings > 0 ? phase.servings : 1 }
-          : { isRecipe: undefined, servings: undefined }
+          ? {
+              isRecipe: true,
+              servings: phase.servings && phase.servings > 0 ? phase.servings : 1,
+              cookedWeightG: phase.cookedWeightG && phase.cookedWeightG > 0 ? phase.cookedWeightG : undefined,
+            }
+          : { isRecipe: undefined, servings: undefined, cookedWeightG: undefined }
 
         let plan: NutritionPlan | undefined = phase.phaseName ? planByName.get(nameKey(phase.phaseName)) : plans[0]
         if (!plan) {
