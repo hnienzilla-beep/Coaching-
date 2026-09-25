@@ -3,7 +3,7 @@ import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/de
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30 ${className}`}>{children}</div>
+  return <div className={`reveal rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30 ${className}`}>{children}</div>
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -242,7 +242,7 @@ export function ListRow({
     </>
   )
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
+    <div className="reveal flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
       {onClick ? (
         <button
           type="button"

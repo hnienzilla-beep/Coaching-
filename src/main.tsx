@@ -4,9 +4,11 @@ import './index.css'
 import App from './App.tsx'
 import { applyTheme, getStoredTheme } from './lib/theme.ts'
 import { applyStoredOverviewAccent } from './lib/accentColor.ts'
+import { initScrollReveal } from './lib/scrollReveal.ts'
 
 applyTheme(getStoredTheme())
 applyStoredOverviewAccent()
+initScrollReveal()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -25,11 +25,17 @@ export default function ReminderBanner({ entries }: { athleteId: string; entries
   if (loggedToday) return null
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-fg">
-      <span>Heute noch nicht eingetragen.</span>
+    <div className="anim-pop flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3">
+      <span className="text-xl" aria-hidden="true">
+        ✍️
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-fg">Heute noch nichts eingetragen</p>
+        <p className="text-xs text-muted">Gewicht unter „Tracking“, Essen unter „Ernährung“.</p>
+      </div>
       {permission === 'default' && (
         <Button variant="ghost" className="shrink-0 text-xs" onClick={() => Notification.requestPermission().then(setPermission)}>
-          Erinnerung erlauben
+          Erinnern
         </Button>
       )}
     </div>
