@@ -208,7 +208,7 @@ export interface NutritionLog {
   date: string // ISO date, ein Eintrag pro Tag
   nutritionPlanId?: string // welche geplante Ernährungsplan-Phase übernommen wurde
   notes?: string
-  completedAt?: string // ISO-Zeitstempel, gesetzt über den "Ernährung abschließen"-Button
+  completedAt?: string // veraltet: früherer "Tag abschließen"-Knopf, wird nicht mehr gesetzt
 }
 
 export interface NutritionLogItem {

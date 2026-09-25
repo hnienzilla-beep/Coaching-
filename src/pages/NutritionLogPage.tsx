@@ -100,8 +100,9 @@ export default function NutritionLogPage() {
 
   const suggestedMealType = mealTypeForTime()
 
-  const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
-  const status: LogDayStatus = !currentLog ? 'none' : currentLog.completedAt ? 'done' : 'open'
+  // Einen Tag abschließen gibt es nicht mehr: Was eingetragen ist, gilt als erfasst.
+  const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, 'done']))
+  const status: LogDayStatus = currentLog ? 'logged' : 'none'
 
   async function addFood(foodItemId: string, grams: number, mealType: MealType) {
     const log = await getOrCreateNutritionLog(athlete.id, selectedDate)
@@ -201,16 +202,6 @@ export default function NutritionLogPage() {
     await db.nutritionLogs.update(log.id, { notes })
   }
 
-  async function completeLog() {
-    if (!currentLog) return
-    await db.nutritionLogs.update(currentLog.id, { completedAt: new Date().toISOString() })
-  }
-
-  async function reopenLog() {
-    if (!currentLog) return
-    await db.nutritionLogs.update(currentLog.id, { completedAt: undefined })
-  }
-
   async function deleteLog() {
     if (!currentLog) return
     await db.nutritionLogItems.where('nutritionLogId').equals(currentLog.id).delete()
@@ -241,7 +232,8 @@ export default function NutritionLogPage() {
       />
 
       <Card className="flex flex-col gap-3">
-        <MacroBars sums={sums} target={target} evaluate={!!currentLog?.completedAt} />
+        {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
+        <MacroBars sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} />
         {coachMode && (
           <CollapsibleCard title="Details (Ist / Ziel / Differenz)" variant="plain" defaultExpanded={false}>
             <MacroSumTable sums={sums} target={target} />
@@ -323,23 +315,9 @@ export default function NutritionLogPage() {
         )}
       </CollapsibleCard>
 
-      {currentLog?.completedAt ? (
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-center text-sm text-ok">✓ Abgeschlossen am {new Date(currentLog.completedAt).toLocaleString('de-DE')}</p>
-          <Button variant="ghost" onClick={reopenLog}>
-            Wieder öffnen
-          </Button>
-        </div>
-      ) : (
-        <Button variant="secondary" onClick={completeLog} disabled={!currentLog}>
-          Tag abschließen
-        </Button>
-      )}
-
       <LogHistoryList
         entries={(logs ?? []).map((log) => ({
           date: log.date,
-          done: !!log.completedAt,
           summary: historySummary(log.id, log.nutritionPlanId),
         }))}
         selectedDate={selectedDate}

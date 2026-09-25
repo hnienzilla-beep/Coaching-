@@ -3,12 +3,13 @@ import { addDays, todayIso } from '../db/queries'
 import DayStrip, { type DayMarker } from './DayStrip'
 import { Button, Card, Input } from './ui'
 
-export type LogDayStatus = 'none' | 'open' | 'done'
+export type LogDayStatus = 'none' | 'open' | 'done' | 'logged'
 
 const STATUS_LABEL: Record<LogDayStatus, string> = {
   none: 'Kein Eintrag',
   open: 'Offen',
   done: '✓ Abgeschlossen',
+  logged: 'Erfasst', // Ernährungslog: kein Abschließen, ein Tag mit Einträgen ist einfach erfasst
 }
 
 function formatDay(iso: string): string {
