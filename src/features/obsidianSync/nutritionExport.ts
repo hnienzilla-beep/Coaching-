@@ -100,7 +100,11 @@ async function buildErnaehrungsplan(): Promise<string> {
     // Rezepte bekommen eine eigene Überschrift: Sie sind kein Tagesablauf, und der Import muss
     // sie beim Zurücklesen wieder als Rezept anlegen statt als Plan-Phase.
     lines.push(`## ${plan.isRecipe ? 'Rezept' : 'Plan'}: ${plan.phaseName}`, '')
-    if (plan.isRecipe) lines.push(`**Ergibt:** ${servingsLabel(servingsOf(plan))}`, '')
+    if (plan.isRecipe) {
+      lines.push(`**Ergibt:** ${servingsLabel(servingsOf(plan))}`)
+      if (plan.cookedWeightG) lines.push(`**Fertiggewicht:** ${plan.cookedWeightG} g`)
+      lines.push('')
+    }
 
     const portions: Sums[] = []
 

@@ -378,6 +378,7 @@ interface NutritionPlanTemplate {
   // Fehlen beide (Vorlage aus einer aelteren Version), entsteht ein normaler Tagesplan.
   isRecipe?: boolean
   servings?: number
+  cookedWeightG?: number
   items: { mealType: MealType; grams: number; foodName: string; foodMacros?: Omit<FoodItem, 'id' | 'name'> }[]
 }
 
@@ -392,6 +393,7 @@ export async function exportNutritionPlan(planId: string): Promise<string> {
     phaseName: plan.phaseName,
     isRecipe: plan.isRecipe,
     servings: plan.servings,
+    cookedWeightG: plan.cookedWeightG,
     items: meals.map((m, i) => {
       const food = foods[i]
       return {
@@ -418,6 +420,7 @@ export async function importNutritionPlan(json: string, athleteId: string): Prom
       order,
       isRecipe: template.isRecipe,
       servings: template.servings,
+      cookedWeightG: template.cookedWeightG,
     })
     // Karte einmal vor der Schleife: Ein Nachschlagen je Zeile würde die ganze Tabelle je
     // Eintrag neu lesen, und frisch angelegte Lebensmittel wären innerhalb desselben Imports

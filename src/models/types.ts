@@ -53,6 +53,11 @@ export interface FoodItem {
   // Aus dem Vault übernommener Schätzwert (Lebensmittel-Neu.md), nicht aus einer
   // Nährwertquelle. Bleibt gesetzt, bis die Werte in der App bestätigt wurden.
   unconfirmed?: boolean
+  // Aus Open Food Facts übernommen - Barcode und Marke helfen, dasselbe Produkt bei einer
+  // weiteren Übernahme wiederzufinden.
+  source?: 'off'
+  barcode?: string
+  brand?: string
 }
 
 export interface NutritionPlan {
@@ -74,6 +79,12 @@ export interface NutritionPlan {
    * eingegebene Portionszahl direkt der Faktor.
    */
   servings?: number
+  /**
+   * Gewicht des fertigen Gerichts in Gramm (z.B. nach dem Kochen). Grundlage, wenn im Log eine
+   * Menge in Gramm statt in Portionen eingefügt wird. Fehlt der Wert, zählt die Summe der
+   * Zutaten-Grammzahlen.
+   */
+  cookedWeightG?: number
 }
 
 export const MEAL_TYPES = [

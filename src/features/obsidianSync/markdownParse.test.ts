@@ -280,6 +280,7 @@ describe('parseMealPhases', () => {
       '## Rezept: Protein-Eis Schoko',
       '',
       '**Ergibt:** 2 Portionen',
+      '**Fertiggewicht:** 1200 g',
       '',
       '### Snack 1',
       '- Joghurt (natur, 3,5%) – 150g (96 kcal)',
@@ -297,6 +298,7 @@ describe('parseMealPhases', () => {
       phaseName: 'Protein-Eis Schoko',
       isRecipe: true,
       servings: 2,
+      cookedWeightG: 1200,
       items: [
         { mealType: 'Snack 1', name: 'Joghurt (natur, 3,5%)', grams: 150, done: false },
         { mealType: 'Snack 1', name: 'Whey Protein (Pulver)', grams: 60, done: false },

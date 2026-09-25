@@ -154,3 +154,112 @@ export function StatBadge({ label, value, tone = 'default' }: { label: string; v
     </div>
   )
 }
+
+/**
+ * Umschalter zwischen zwei bis vier gleichrangigen Ansichten - einheitlich für Log/Plan/
+ * Supplements, Tagespläne/Rezepte und Portionen/Gramm, statt je Seite eigener Knopfreihen.
+ */
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  size = 'md',
+}: {
+  options: readonly { key: T; label: string }[]
+  value: T
+  onChange: (key: T) => void
+  size?: 'sm' | 'md'
+}) {
+  return (
+    <div role="tablist" className="flex gap-1 rounded-xl bg-surface-2 p-1">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="tab"
+          aria-selected={value === o.key}
+          onClick={() => onChange(o.key)}
+          className={`flex-1 rounded-lg font-medium transition ${size === 'sm' ? 'py-1.5 text-xs' : 'py-2 text-sm'} ${
+            value === o.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Überschrift eines Listenabschnitts: Titel links, Zusatzinfo und Aktion rechts. */
+export function SectionHeader({ title, meta, action }: { title: string; meta?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <h3 className="truncate text-sm font-semibold text-fg">{title}</h3>
+        {meta && <span className="shrink-0 text-xs tabular-nums text-muted">{meta}</span>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/**
+ * Eine flache Listenzeile - Titel und Untertitel links, ein Wert rechts. Antippen öffnet
+ * üblicherweise ein Sheet zum Bearbeiten; die Zeile selbst bleibt immer einzeilig.
+ */
+export function ListRow({
+  title,
+  subtitle,
+  value,
+  leading,
+  trailing,
+  onClick,
+  ariaLabel,
+}: {
+  title: ReactNode
+  subtitle?: ReactNode
+  value?: ReactNode
+  leading?: ReactNode
+  trailing?: ReactNode
+  onClick?: () => void
+  ariaLabel?: string
+}) {
+  const content = (
+    <>
+      {leading}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm text-fg">{title}</span>
+        {subtitle && <span className="block truncate text-xs text-muted">{subtitle}</span>}
+      </span>
+      {value !== undefined && <span className="shrink-0 text-sm tabular-nums text-muted">{value}</span>}
+    </>
+  )
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
+      {onClick ? (
+        <button type="button" onClick={onClick} aria-label={ariaLabel} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          {content}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-3">{content}</div>
+      )}
+      {trailing}
+    </div>
+  )
+}
+
+/** Protein / Carbs / Fett als kompakte Zeile - überall dieselbe Reihenfolge und Schreibweise. */
+export function MacroChips({ protein, carbs, fat }: { protein: number; carbs: number; fat: number }) {
+  return (
+    <span className="inline-flex gap-2 tabular-nums">
+      <span>P {Math.round(protein)}</span>
+      <span>C {Math.round(carbs)}</span>
+      <span>F {Math.round(fat)}</span>
+    </span>
+  )
+}
+
+/** Kleines Kennzeichen für Einträge aus einer Online-Quelle. */
+export function SourceBadge({ label }: { label: string }) {
+  return <span className="ml-1 rounded border border-border px-1 py-px align-middle text-[10px] text-muted">{label}</span>
+}
