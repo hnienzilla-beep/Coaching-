@@ -11,6 +11,7 @@ import { dedupeAfterImport } from '../db/dedupe'
 import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
 import { AccentSwatch, Button, Card, ListRow } from '../components/ui'
 import Sheet from '../components/Sheet'
+import SwipeToDelete from '../components/SwipeToDelete'
 import NewAthleteForm from '../components/NewAthleteForm'
 import type { Athlete } from '../models/types'
 import { useOverviewAccent } from '../lib/accentColor'
@@ -378,53 +379,59 @@ function ExportAthleteSelector({
 function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weightKg: number | undefined }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: a.id })
 
+  async function remove() {
+    await deleteAthlete(a.id)
+    // War das der gemerkte Athlet, würde die App beim nächsten Start ins Leere starten -
+    // dann fällt sie wieder auf den ersten der Reihenfolge zurück.
+    if (getLastAthleteId() === a.id) clearLastAthleteId()
+  }
+
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="reveal flex items-center gap-2 rounded-2xl border border-border bg-surface p-3 shadow-lg shadow-black/30"
-    >
-      <button
-        {...attributes}
-        {...listeners}
-        type="button"
-        className="shrink-0 touch-none px-1 text-lg text-muted"
-        aria-label="Verschieben"
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
+      <SwipeToDelete
+        rounded="rounded-2xl"
+        onDelete={remove}
+        confirmText={`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`}
       >
-        ⠿
-      </button>
-      <Link to={`/athlete/${a.id}`} className="flex min-w-0 flex-1 items-center gap-3 transition-transform duration-150 active:scale-[0.98]">
-        {/* Initiale in der Akzentfarbe des Athleten - so erkennt man ihn auf einen Blick. */}
-        <span
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-black"
-          style={{ background: a.accentColor }}
-          aria-hidden="true"
-        >
-          {a.name.trim().charAt(0).toUpperCase() || '?'}
-        </span>
-        <div className="min-w-0">
-          <div className="truncate font-semibold text-fg">{a.name}</div>
-          <div className="truncate text-xs text-muted">
-            {weightKg ?? a.weightKg} kg · {a.goal}
-          </div>
+        <div className="reveal flex items-center gap-2 rounded-2xl border border-border bg-surface p-3 shadow-lg shadow-black/30">
+          <button
+            {...attributes}
+            {...listeners}
+            type="button"
+            className="shrink-0 touch-none px-1 text-lg text-muted"
+            aria-label="Verschieben"
+          >
+            ⠿
+          </button>
+          <Link to={`/athlete/${a.id}`} className="flex min-w-0 flex-1 items-center gap-3 transition-transform duration-150 active:scale-[0.98]">
+            {/* Initiale in der Akzentfarbe des Athleten - so erkennt man ihn auf einen Blick. */}
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-black"
+              style={{ background: a.accentColor }}
+              aria-hidden="true"
+            >
+              {a.name.trim().charAt(0).toUpperCase() || '?'}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-fg">{a.name}</div>
+              <div className="truncate text-xs text-muted">
+                {weightKg ?? a.weightKg} kg · {a.goal}
+              </div>
+            </div>
+          </Link>
+          <button
+            type="button"
+            aria-label={`${a.name} löschen`}
+            className="shrink-0 rounded-lg px-2 py-2 text-sm text-muted hover:text-danger"
+            onClick={async (e) => {
+              e.preventDefault()
+              if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) await remove()
+            }}
+          >
+            🗑
+          </button>
         </div>
-      </Link>
-      <button
-        type="button"
-        aria-label={`${a.name} löschen`}
-        className="shrink-0 rounded-lg px-2 py-2 text-sm text-muted hover:text-danger"
-        onClick={async (e) => {
-          e.preventDefault()
-          if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) {
-            await deleteAthlete(a.id)
-            // War das der gemerkte Athlet, würde die App beim nächsten Start ins Leere
-            // starten - dann fällt sie wieder auf den ersten der Reihenfolge zurück.
-            if (getLastAthleteId() === a.id) clearLastAthleteId()
-          }
-        }}
-      >
-        🗑
-      </button>
+      </SwipeToDelete>
     </div>
   )
 }

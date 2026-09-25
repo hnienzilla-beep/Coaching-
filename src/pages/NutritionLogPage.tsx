@@ -137,7 +137,7 @@ export default function NutritionLogPage() {
         })
       }
     })
-    navigate(`/athlete/${athlete.id}/ernaehrung`, { state: { view: 'plan' } })
+    navigate(`/athlete/${athlete.id}/ernaehrung?view=plan`)
   }
 
   async function setNutritionPlanId(planId: string) {
@@ -270,6 +270,7 @@ export default function NutritionLogPage() {
                 {group.rows.map((row) => (
                   <ListRow
                     key={row.item.id}
+                    onSwipeDelete={() => db.nutritionLogItems.delete(row.item.id)}
                     title={foodMap.get(row.item.foodItemId)?.name ?? 'Unbekanntes Lebensmittel'}
                     subtitle={
                       <>

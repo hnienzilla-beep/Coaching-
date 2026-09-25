@@ -63,6 +63,8 @@ export default function FoodDatabasePage() {
         {filtered.map((f) => (
           <ListRow
             key={f.id}
+            onSwipeDelete={() => db.foodItems.delete(f.id)}
+            swipeConfirm={`„${f.name}" wirklich löschen?`}
             title={
               <>
                 {f.name}

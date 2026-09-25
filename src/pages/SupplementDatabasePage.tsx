@@ -44,6 +44,8 @@ export default function SupplementDatabasePage() {
         {filtered.map((s) => (
           <ListRow
             key={s.id}
+            onSwipeDelete={() => db.supplements.delete(s.id)}
+            swipeConfirm={`„${s.name}" wirklich löschen?`}
             title={s.name}
             subtitle={[s.defaultTiming, s.notes].filter(Boolean).join(' · ')}
             value={s.defaultDose}

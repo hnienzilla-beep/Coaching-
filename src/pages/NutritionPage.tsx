@@ -467,6 +467,7 @@ export default function NutritionPage() {
                         row={row}
                         foodName={foodMap.get(row.meal.foodItemId)?.name}
                         onEdit={() => setEditMealId(row.meal.id)}
+                        onRemove={() => removeDraftMeal(row.meal.id)}
                       />
                     ))}
                   </SortableContext>
@@ -546,7 +547,7 @@ export default function NutritionPage() {
   )
 }
 
-function SortableMealRow({ row, foodName, onEdit }: { row: Row; foodName?: string; onEdit: () => void }) {
+function SortableMealRow({ row, foodName, onEdit, onRemove }: { row: Row; foodName?: string; onEdit: () => void; onRemove: () => void }) {
   const { meal } = row
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
 
@@ -563,6 +564,7 @@ function SortableMealRow({ row, foodName, onEdit }: { row: Row; foodName?: strin
         value={`${Math.round(row.kcal)} kcal`}
         onClick={onEdit}
         ariaLabel={`${foodName ?? 'Eintrag'} bearbeiten`}
+        onSwipeDelete={onRemove}
       />
     </div>
   )
