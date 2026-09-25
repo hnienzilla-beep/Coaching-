@@ -4,15 +4,15 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
-import { GRAM_PRESETS, macroLine, sumMacros, type Sums } from '../lib/macros'
+import { sumMacros, type Sums } from '../lib/macros'
 import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { Button, Card, Field, ListRow, MacroChips, SectionHeader, Select } from '../components/ui'
-import AddFoodSheet, { AmountInput } from '../components/AddFoodSheet'
+import AddFoodSheet from '../components/AddFoodSheet'
+import PortionEditSheet from '../components/PortionEditSheet'
 import CollapsibleCard from '../components/CollapsibleCard'
 import MacroBars from '../components/MacroBars'
 import MacroSumTable from '../components/MacroSumTable'
-import Sheet from '../components/Sheet'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
@@ -358,73 +358,21 @@ export default function NutritionLogPage() {
         onAddRecipe={addRecipeToLog}
       />
 
-      <EditLogItemSheet row={editRow} foodName={editRow ? foodMap.get(editRow.item.foodItemId)?.name : undefined} onClose={() => setEditRow(null)} />
+      <PortionEditSheet
+        entry={editRow?.item ?? null}
+        food={editRow ? foodMap.get(editRow.item.foodItemId) : undefined}
+        onSave={async (grams, mealType) => {
+          if (editRow) await db.nutritionLogItems.update(editRow.item.id, { grams, mealType })
+        }}
+        onRemove={async () => {
+          if (editRow) await db.nutritionLogItems.delete(editRow.item.id)
+        }}
+        onClose={() => setEditRow(null)}
+      />
     </div>
   )
 }
 
 function formatGrams(grams: number): string {
   return grams.toLocaleString('de-DE', { maximumFractionDigits: 1 })
-}
-
-/** Menge und Mahlzeit eines Eintrags ändern oder ihn entfernen. */
-function EditLogItemSheet({ row, foodName, onClose }: { row: Row | null; foodName?: string; onClose: () => void }) {
-  const [grams, setGrams] = useState<number | undefined>(row?.item.grams)
-  const [mealType, setMealType] = useState<MealType | undefined>(row?.item.mealType)
-
-  useEffect(() => {
-    setGrams(row?.item.grams)
-    setMealType(row?.item.mealType)
-  }, [row])
-
-  if (!row) return null
-  const perGram = row.item.grams > 0 ? 1 / row.item.grams : 0
-  const preview = {
-    kcal: row.kcal * perGram * (grams ?? 0),
-    protein: row.protein * perGram * (grams ?? 0),
-    carbs: row.carbs * perGram * (grams ?? 0),
-    fat: row.fat * perGram * (grams ?? 0),
-  }
-
-  async function save() {
-    if (!row || !grams || grams <= 0) return
-    await db.nutritionLogItems.update(row.item.id, { grams, mealType })
-    onClose()
-  }
-
-  async function remove() {
-    if (!row) return
-    await db.nutritionLogItems.delete(row.item.id)
-    onClose()
-  }
-
-  return (
-    <Sheet
-      open
-      title={foodName ?? 'Eintrag bearbeiten'}
-      onClose={onClose}
-      footer={
-        <div className="flex gap-2">
-          <Button variant="danger" onClick={() => void remove()}>
-            Entfernen
-          </Button>
-          <Button variant="primary" className="flex-1" disabled={!grams || grams <= 0} onClick={() => void save()}>
-            Speichern
-          </Button>
-        </div>
-      }
-    >
-      <AmountInput value={grams} onChange={setGrams} presets={GRAM_PRESETS} unit="g" label="Menge in Gramm" />
-      <Field label="Mahlzeit">
-        <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
-          {MEAL_TYPES.map((mt) => (
-            <option key={mt} value={mt}>
-              {mt}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      {row.item.grams > 0 && <p className="rounded-xl bg-surface-2 px-3 py-2.5 text-sm tabular-nums text-fg">{macroLine(preview)}</p>}
-    </Sheet>
-  )
 }
