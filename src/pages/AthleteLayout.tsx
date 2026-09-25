@@ -21,6 +21,14 @@ const TABS = [
   { to: 'training', label: 'Training', end: false },
 ]
 
+const APP_BUILD_LABEL = new Date(__APP_BUILD__).toLocaleString('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 export default function AthleteLayout() {
   const { athleteId } = useParams()
   const { pathname } = useLocation()
@@ -187,7 +195,7 @@ export default function AthleteLayout() {
             ⚙️
           </button>
           {settingsOpen && (
-            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+            <div className="anim-pop absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
@@ -287,6 +295,8 @@ export default function AthleteLayout() {
                   </button>
                 </>
               )}
+              <div className="my-1 border-t border-border" />
+              <p className="px-2 pb-0.5 text-[11px] text-muted">Version vom {APP_BUILD_LABEL}</p>
             </div>
           )}
         </div>
