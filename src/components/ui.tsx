@@ -145,12 +145,13 @@ export function Button({
   return <button {...props} className={`${base} ${variants[variant]} ${className}`} />
 }
 
+/** Kennzahl-Kachel: kleiner Titel oben, große Zahl darunter. */
 export function StatBadge({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'ok' | 'danger' }) {
   const toneClass = tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-fg'
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-xl bg-surface-2 px-3 py-2">
-      <span className={`text-lg font-semibold ${toneClass}`}>{value}</span>
-      <span className="text-[11px] uppercase tracking-wide text-muted">{label}</span>
+    <div className="reveal flex min-w-0 flex-col gap-0.5 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <span className="truncate text-[11px] text-muted">{label}</span>
+      <span className={`truncate text-lg font-semibold tabular-nums ${toneClass}`}>{value}</span>
     </div>
   )
 }

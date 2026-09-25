@@ -17,11 +17,15 @@ export default function NewAthleteForm({
   onCreated,
   onCancel,
   submitLabel = 'Anlegen',
+  plain = false,
 }: {
   onCreated: (athlete: Athlete) => void
   onCancel?: () => void
   submitLabel?: string
+  /** Ohne eigene Karte - wenn das Formular schon in einem Sheet steht. */
+  plain?: boolean
 }) {
+  const Wrapper = plain ? 'div' : Card
   const [name, setName] = useState('')
   const [gender, setGender] = useState<Gender>('Männlich')
   const [age, setAge] = useState(30)
@@ -50,7 +54,7 @@ export default function NewAthleteForm({
   }
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Wrapper className="flex flex-col gap-3">
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Max" autoFocus />
       </Field>
@@ -112,6 +116,6 @@ export default function NewAthleteForm({
           </Button>
         )}
       </div>
-    </Card>
+    </Wrapper>
   )
 }
