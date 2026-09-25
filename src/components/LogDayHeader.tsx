@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from 'react'
 import { addDays, todayIso } from '../db/queries'
 import DayStrip, { type DayMarker } from './DayStrip'
-import { Button, Card, Input } from './ui'
+import { startOfWeek } from '../lib/calendar'
+import MonthCalendarSheet from './MonthCalendarSheet'
+import { Card } from './ui'
 
 export type LogDayStatus = 'none' | 'open' | 'done' | 'logged'
 
@@ -54,59 +56,78 @@ export default function LogDayHeader({
   const [calendarOpen, setCalendarOpen] = useState(false)
   const today = todayIso()
   const relative = relativeDay(selectedDate, today)
+  // Die Folgewoche ist nur erreichbar, wenn dort schon ein wählbarer Tag liegt.
+  const nextWeekStart = addDays(startOfWeek(selectedDate), 7)
+  const nextDisabled = !allowFuture && nextWeekStart > today
+
+  function shiftWeek(delta: number) {
+    const target = addDays(selectedDate, delta * 7)
+    // In der laufenden Woche nicht über heute hinaus - sonst landete man auf einem
+    // gesperrten Tag.
+    onSelectDate(!allowFuture && target > today ? today : target)
+  }
 
   return (
     <Card className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
-          <p className="truncate text-base font-semibold text-fg">{relative ?? formatDay(selectedDate)}</p>
-          <p className="truncate text-xs text-muted">
-            {/* Bei "Heute"/"Morgen"/"Gestern" steht das ausgeschriebene Datum darunter, sonst
-                stünde es doppelt. */}
+      {/* Der Titel steht nur für Screenreader da - sichtbar sagt es schon der Reiter. */}
+      <h2 className="sr-only">{title}</h2>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => shiftWeek(-1)}
+          aria-label="Vorherige Woche"
+          className="shrink-0 rounded-lg px-2 py-1 text-2xl leading-none text-muted hover:text-fg"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          onClick={() => setCalendarOpen(true)}
+          aria-label="Anderen Tag wählen"
+          className="flex min-w-0 flex-1 flex-col items-center rounded-lg py-0.5 text-center hover:bg-surface-2"
+        >
+          <span className="truncate text-base font-semibold text-fg">{relative ?? formatDay(selectedDate)}</span>
+          <span className="truncate text-xs text-muted">
+            {/* Bei "Heute"/"Gestern" steht das ausgeschriebene Datum darunter, sonst stünde es doppelt. */}
             {relative ? `${formatDay(selectedDate)} · ` : ''}
-            {STATUS_LABEL[status]}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            variant="ghost"
-            onClick={() => setCalendarOpen((v) => !v)}
-            aria-expanded={calendarOpen}
-            aria-label="Anderen Tag wählen"
+            {STATUS_LABEL[status]} ▾
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => shiftWeek(1)}
+          disabled={nextDisabled}
+          aria-label="Nächste Woche"
+          className="shrink-0 rounded-lg px-2 py-1 text-2xl leading-none text-muted hover:text-fg disabled:opacity-30"
+        >
+          ›
+        </button>
+        {onDelete && (
+          <button
+            type="button"
+            aria-label="Eintrag löschen"
+            onClick={() => {
+              if (window.confirm(deleteConfirmText ?? 'Diesen Eintrag wirklich löschen?')) onDelete()
+            }}
+            className="shrink-0 rounded-lg px-1.5 py-1 text-sm text-muted hover:text-danger"
           >
-            📅
-          </Button>
-          {onDelete && (
-            <Button
-              variant="ghost"
-              aria-label="Eintrag löschen"
-              onClick={() => {
-                if (window.confirm(deleteConfirmText ?? 'Diesen Eintrag wirklich löschen?')) onDelete()
-              }}
-            >
-              🗑
-            </Button>
-          )}
-        </div>
+            🗑
+          </button>
+        )}
       </div>
-
-      {calendarOpen && (
-        <Input
-          type="date"
-          value={selectedDate}
-          max={allowFuture ? undefined : today}
-          onChange={(e) => {
-            if (!e.target.value) return
-            onSelectDate(e.target.value)
-            setCalendarOpen(false)
-          }}
-        />
-      )}
 
       <DayStrip selectedDate={selectedDate} onSelect={onSelectDate} markers={markers} allowFuture={allowFuture} />
 
       {children}
+
+      <MonthCalendarSheet
+        open={calendarOpen}
+        selectedDate={selectedDate}
+        markers={markers}
+        allowFuture={allowFuture}
+        onSelect={onSelectDate}
+        onClose={() => setCalendarOpen(false)}
+      />
     </Card>
   )
 }
