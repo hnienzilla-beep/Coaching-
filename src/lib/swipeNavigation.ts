@@ -33,7 +33,8 @@ const COMMIT_FRACTION = 0.25 // Anteil der Breite, ab dem beim Loslassen gewechs
 const FLICK_DISTANCE = 30 // kurzer, schneller Wisch reicht auch
 const FLICK_SPEED = 0.35 // px/ms
 const RUBBER_BAND = 0.25 // am Anfang/Ende der Reihe folgt der Inhalt nur gebremst
-const OUT_MS = 180
+const OUT_MIN_MS = 120
+const OUT_MAX_MS = 240
 // Waagerecht scrollende Leisten und Zuggriffe haben eigene Gesten. Eingabefelder nur, solange
 // darin getippt wird - sonst wären ganze Seiten (Tracking, Trainingslog) kaum wischbar.
 const IGNORE = '[data-no-swipe], .overflow-x-auto, .touch-none'
@@ -63,9 +64,10 @@ function isClaimed(e: TouchEvent): boolean {
 
 /**
  * Blättern zwischen den Ansichten per Wischen - wie in einer iOS-App:
- * - Der Inhalt (`content`) klebt 1:1 am Finger, am Rand zeigt `hint`, wohin es geht.
- * - Beim Loslassen (ab einem Viertel der Breite oder mit schnellem Wisch) gleitet die Seite
- *   ganz hinaus, erst dann wird gewechselt; die neue Seite kommt aus der Gegenrichtung.
+ * - Der Inhalt (`content`) klebt 1:1 am Finger.
+ * - Beim Loslassen (ab einem Viertel der Breite oder mit schnellem Wisch) gleitet die Seite mit
+ *   dem Schwung des Fingers ganz hinaus, dann wird gewechselt; die neue Seite kommt aus der
+ *   Gegenrichtung.
  * - Sonst federt sie mit leichtem Nachschwingen zurück. Am Anfang und Ende der Reihe gibt es
  *   Gummiband-Widerstand.
  *
@@ -76,14 +78,12 @@ function isClaimed(e: TouchEvent): boolean {
 export function useSwipeNavigation({
   area,
   content,
-  hint,
   ready,
   targetLabel,
   onSwipe,
 }: {
   area: RefObject<HTMLElement | null>
   content: RefObject<HTMLElement | null>
-  hint: RefObject<HTMLElement | null>
   /** Erst `true`, wenn der Bereich gerendert ist - vorher gibt es nichts, woran man hört. */
   ready: boolean
   /** Name der Ansicht in dieser Richtung - `null` am Anfang bzw. Ende der Reihe. */
@@ -109,36 +109,21 @@ export function useSwipeNavigation({
     } | null = null
     let animating = false
 
-    function style(dx: number, transition: string) {
+    // Nur verschieben (translate3d läuft auf der Grafikeinheit) und ganz leicht ausblenden -
+    // Skalieren ließ Text auf dem iPhone beim Ziehen neu rastern und wirkte ruckelig.
+    function style(dx: number, transition: string, width = g?.width ?? 400) {
       const c = content.current
       if (c) {
-        const progress = Math.min(1, Math.abs(dx) / (g?.width ?? 400))
+        const progress = Math.min(1, Math.abs(dx) / width)
         c.style.transition = transition
-        c.style.transform = dx ? `translateX(${dx}px) scale(${1 - progress * 0.03})` : ''
-        c.style.opacity = dx ? String(1 - progress * 0.25) : ''
-        c.style.willChange = dx ? 'transform' : ''
+        c.style.transform = dx ? `translate3d(${dx}px, 0, 0)` : ''
+        c.style.opacity = dx ? String(1 - progress * 0.15) : ''
+        c.style.willChange = dx ? 'transform, opacity' : ''
       }
-    }
-
-    function showHint(dx: number) {
-      const h = hint.current
-      if (!h) return
-      const direction: SwipeDirection = dx < 0 ? 'next' : 'prev'
-      const label = dx ? latest.current.targetLabel(direction) : null
-      if (!label) {
-        h.style.opacity = '0'
-        return
-      }
-      h.textContent = direction === 'next' ? `${label} ›` : `‹ ${label}`
-      h.style.left = direction === 'prev' ? '12px' : ''
-      h.style.right = direction === 'next' ? '12px' : ''
-      h.style.opacity = String(Math.min(1, Math.abs(dx) / 90))
-      h.style.transform = `translateY(-50%) scale(${0.9 + Math.min(1, Math.abs(dx) / 120) * 0.1})`
     }
 
     function springBack() {
-      style(0, 'transform 350ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 250ms ease')
-      showHint(0)
+      style(0, 'transform 380ms cubic-bezier(0.25, 1.25, 0.5, 1), opacity 300ms ease-out')
     }
 
     function onStart(e: TouchEvent) {
@@ -175,7 +160,6 @@ export function useSwipeNavigation({
       g.dx = possible ? rawDx : rawDx * RUBBER_BAND
       if (reducedMotion()) return
       style(g.dx, 'none')
-      showHint(possible ? g.dx : 0)
     }
 
     function onEnd(e: TouchEvent) {
@@ -196,7 +180,6 @@ export function useSwipeNavigation({
         springBack()
         return
       }
-      showHint(0)
       if (reducedMotion()) {
         latest.current.onSwipe(direction)
         return
@@ -204,7 +187,11 @@ export function useSwipeNavigation({
       // Ganz hinausschieben, dann wechseln. Die Hülle bleibt unsichtbar, bis die neue Ansicht
       // gerendert ist - sonst blitzte die alte an ihrem Platz noch einmal auf.
       animating = true
-      style(direction === 'next' ? -current.width : current.width, `transform ${OUT_MS}ms cubic-bezier(0.4, 0, 1, 1), opacity ${OUT_MS}ms ease-in`)
+      // Mit dem Schwung des Fingers weitergleiten: Die Dauer ergibt sich aus Reststrecke und
+      // Tempo, damit Ziehen und Hinausgleiten eine einzige Bewegung bleiben.
+      const remaining = current.width - distance
+      const outMs = Math.round(Math.min(OUT_MAX_MS, Math.max(OUT_MIN_MS, remaining / Math.max(speed, 1.2))))
+      style(direction === 'next' ? -current.width : current.width, `transform ${outMs}ms cubic-bezier(0.2, 0.6, 0.35, 1), opacity ${outMs}ms ease-out`, current.width)
       setTimeout(() => {
         const c = content.current
         if (c) {
@@ -220,7 +207,7 @@ export function useSwipeNavigation({
             animating = false
           }),
         )
-      }, OUT_MS)
+      }, outMs)
     }
 
     function onCancel() {
@@ -238,5 +225,5 @@ export function useSwipeNavigation({
       el.removeEventListener('touchend', onEnd)
       el.removeEventListener('touchcancel', onCancel)
     }
-  }, [area, content, hint, ready])
+  }, [area, content, ready])
 }

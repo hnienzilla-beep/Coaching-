@@ -24,12 +24,24 @@ export function initScrollReveal(): void {
     root.querySelectorAll('.reveal:not(.revealed)').forEach((el) => intersection.observe(el))
   }
 
+  // Was beim Einfügen schon im Bild ist (neue Seite, neuer Reiter), wird sofort sichtbar - die
+  // Seite selbst gleitet ja schon herein. Ein zusätzliches Einblenden jeder Karte ließ den
+  // Wechsel dunkel und zäh wirken. Einblenden gibt es nur für das, was erst beim Scrollen kommt.
+  function handle(el: Element) {
+    if (el.classList.contains('revealed')) return
+    const rect = el.getBoundingClientRect()
+    // `reveal-instant` schaltet den Übergang ab: Das Messen hat den versteckten Zustand schon
+    // berechnet, ohne diese Klasse würde die Karte trotzdem noch einblenden.
+    if (rect.top < window.innerHeight && rect.bottom > 0) el.classList.add('revealed', 'reveal-instant')
+    else intersection.observe(el)
+  }
+
   new MutationObserver((mutations) => {
     for (const m of mutations) {
       m.addedNodes.forEach((node) => {
         if (!(node instanceof Element)) return
-        if (node.classList.contains('reveal') && !node.classList.contains('revealed')) intersection.observe(node)
-        observe(node)
+        if (node.classList.contains('reveal')) handle(node)
+        node.querySelectorAll('.reveal').forEach(handle)
       })
     }
   }).observe(document.body, { childList: true, subtree: true })
