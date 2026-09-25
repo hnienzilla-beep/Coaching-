@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { DailyEntry, WorkoutLog } from '../models/types'
 import { isoDate, todayIso } from '../db/queries'
-import { Button, Card } from './ui'
+import { Card } from './ui'
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 
@@ -47,38 +47,38 @@ export default function CalendarOverview({ entries, workoutLogs }: { entries: Da
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={prevMonth}>
+        <button type="button" onClick={prevMonth} aria-label="Vorheriger Monat" className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg">
           ‹
-        </Button>
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{monthLabel}</h2>
-        <Button variant="ghost" onClick={nextMonth}>
+        </button>
+        <h2 className="text-sm font-semibold text-fg">{monthLabel}</h2>
+        <button type="button" onClick={nextMonth} aria-label="Nächster Monat" className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg">
           ›
-        </Button>
+        </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-muted">
+      {/* Neu gemountet je Monat, damit der Wechsel sichtbar einblendet. */}
+      <div key={`${year}-${month}`} className="anim-page grid grid-cols-7 gap-1 text-center">
         {WEEKDAYS.map((w) => (
-          <div key={w}>{w}</div>
+          <span key={w} className="pb-1 text-[11px] uppercase text-muted">
+            {w}
+          </span>
         ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-1">
         {cells.map((iso, i) => {
-          if (!iso) return <div key={`empty-${i}`} />
+          if (!iso) return <span key={`empty-${i}`} />
           const isToday = iso === todayDate
           const tracked = trackedDates.has(iso)
           const trained = trainedDates.has(iso)
-          const day = Number(iso.slice(8, 10))
+          const future = iso > todayDate
           return (
             <div
               key={iso}
-              className={`flex flex-col items-center gap-0.5 rounded-lg py-1 text-xs ${
-                isToday ? 'bg-surface-2 font-semibold text-fg' : 'text-muted'
+              className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-xl text-sm tabular-nums ${
+                isToday ? 'bg-accent font-semibold text-accent-fg' : future ? 'text-muted/50' : 'text-fg'
               }`}
             >
-              <span>{day}</span>
+              {Number(iso.slice(8, 10))}
               <span className="flex h-1.5 gap-0.5">
-                {tracked && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                {tracked && <span className={`h-1.5 w-1.5 rounded-full ${isToday ? 'bg-accent-fg' : 'bg-ok'}`} />}
                 {trained && <span className="h-1.5 w-1.5 rounded-full bg-[#f472b6]" />}
               </span>
             </div>
@@ -86,9 +86,9 @@ export default function CalendarOverview({ entries, workoutLogs }: { entries: Da
         })}
       </div>
 
-      <div className="flex gap-4 text-xs text-muted">
+      <div className="flex justify-center gap-4 text-xs text-muted">
         <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Tracking
+          <span className="h-1.5 w-1.5 rounded-full bg-ok" /> Tracking
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#f472b6]" /> Training
