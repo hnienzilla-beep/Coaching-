@@ -6,7 +6,7 @@ import { getLastExercisePerformance, getOrCreateWorkoutLog, todayIso } from '../
 import type { Athlete, TrainingPlanExercise, WorkoutLog, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
-import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
+import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
 import WorkoutTimer from '../components/WorkoutTimer'
@@ -61,6 +61,8 @@ export default function WorkoutLogPage() {
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
 
   const [selectedDate, setSelectedDate] = useState(todayIso())
+  // Übungsauswahl: ohne swapRowId wird eine neue Zeile angelegt, sonst die Übung getauscht.
+  const [picker, setPicker] = useState<{ swapRowId?: string; currentId?: string } | null>(null)
   const currentLog = logs?.find((l) => l.date === selectedDate)
 
   const rows = useLiveQuery(
@@ -84,12 +86,6 @@ export default function WorkoutLogPage() {
   )
 
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
-  const pickerItems: SearchPickerItem[] = (exercises ?? []).map((e) => ({
-    id: e.id,
-    label: e.name,
-    sublabel: e.muscleGroup,
-    favorite: e.favorite,
-  }))
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
   const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
@@ -112,16 +108,15 @@ export default function WorkoutLogPage() {
   const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
   const status: LogDayStatus = !currentLog ? 'none' : currentLog.completedAt ? 'done' : 'open'
 
-  async function addExerciseRow() {
+  // Die Übung wird im Sheet gewählt, bevor die Zeile entsteht - keine leeren Zeilen mehr.
+  async function addExerciseRow(exerciseId: string) {
     const log = await getOrCreateWorkoutLog(athlete.id, selectedDate)
     await ensureStarted(log)
     const existing = await db.workoutLogExercises.where('workoutLogId').equals(log.id).toArray()
-    // Leere exerciseId: die Zeile startet im Auswahlmodus, statt still die erste Übung des
-    // Alphabets zu setzen, die dann jemand übersieht.
     await db.workoutLogExercises.add({
       id: crypto.randomUUID(),
       workoutLogId: log.id,
-      exerciseId: '',
+      exerciseId,
       order: nextOrder(existing),
     })
   }
@@ -214,10 +209,10 @@ export default function WorkoutLogPage() {
           </div>
         )}
 
-        <Card className="flex flex-col gap-3">
-          <Field label="Trainingstag (optional)">
+        <Card className="flex flex-col gap-2">
+          <Field label="Trainingstag">
             <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
-              <option value="">– kein Plan zugeordnet –</option>
+              <option value="">– kein Plan –</option>
               {trainingPlans?.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.phaseName}
@@ -225,37 +220,38 @@ export default function WorkoutLogPage() {
               ))}
             </Select>
           </Field>
-
           {sortedRows.length === 0 && (
-            <p className="text-sm text-muted">
-              🏋️ Noch keine Übungen für diesen Tag. Wähle oben einen Trainingstag – dann werden die geplanten Übungen samt
-              letzter Gewichte übernommen – oder füge eine einzelne Übung hinzu.
+            <p className="text-xs text-muted">
+              Wähle einen Trainingstag – die geplanten Übungen werden samt letzter Gewichte übernommen – oder füge einzelne
+              Übungen hinzu.
             </p>
           )}
+        </Card>
 
-          <div className="flex flex-col gap-2">
-            {sortedRows.map((row) => (
-              <WorkoutExerciseRow
-                key={row.id}
-                rowId={row.id}
-                exerciseId={row.exerciseId}
-                exerciseName={exerciseMap.get(row.exerciseId)?.name}
-                notes={row.notes}
-                pickerItems={pickerItems}
-                muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
-                imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
-                planExercise={planExerciseByExerciseId.get(row.exerciseId)}
-                athleteId={athlete.id}
-                date={selectedDate}
-                onDelete={() => deleteExerciseRow(row.id)}
-              />
-            ))}
-          </div>
+        <div className="flex flex-col gap-3">
+          {sortedRows.map((row) => (
+            <WorkoutExerciseRow
+              key={row.id}
+              rowId={row.id}
+              exerciseId={row.exerciseId}
+              exerciseName={exerciseMap.get(row.exerciseId)?.name}
+              notes={row.notes}
+              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+              imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
+              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+              athleteId={athlete.id}
+              date={selectedDate}
+              onSwap={() => setPicker({ swapRowId: row.id, currentId: row.exerciseId })}
+              onDelete={() => deleteExerciseRow(row.id)}
+            />
+          ))}
+        </div>
 
-          <Button variant="secondary" onClick={addExerciseRow}>
-            + Übung hinzufügen
-          </Button>
+        <Button variant={sortedRows.length === 0 ? 'primary' : 'secondary'} className="py-3" onClick={() => setPicker({})}>
+          + Übung hinzufügen
+        </Button>
 
+        <Card className="flex flex-col gap-3">
           <Field label="Notizen zum Training">
             <textarea
               value={currentLog?.notes ?? ''}
@@ -283,6 +279,18 @@ export default function WorkoutLogPage() {
           )}
         </Card>
       </div>
+
+      <ExercisePickerSheet
+        open={picker !== null}
+        title={picker?.swapRowId ? 'Übung tauschen' : 'Übung hinzufügen'}
+        exercises={exercises ?? []}
+        selectedId={picker?.currentId}
+        onPick={(id) => {
+          if (picker?.swapRowId) void db.workoutLogExercises.update(picker.swapRowId, { exerciseId: id })
+          else void addExerciseRow(id)
+        }}
+        onClose={() => setPicker(null)}
+      />
 
       <LogHistoryList
         entries={(logs ?? []).map((log) => {
@@ -314,24 +322,24 @@ function WorkoutExerciseRow({
   exerciseId,
   exerciseName,
   notes,
-  pickerItems,
   muscleGroup,
   imageDataUrl,
   planExercise,
   athleteId,
   date,
+  onSwap,
   onDelete,
 }: {
   rowId: string
   exerciseId: string
   exerciseName?: string
   notes?: string
-  pickerItems: SearchPickerItem[]
   muscleGroup?: string
   imageDataUrl?: string
   planExercise?: TrainingPlanExercise
   athleteId: string
   date: string
+  onSwap: () => void
   onDelete: () => void
 }) {
   const sets = useLiveQuery(() => db.workoutSets.where('workoutLogExerciseId').equals(rowId).sortBy('setNumber'), [rowId]) ?? []
@@ -340,9 +348,6 @@ function WorkoutExerciseRow({
     [athleteId, exerciseId, date],
   )
 
-  // Neue Zeilen haben noch keine Übung - sie öffnen direkt die Suche. Bei allen anderen
-  // bleibt die Suche eingeklappt, weil die Übung praktisch nie mehr gewechselt wird.
-  const [picking, setPicking] = useState(exerciseId === '')
   const [expanded, setExpanded] = useState(true)
   const [notesOpen, setNotesOpen] = useState(!!notes)
 
@@ -382,7 +387,7 @@ function WorkoutExerciseRow({
   }
 
   return (
-    <div className={`flex flex-col gap-2 rounded-xl border p-2 ${allDone ? 'border-ok/40' : 'border-border'}`}>
+    <div className={`reveal flex flex-col gap-2 rounded-2xl border bg-surface p-3 shadow-lg shadow-black/30 transition-colors duration-300 ${allDone ? 'border-ok/50' : 'border-border'}`}>
       <div className="flex items-center gap-2">
         {imageDataUrl && <img src={imageDataUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />}
         <button
@@ -403,17 +408,6 @@ function WorkoutExerciseRow({
 
       {expanded && (
         <>
-          {picking && (
-            <SearchPicker
-              items={pickerItems}
-              value={exerciseId || undefined}
-              onChange={(id) => {
-                void db.workoutLogExercises.update(rowId, { exerciseId: id })
-                setPicking(false)
-              }}
-              placeholder="Übung suchen..."
-            />
-          )}
 
           {(planExercise || lastPerformance) && (
             <div className="flex flex-wrap gap-1.5 text-[11px]">
@@ -511,7 +505,7 @@ function WorkoutExerciseRow({
 
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="flex gap-1">
-              <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
+              <Button variant="ghost" onClick={onSwap}>
                 ✎ Übung tauschen
               </Button>
               {!notesOpen && (

@@ -3,7 +3,7 @@ import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/de
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30 ${className}`}>{children}</div>
+  return <div className={`reveal rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30 ${className}`}>{children}</div>
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -145,12 +145,13 @@ export function Button({
   return <button {...props} className={`${base} ${variants[variant]} ${className}`} />
 }
 
+/** Kennzahl-Kachel: kleiner Titel oben, große Zahl darunter. */
 export function StatBadge({ label, value, tone = 'default' }: { label: string; value: string; tone?: 'default' | 'ok' | 'danger' }) {
   const toneClass = tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-fg'
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-xl bg-surface-2 px-3 py-2">
-      <span className={`text-lg font-semibold ${toneClass}`}>{value}</span>
-      <span className="text-[11px] uppercase tracking-wide text-muted">{label}</span>
+    <div className="reveal flex min-w-0 flex-col gap-0.5 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <span className="truncate text-[11px] text-muted">{label}</span>
+      <span className={`truncate text-lg font-semibold tabular-nums ${toneClass}`}>{value}</span>
     </div>
   )
 }
@@ -242,7 +243,7 @@ export function ListRow({
     </>
   )
   return (
-    <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
+    <div className="reveal flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
       {onClick ? (
         <button
           type="button"

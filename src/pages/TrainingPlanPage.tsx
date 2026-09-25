@@ -9,10 +9,11 @@ import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
 import { estimateWorkoutDurationMinutes, nextOrder } from '../lib/calculator'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
-import { Button, Card, DecimalInput, Input, StatBadge } from '../components/ui'
-import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
-import PlanItemRow from '../components/PlanItemRow'
+import { Button, DecimalInput, Field, Input, ListRow, StatBadge } from '../components/ui'
+import CollapsibleCard from '../components/CollapsibleCard'
+import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
+import Sheet from '../components/Sheet'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
 import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
@@ -31,8 +32,9 @@ export default function TrainingPlanPage() {
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  // Frisch angelegte Zeilen starten aufgeklappt - dort fehlt die Übung noch.
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  // Übungsauswahl (neue Zeile oder Tausch) und das Bearbeiten-Sheet einer Zeile.
+  const [picker, setPicker] = useState<{ swapRowId?: string; currentId?: string } | null>(null)
+  const [editRowId, setEditRowId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
@@ -80,12 +82,6 @@ export default function TrainingPlanPage() {
   }
 
   const exerciseMap = new Map((exercises ?? []).map((e) => [e.id, e]))
-  const pickerItems: SearchPickerItem[] = (exercises ?? []).map((e) => ({
-    id: e.id,
-    label: e.name,
-    sublabel: e.muscleGroup,
-    favorite: e.favorite,
-  }))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -105,29 +101,20 @@ export default function TrainingPlanPage() {
     await db.trainingPlans.update(planId, { phaseName: name })
   }
 
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  async function addRow() {
+  // Die Übung wird im Sheet gewählt, bevor die Zeile entsteht; danach öffnet sich gleich das
+  // Bearbeiten-Sheet für Sätze und Wiederholungen.
+  async function addRow(exerciseId: string) {
     if (!currentPlanId) return
-    // Leere exerciseId: die Zeile startet mit offener Suche, statt still die erste Übung des
-    // Alphabets zu setzen, die dann jemand übersieht - genauso macht es das Trainingslog.
     const row: TrainingPlanExercise = {
       id: crypto.randomUUID(),
       planId: currentPlanId,
-      exerciseId: '',
+      exerciseId,
       order: nextOrder(rows ?? []),
       sets: 3,
       reps: '8-12',
     }
     await db.trainingPlanExercises.add(row)
-    setExpandedIds((prev) => new Set(prev).add(row.id))
+    setEditRowId(row.id)
   }
 
   async function handleExportPlan() {
@@ -205,10 +192,10 @@ export default function TrainingPlanPage() {
       )}
 
       {activePlan && (
-        <Card className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
           {allRows.length === 0 && (
-            <p className="text-sm text-muted">
-              🏋️ Noch keine Übungen an diesem Tag.
+            <p className="px-1 py-2 text-center text-sm text-muted">
+              Noch keine Übungen an diesem Tag.
               {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
             </p>
           )}
@@ -216,51 +203,56 @@ export default function TrainingPlanPage() {
           {editing ? (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={allRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                <div className="flex flex-col gap-1.5">
-                  {allRows.map((row) => (
-                    <SortableRow
-                      key={row.id}
-                      row={row}
-                      exercise={exerciseMap.get(row.exerciseId)}
-                      pickerItems={pickerItems}
-                      expanded={expandedIds.has(row.id)}
-                      onToggle={() => toggleExpanded(row.id)}
-                    />
-                  ))}
-                </div>
+                {allRows.map((row) => (
+                  <SortableRow key={row.id} row={row} exercise={exerciseMap.get(row.exerciseId)} onEdit={() => setEditRowId(row.id)} />
+                ))}
               </SortableContext>
             </DndContext>
           ) : (
-            <div className="flex flex-col gap-1">
-              {filledRows.map((row) => {
-                const exercise = exerciseMap.get(row.exerciseId)
-                return (
-                  <div key={row.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-                    <div className="flex min-w-0 items-center gap-3">
-                      {exercise?.imageDataUrl && (
-                        <img src={exercise.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
-                      )}
-                      <div className="min-w-0">
-                        <div className="truncate text-fg">{exercise?.name ?? '–'}</div>
-                        {exercise?.muscleGroup && <div className="text-xs text-muted">{exercise.muscleGroup}</div>}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-muted">{prescription(row)}</span>
-                  </div>
-                )
-              })}
-            </div>
+            filledRows.map((row) => {
+              const exercise = exerciseMap.get(row.exerciseId)
+              return (
+                <ListRow
+                  key={row.id}
+                  leading={<ExerciseThumb exercise={exercise} />}
+                  title={exercise?.name ?? '–'}
+                  subtitle={[exercise?.muscleGroup, row.notes].filter(Boolean).join(' · ')}
+                  value={prescription(row)}
+                />
+              )
+            })
           )}
 
           {editing && (
-            <Button variant="secondary" onClick={addRow}>
+            <Button variant="secondary" className="mt-1.5 py-3" onClick={() => setPicker({})}>
               + Übung hinzufügen
             </Button>
           )}
-        </Card>
+        </div>
       )}
 
+      <ExercisePickerSheet
+        open={picker !== null}
+        title={picker?.swapRowId ? 'Übung tauschen' : 'Übung hinzufügen'}
+        exercises={exercises ?? []}
+        selectedId={picker?.currentId}
+        onPick={(id) => {
+          if (picker?.swapRowId) void db.trainingPlanExercises.update(picker.swapRowId, { exerciseId: id })
+          else void addRow(id)
+        }}
+        onClose={() => setPicker(null)}
+      />
+
+      <PlanRowSheet
+        key={editRowId ?? 'closed'}
+        row={allRows.find((r) => r.id === editRowId)}
+        exercise={exerciseMap.get(allRows.find((r) => r.id === editRowId)?.exerciseId ?? '')}
+        onSwap={(row) => setPicker({ swapRowId: row.id, currentId: row.exerciseId })}
+        onClose={() => setEditRowId(null)}
+      />
+
       {activePlan && coachMode && (
+        <CollapsibleCard title="Export & Import" defaultExpanded={false}>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -279,6 +271,7 @@ export default function TrainingPlanPage() {
             }}
           />
         </div>
+        </CollapsibleCard>
       )}
 
       <ExportTrainingPlanButton athlete={athlete} />
@@ -286,110 +279,98 @@ export default function TrainingPlanPage() {
   )
 }
 
-function SortableRow({
+function ExerciseThumb({ exercise }: { exercise?: Exercise }) {
+  return exercise?.imageDataUrl ? (
+    <img src={exercise.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+  ) : (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg text-lg" aria-hidden="true">
+      🏋️
+    </span>
+  )
+}
+
+function SortableRow({ row, exercise, onEdit }: { row: TrainingPlanExercise; exercise?: Exercise; onEdit: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id })
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
+      <ListRow
+        leading={
+          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
+            ⠿
+          </span>
+        }
+        title={exercise?.name ?? 'Übung wählen …'}
+        subtitle={exercise?.muscleGroup}
+        value={prescription(row)}
+        onClick={onEdit}
+        ariaLabel={`${exercise?.name ?? 'Übung'} bearbeiten`}
+      />
+    </div>
+  )
+}
+
+/** Sätze, Wiederholungen, Zielgewicht und Notiz einer Planzeile - Änderungen gelten sofort. */
+function PlanRowSheet({
   row,
   exercise,
-  pickerItems,
-  expanded,
-  onToggle,
+  onSwap,
+  onClose,
 }: {
-  row: TrainingPlanExercise
+  row?: TrainingPlanExercise
   exercise?: Exercise
-  pickerItems: SearchPickerItem[]
-  expanded: boolean
-  onToggle: () => void
+  onSwap: (row: TrainingPlanExercise) => void
+  onClose: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id })
-  const [picking, setPicking] = useState(row.exerciseId === '')
-  const [notesOpen, setNotesOpen] = useState(!!row.notes)
+  if (!row) return null
 
   function update(patch: Partial<TrainingPlanExercise>) {
-    void db.trainingPlanExercises.update(row.id, patch)
+    if (row) void db.trainingPlanExercises.update(row.id, patch)
   }
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <PlanItemRow
-        title={exercise?.name ?? 'Übung wählen …'}
-        subtitle={[exercise?.muscleGroup, prescription(row)].filter(Boolean).join(' · ')}
-        imageDataUrl={exercise?.imageDataUrl}
-        expanded={expanded}
-        onToggle={onToggle}
-        onDelete={() => db.trainingPlanExercises.delete(row.id)}
-        deleteLabel={`${exercise?.name ?? 'Übung'} aus dem Plan entfernen`}
-        dragHandle={
-          <button
-            {...attributes}
-            {...listeners}
-            type="button"
-            className="shrink-0 touch-none px-1 text-lg text-muted"
-            aria-label="Verschieben"
-          >
-            ⠿
-          </button>
-        }
-      >
-        {picking && (
-          <SearchPicker
-            items={pickerItems}
-            value={row.exerciseId || undefined}
-            onChange={(id) => {
-              update({ exerciseId: id })
-              setPicking(false)
+    <Sheet
+      open
+      title={exercise?.name ?? 'Übung'}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          <Button
+            variant="danger"
+            onClick={async () => {
+              await db.trainingPlanExercises.delete(row.id)
+              onClose()
             }}
-            placeholder="Übung suchen..."
-          />
-        )}
-
-        {/* Spaltenköpfe: die Platzhalter in den Feldern verschwinden, sobald ein Wert
-            drinsteht - ohne Kopfzeile weiß danach niemand mehr, was welche Zahl ist. */}
-        <div className="grid grid-cols-[3rem_1fr_1fr] gap-1 text-[10px] uppercase tracking-wide text-muted">
-          <span>Sätze</span>
-          <span>Wdh.</span>
-          <span>Ziel kg</span>
+          >
+            Entfernen
+          </Button>
+          <Button variant="primary" className="flex-1" onClick={onClose}>
+            Fertig
+          </Button>
         </div>
-        <div className="grid grid-cols-[3rem_1fr_1fr] items-center gap-1">
+      }
+    >
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="Sätze">
           <Input
             type="number"
             inputMode="numeric"
             value={row.sets}
             onChange={(e) => update({ sets: Number(e.target.value) })}
-            aria-label="Anzahl Sätze"
           />
-          <Input
-            value={row.reps}
-            onChange={(e) => update({ reps: e.target.value })}
-            placeholder="8-12"
-            aria-label="Wiederholungen"
-          />
-          <DecimalInput
-            value={row.targetWeightKg}
-            onChange={(n) => update({ targetWeightKg: n })}
-            placeholder="–"
-            aria-label="Zielgewicht in kg"
-          />
-        </div>
-
-        {notesOpen && (
-          <Input
-            value={row.notes ?? ''}
-            onChange={(e) => update({ notes: e.target.value })}
-            placeholder="Notiz zur Übung (z.B. Griff, Technik)"
-            aria-label="Notiz zur Übung"
-          />
-        )}
-
-        <div className="flex gap-1">
-          <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
-            ✎ Übung tauschen
-          </Button>
-          {!notesOpen && (
-            <Button variant="ghost" onClick={() => setNotesOpen(true)}>
-              + Notiz
-            </Button>
-          )}
-        </div>
-      </PlanItemRow>
-    </div>
+        </Field>
+        <Field label="Wdh.">
+          <Input value={row.reps} onChange={(e) => update({ reps: e.target.value })} placeholder="8-12" />
+        </Field>
+        <Field label="Ziel kg">
+          <DecimalInput value={row.targetWeightKg} onChange={(n) => update({ targetWeightKg: n })} placeholder="–" />
+        </Field>
+      </div>
+      <Field label="Notiz (optional)">
+        <Input value={row.notes ?? ''} onChange={(e) => update({ notes: e.target.value })} placeholder="z.B. Griff, Technik" />
+      </Field>
+      <Button variant="ghost" className="self-start" onClick={() => onSwap(row)}>
+        ✎ Übung tauschen
+      </Button>
+    </Sheet>
   )
 }

@@ -9,7 +9,8 @@ import { shareOrDownloadFile } from '../lib/share'
 import { db, exportAllData, exportAthletes, importAllData, importSelectedAthletes } from '../db/db'
 import { dedupeAfterImport } from '../db/dedupe'
 import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
-import { AccentSwatch, Button, Card } from '../components/ui'
+import { AccentSwatch, Button, Card, ListRow } from '../components/ui'
+import Sheet from '../components/Sheet'
 import NewAthleteForm from '../components/NewAthleteForm'
 import type { Athlete } from '../models/types'
 import { useOverviewAccent } from '../lib/accentColor'
@@ -116,16 +117,19 @@ export default function AthleteListPage() {
 
   return (
     <div className="anim-page mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
-      <header className="flex items-center justify-between pt-[max(1rem,env(safe-area-inset-top))]">
+      <header className="flex items-center gap-2 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-3">
           <Link to="/" className="text-muted" aria-label="Zurück zum Athleten">
             ←
           </Link>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold text-fg">Athleten</h1>
-            <p className="text-sm text-muted">Anlegen, sortieren, löschen</p>
+            <p className="text-xs text-muted">{athletes?.length ?? 0} angelegt</p>
           </div>
         </div>
+        <Button variant="primary" className="ml-auto shrink-0" onClick={() => setShowForm(true)}>
+          + Neu
+        </Button>
         {/* Der Akzent für alle Seiten außerhalb eines Athleten - innerhalb eines Athleten
             gewinnt dessen eigene Farbe, deshalb steht der Picker hier und nicht im
             Zahnrad-Menü der Kopfzeile. */}
@@ -176,28 +180,13 @@ export default function AthleteListPage() {
         </DndContext>
       )}
 
-      {/* Nach dem Anlegen direkt in den neuen Athleten - `createAthlete` liefert ihn zurück. */}
-      {showForm ? (
-        <NewAthleteForm onCreated={(a) => navigate(`/athlete/${a.id}`)} onCancel={() => setShowForm(false)} />
-      ) : (
-        <Button variant="primary" onClick={() => setShowForm(true)}>
-          + Athlet hinzufügen
-        </Button>
-      )}
-
-      {athletes && athletes.length > 0 && (
-        <Button variant="secondary" onClick={() => setExportSelectorOpen(true)}>
-          Athleten exportieren
-        </Button>
-      )}
-
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={handleExport} className="flex-1">
-          Daten exportieren
-        </Button>
-        <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
-          Daten importieren
-        </Button>
+      <section className="flex flex-col gap-1.5">
+        <h2 className="px-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted">Daten</h2>
+        {athletes && athletes.length > 0 && (
+          <ListRow title="Athleten exportieren" subtitle="Einzelne Athleten zum Weitergeben" value="›" onClick={() => setExportSelectorOpen(true)} />
+        )}
+        <ListRow title="Backup exportieren" subtitle="Alle Daten als Datei sichern" value="›" onClick={() => void handleExport()} />
+        <ListRow title="Backup importieren" subtitle="Aus einer Backup-Datei wiederherstellen" value="›" onClick={() => importInputRef.current?.click()} />
         <input
           ref={importInputRef}
           type="file"
@@ -208,7 +197,12 @@ export default function AthleteListPage() {
             e.target.value = ''
           }}
         />
-      </div>
+      </section>
+
+      {/* Nach dem Anlegen direkt in den neuen Athleten - `createAthlete` liefert ihn zurück. */}
+      <Sheet open={showForm} title="Neuer Athlet" onClose={() => setShowForm(false)}>
+        <NewAthleteForm plain onCreated={(a) => navigate(`/athlete/${a.id}`)} onCancel={() => setShowForm(false)} />
+      </Sheet>
 
       {pendingImport && (
         <ImportAthleteSelector
@@ -310,9 +304,8 @@ function ImportAthleteSelector({
   const { selected, toggle, setSelected } = useAthleteSelection()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex max-h-[80vh] w-full max-w-md flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Athleten zum Importieren auswählen</h2>
+    <Sheet open title="Athleten importieren" onClose={onCancel}>
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setSelected(new Set(athletes.map((a) => a.id)))}>
             Alle auswählen
@@ -336,8 +329,8 @@ function ImportAthleteSelector({
             Abbrechen
           </Button>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Sheet>
   )
 }
 
@@ -353,9 +346,8 @@ function ExportAthleteSelector({
   const { selected, toggle, setSelected } = useAthleteSelection()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex max-h-[80vh] w-full max-w-md flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Athleten zum Exportieren auswählen</h2>
+    <Sheet open title="Athleten exportieren" onClose={onCancel}>
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2">
           <Button variant="ghost" onClick={() => setSelected(new Set(athletes.map((a) => a.id)))}>
             Alle auswählen
@@ -378,8 +370,8 @@ function ExportAthleteSelector({
             Abbrechen
           </Button>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Sheet>
   )
 }
 
@@ -390,7 +382,7 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="flex items-center gap-2 rounded-2xl border border-border bg-surface p-4 shadow-lg shadow-black/30"
+      className="reveal flex items-center gap-2 rounded-2xl border border-border bg-surface p-3 shadow-lg shadow-black/30"
     >
       <button
         {...attributes}
@@ -401,17 +393,26 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
       >
         ⠿
       </button>
-      <Link to={`/athlete/${a.id}`} className="flex flex-1 items-center gap-3">
-        <span className="h-3 w-3 shrink-0 rounded-full border border-border" style={{ background: a.accentColor }} />
-        <div>
-          <div className="font-semibold text-fg">{a.name}</div>
-          <div className="text-xs text-muted">
+      <Link to={`/athlete/${a.id}`} className="flex min-w-0 flex-1 items-center gap-3 transition-transform duration-150 active:scale-[0.98]">
+        {/* Initiale in der Akzentfarbe des Athleten - so erkennt man ihn auf einen Blick. */}
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-black"
+          style={{ background: a.accentColor }}
+          aria-hidden="true"
+        >
+          {a.name.trim().charAt(0).toUpperCase() || '?'}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-fg">{a.name}</div>
+          <div className="truncate text-xs text-muted">
             {weightKg ?? a.weightKg} kg · {a.goal}
           </div>
         </div>
       </Link>
-      <Button
-        variant="danger"
+      <button
+        type="button"
+        aria-label={`${a.name} löschen`}
+        className="shrink-0 rounded-lg px-2 py-2 text-sm text-muted hover:text-danger"
         onClick={async (e) => {
           e.preventDefault()
           if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) {
@@ -422,8 +423,8 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
           }
         }}
       >
-        Löschen
-      </Button>
+        🗑
+      </button>
     </div>
   )
 }
