@@ -105,6 +105,8 @@ export default function ExerciseDatabasePage() {
         {filtered.map((e) => (
           <ListRow
             key={e.id}
+            onSwipeDelete={() => db.exercises.delete(e.id)}
+            swipeConfirm={`„${e.name}" wirklich löschen?`}
             leading={
               e.imageDataUrl ? (
                 <img src={e.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />

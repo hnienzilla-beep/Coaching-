@@ -280,6 +280,7 @@ function SortableSupplementRow({ item, supplement, onEdit }: { item: SupplementP
         value={item.dose}
         onClick={onEdit}
         ariaLabel={`${supplement?.name ?? 'Supplement'} bearbeiten`}
+        onSwipeDelete={() => db.supplementPlanItems.delete(item.id)}
       />
     </div>
   )

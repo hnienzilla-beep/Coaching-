@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/decimalInput'
+import SwipeToDelete from './SwipeToDelete'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -223,6 +224,8 @@ export function ListRow({
   trailing,
   onClick,
   ariaLabel,
+  onSwipeDelete,
+  swipeConfirm,
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -231,6 +234,10 @@ export function ListRow({
   trailing?: ReactNode
   onClick?: () => void
   ariaLabel?: string
+  /** Nach links wegwischen löscht die Zeile (siehe SwipeToDelete). */
+  onSwipeDelete?: () => void | Promise<void>
+  /** Rückfrage vor dem Wegwischen. */
+  swipeConfirm?: string
 }) {
   const content = (
     <>
@@ -242,7 +249,7 @@ export function ListRow({
       {value !== undefined && <span className="shrink-0 text-sm tabular-nums text-muted">{value}</span>}
     </>
   )
-  return (
+  const row = (
     <div className="reveal flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
       {onClick ? (
         <button
@@ -258,6 +265,13 @@ export function ListRow({
       )}
       {trailing}
     </div>
+  )
+  return onSwipeDelete ? (
+    <SwipeToDelete onDelete={onSwipeDelete} confirmText={swipeConfirm}>
+      {row}
+    </SwipeToDelete>
+  ) : (
+    row
   )
 }
 
