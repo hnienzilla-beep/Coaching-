@@ -9,19 +9,17 @@ import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../li
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, NutritionPlan, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Card, DecimalInput, Field, Select } from '../components/ui'
-import { type SearchPickerItem } from '../components/SearchPicker'
+import { Button, Card, DecimalInput, Field, ListRow, MacroChips, SectionHeader, SegmentedControl } from '../components/ui'
+import AddFoodSheet from '../components/AddFoodSheet'
+import PortionEditSheet from '../components/PortionEditSheet'
 import CollapsibleCard from '../components/CollapsibleCard'
-import FoodPortionFields from '../components/FoodPortionFields'
-import GroupAddChips from '../components/GroupAddChips'
 import MacroBars from '../components/MacroBars'
 import MacroSumTable from '../components/MacroSumTable'
-import PlanItemRow from '../components/PlanItemRow'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import { macroLine, scaleMacros, sumMacros, type Sums } from '../lib/macros'
 import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
-import { servingsLabel, servingsOf } from '../lib/recipes'
+import { recipeWeight, servingsLabel, servingsOf } from '../lib/recipes'
 
 type Ctx = { athlete: Athlete }
 
@@ -43,8 +41,9 @@ export default function NutritionPage() {
   const [kind, setKind] = useState<'plan' | 'recipe'>('plan')
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [draftMeals, setDraftMeals] = useState<PlanMeal[] | null>(null)
-  // Frisch angelegte Zeilen starten aufgeklappt - dort fehlt das Lebensmittel noch.
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  // Hinzufügen und Bearbeiten laufen über Sheets - die Liste selbst bleibt einzeilig.
+  const [addMeal, setAddMeal] = useState<MealType | null>(null)
+  const [editMealId, setEditMealId] = useState<string | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const sensors = useDragSensors()
 
@@ -73,13 +72,6 @@ export default function NutritionPage() {
   }, [planIdKey])
 
   const foodMap = new Map((foods ?? []).map((f) => [f.id, f]))
-  const foodPickerItems: SearchPickerItem[] = (foods ?? []).map((f) => ({
-    id: f.id,
-    label: f.name,
-    sublabel: `${Math.round(caloriesFromMacros(f.protein, f.carbs, f.fat))} kcal/100g`,
-    favorite: f.favorite,
-    unconfirmed: f.unconfirmed,
-  }))
   const target = calculate({
     gender: athlete.gender,
     age: athlete.age,
@@ -129,7 +121,6 @@ export default function NutritionPage() {
       : []
     : mealGroups
 
-  const usedMealTypes = new Set(mealGroups.map((g) => g.mealType))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -161,6 +152,10 @@ export default function NutritionPage() {
     await db.nutritionPlans.update(planId, { servings: servings > 0 ? servings : 1 })
   }
 
+  async function setCookedWeight(planId: string, grams: number | undefined) {
+    await db.nutritionPlans.update(planId, { cookedWeightG: grams && grams > 0 ? grams : undefined })
+  }
+
   /**
    * Umsortieren wirkt nur in der sichtbaren Liste. Statt bei 0 neu zu zählen werden die
    * `order`-Werte neu verteilt, die diese Gruppe ohnehin schon belegt - sonst bekämen
@@ -189,7 +184,6 @@ export default function NutritionPage() {
 
   function startEdit() {
     setDraftMeals((meals ?? []).map((m) => ({ ...m })))
-    setExpandedIds(new Set())
     setMode('edit')
   }
 
@@ -198,23 +192,12 @@ export default function NutritionPage() {
     setMode('view')
   }
 
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function addDraftRow(mealType: MealType) {
+  function addDraftFood(foodItemId: string, grams: number, mealType: MealType) {
     if (!currentPlanId) return
-    const id = crypto.randomUUID()
     setDraftMeals((prev) => [
       ...(prev ?? []),
-      { id, planId: currentPlanId, mealType, foodItemId: '', grams: 100, order: nextOrder(prev ?? []) },
+      { id: crypto.randomUUID(), planId: currentPlanId, mealType, foodItemId, grams, order: nextOrder(prev ?? []) },
     ])
-    setExpandedIds((prev) => new Set(prev).add(id))
   }
 
   function updateDraftMeal(id: string, patch: Partial<PlanMeal>) {
@@ -287,29 +270,23 @@ export default function NutritionPage() {
       : undefined
 
   const perServing = activePlan && isRecipeView ? scaleMacros(sums, 1 / servingsOf(activePlan)) : null
+  const weight = activePlan && isRecipeView ? recipeWeight(activePlan, visibleMeals) : 0
+  const per100 = weight > 0 ? scaleMacros(sums, 100 / weight) : null
+  const editMeal = editMealId ? (draftMeals ?? []).find((m) => m.id === editMealId) : undefined
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        {(['plan', 'recipe'] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => {
-              setKind(k)
-              cancelEdit()
-            }}
-            aria-pressed={kind === k}
-            className={`flex-1 rounded-xl px-3 py-2 text-sm transition active:scale-95 ${
-              kind === k
-                ? 'bg-accent font-medium text-accent-fg'
-                : 'border border-border bg-surface-2 text-muted hover:text-fg'
-            }`}
-          >
-            {k === 'plan' ? 'Tagespläne' : 'Rezepte'}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        options={[
+          { key: 'plan', label: 'Tagespläne' },
+          { key: 'recipe', label: 'Rezepte' },
+        ]}
+        value={kind}
+        onChange={(k) => {
+          setKind(k)
+          cancelEdit()
+        }}
+      />
 
       <PlanPhaseHeader
         title={isRecipeView ? 'Rezept' : 'Ernährungsplan'}
@@ -376,15 +353,25 @@ export default function NutritionPage() {
             </label>
             {activePlan.isRecipe ? (
               <>
-                <Field label="Ergibt … Portionen">
-                  <DecimalInput
-                    value={servingsOf(activePlan)}
-                    onChange={(v) => void setServings(activePlan.id, v ?? 1)}
-                  />
-                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Ergibt Portionen">
+                    <DecimalInput
+                      value={servingsOf(activePlan)}
+                      onChange={(v) => void setServings(activePlan.id, v ?? 1)}
+                    />
+                  </Field>
+                  <Field label="Fertiggewicht (g)">
+                    <DecimalInput
+                      value={activePlan.cookedWeightG}
+                      onChange={(v) => void setCookedWeight(activePlan.id, v)}
+                      placeholder={`${Math.round(recipeWeight({}, visibleMeals))} (Zutaten)`}
+                    />
+                  </Field>
+                </div>
                 <p className="text-xs text-muted">
-                  Die Zutaten unten beschreiben den ganzen Ansatz. Im Ernährungslog gibst du dann Portionen ein und
-                  bekommst die Zutaten anteilig eingetragen.
+                  Die Zutaten beschreiben den ganzen Ansatz. Im Log fügst du dann Portionen oder Gramm ein. Das
+                  Fertiggewicht ist optional: Wiegst du das fertige Gericht, stimmen die Gramm-Angaben auch nach dem
+                  Kochen.
                 </p>
               </>
             ) : (
@@ -408,13 +395,24 @@ export default function NutritionPage() {
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Nährwerte</h2>
                 <div className="flex flex-col gap-1 text-sm">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-muted">Ganzes Rezept</span>
+                    <span className="shrink-0 whitespace-nowrap text-muted">Ganzes Rezept</span>
                     <span className="text-right text-fg">{macroLine(sums)}</span>
                   </div>
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-muted">Je Portion</span>
+                    <span className="shrink-0 whitespace-nowrap text-muted">Je Portion</span>
                     <span className="text-right font-medium text-fg">{macroLine(perServing)}</span>
                   </div>
+                  {per100 && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="shrink-0 whitespace-nowrap text-muted">Je 100 g</span>
+                      <span className="text-right text-fg">{macroLine(per100)}</span>
+                    </div>
+                  )}
+                  {weight > 0 && (
+                    <p className="text-xs text-muted">
+                      Gesamtgewicht {Math.round(weight)} g {activePlan?.cookedWeightG ? '(fertig gewogen)' : '(Summe der Zutaten)'}
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
@@ -430,103 +428,100 @@ export default function NutritionPage() {
             )}
           </Card>
 
-          <Card className="flex flex-col gap-3">
-            {groups.length === 0 && (
-              <p className="text-sm text-muted">
-                🍽️ {isRecipeView ? 'Noch keine Zutaten in diesem Rezept.' : 'Noch keine Mahlzeiten in dieser Phase.'}
-                {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
-              </p>
-            )}
+          {groups.length === 0 && (
+            <p className="px-1 text-center text-sm text-muted">
+              {isRecipeView ? 'Noch keine Zutaten in diesem Rezept.' : 'Noch keine Mahlzeiten in dieser Phase.'}
+              {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
+            </p>
+          )}
 
-            <div className="flex flex-col gap-4">
-              {groups.map((group) => (
-                <div key={group.key} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    {/* text-fg statt text-accent: die Athleten-Akzentfarben sind hell und im
-                        Hell-Modus als Schrift praktisch unlesbar. */}
-                    <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.label}</div>
-                    {editing && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => addDraftRow(group.mealType)}
-                        aria-label={`${isRecipeView ? 'Zutat' : `Lebensmittel zu ${group.label}`} hinzufügen`}
-                      >
-                        {isRecipeView ? '+ Zutat' : '+ Lebensmittel'}
-                      </Button>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-muted">{macroLine(group.sum)}</div>
-
-                  {editing ? (
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={(e) => handleDragEndInGroup(group.rows.map((r) => r.meal), e)}
+          {groups.map((group) => (
+            <section key={group.key} className="flex flex-col gap-1.5">
+              <SectionHeader
+                title={group.label}
+                meta={`${Math.round(group.sum.kcal)} kcal`}
+                action={
+                  editing ? (
+                    <button
+                      type="button"
+                      onClick={() => setAddMeal(group.mealType)}
+                      aria-label={`${isRecipeView ? 'Zutat' : `Lebensmittel zu ${group.label}`} hinzufügen`}
+                      className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
                     >
-                      <SortableContext items={group.rows.map((r) => r.meal.id)} strategy={verticalListSortingStrategy}>
-                        <div className="flex flex-col gap-1.5">
-                          {group.rows.map((row) => (
-                            <SortableMealRow
-                              key={row.meal.id}
-                              row={row}
-                              foodName={foodMap.get(row.meal.foodItemId)?.name}
-                              foodPickerItems={foodPickerItems}
-                              expanded={expandedIds.has(row.meal.id)}
-                              onToggle={() => toggleExpanded(row.meal.id)}
-                              onChange={(patch) => updateDraftMeal(row.meal.id, patch)}
-                              onRemove={() => removeDraftMeal(row.meal.id)}
-                              showMealType={!isRecipeView}
-                            />
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      {group.rows.map((row) => (
-                        <div
-                          key={row.meal.id}
-                          className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
-                        >
-                          <span className="min-w-0 flex-1 truncate text-fg">
-                            {foodMap.get(row.meal.foodItemId)?.name ?? '–'}
-                          </span>
-                          <span className="shrink-0 text-muted">{row.meal.grams} g</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                      +
+                    </button>
+                  ) : undefined
+                }
+              />
 
-            {editing &&
-              (isRecipeView ? (
-                groups.length === 0 && (
-                  <Button variant="secondary" onClick={() => addDraftRow(recipeRowMealType)}>
-                    + Zutat
-                  </Button>
-                )
+              {editing ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(e) => handleDragEndInGroup(group.rows.map((r) => r.meal), e)}
+                >
+                  <SortableContext items={group.rows.map((r) => r.meal.id)} strategy={verticalListSortingStrategy}>
+                    {group.rows.map((row) => (
+                      <SortableMealRow
+                        key={row.meal.id}
+                        row={row}
+                        foodName={foodMap.get(row.meal.foodItemId)?.name}
+                        onEdit={() => setEditMealId(row.meal.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               ) : (
-                <GroupAddChips
-                  label="Mahlzeit hinzufügen"
-                  options={MEAL_TYPES}
-                  used={usedMealTypes}
-                  onAdd={addDraftRow}
-                  highlight={mealTypeForTime()}
-                />
-              ))}
+                group.rows.map((row) => (
+                  <ListRow
+                    key={row.meal.id}
+                    title={foodMap.get(row.meal.foodItemId)?.name ?? '–'}
+                    subtitle={
+                      <>
+                        {row.meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+                      </>
+                    }
+                    value={`${Math.round(row.kcal)} kcal`}
+                  />
+                ))
+              )}
+            </section>
+          ))}
 
-            {editing && (
+          {editing && (
+            <div className="flex flex-col gap-2">
+              <Button variant="secondary" onClick={() => setAddMeal(isRecipeView ? recipeRowMealType : mealTypeForTime())}>
+                {isRecipeView ? '+ Zutat hinzufügen' : '+ Lebensmittel hinzufügen'}
+              </Button>
               <Button variant="ghost" onClick={cancelEdit}>
                 Änderungen verwerfen
               </Button>
-            )}
-          </Card>
+            </div>
+          )}
         </>
       )}
 
+      <AddFoodSheet
+        open={addMeal !== null}
+        onClose={() => setAddMeal(null)}
+        title={isRecipeView ? 'Zutat hinzufügen' : 'Lebensmittel hinzufügen'}
+        foods={foods ?? []}
+        mealType={addMeal ?? mealTypeForTime()}
+        showMealType={!isRecipeView}
+        onAddFood={addDraftFood}
+      />
+
+      <PortionEditSheet
+        entry={editMeal ?? null}
+        food={editMeal ? foodMap.get(editMeal.foodItemId) : undefined}
+        showMealType={!isRecipeView}
+        onSave={(grams, mealType) => editMeal && updateDraftMeal(editMeal.id, { grams, mealType })}
+        onRemove={() => editMeal && removeDraftMeal(editMeal.id)}
+        onClose={() => setEditMealId(null)}
+      />
+
       {activePlan && coachMode && (
+        <CollapsibleCard title="Export & Import" defaultExpanded={false}>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -545,73 +540,30 @@ export default function NutritionPage() {
             }}
           />
         </div>
+        </CollapsibleCard>
       )}
     </div>
   )
 }
 
-function SortableMealRow({
-  row,
-  foodName,
-  foodPickerItems,
-  expanded,
-  onToggle,
-  onChange,
-  onRemove,
-  showMealType,
-}: {
-  row: Row
-  foodName?: string
-  foodPickerItems: SearchPickerItem[]
-  expanded: boolean
-  onToggle: () => void
-  onChange: (patch: Partial<PlanMeal>) => void
-  onRemove: () => void
-  showMealType: boolean // im Rezept nicht: die Mahlzeit wird erst beim Einfügen ins Log gewählt
-}) {
+function SortableMealRow({ row, foodName, onEdit }: { row: Row; foodName?: string; onEdit: () => void }) {
   const { meal } = row
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <PlanItemRow
-        title={foodName ?? 'Lebensmittel wählen …'}
-        subtitle={`${meal.grams} g · ${macroLine(row)}`}
-        expanded={expanded}
-        onToggle={onToggle}
-        onDelete={onRemove}
-        deleteLabel={`${foodName ?? 'Eintrag'} entfernen`}
-        dragHandle={
-          <button
-            {...attributes}
-            {...listeners}
-            type="button"
-            className="shrink-0 touch-none px-1 text-lg text-muted"
-            aria-label="Verschieben"
-          >
+      <ListRow
+        leading={
+          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
             ⠿
-          </button>
+          </span>
         }
-      >
-        <FoodPortionFields
-          pickerItems={foodPickerItems}
-          foodItemId={meal.foodItemId}
-          grams={meal.grams}
-          onChange={onChange}
-        />
-
-        {showMealType && (
-          <Field label="Mahlzeit">
-            <Select value={meal.mealType} onChange={(e) => onChange({ mealType: e.target.value as MealType })}>
-              {MEAL_TYPES.map((mt) => (
-                <option key={mt} value={mt}>
-                  {mt}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-      </PlanItemRow>
+        title={foodName ?? 'Unbekanntes Lebensmittel'}
+        subtitle={`${meal.grams} g`}
+        value={`${Math.round(row.kcal)} kcal`}
+        onClick={onEdit}
+        ariaLabel={`${foodName ?? 'Eintrag'} bearbeiten`}
+      />
     </div>
   )
 }

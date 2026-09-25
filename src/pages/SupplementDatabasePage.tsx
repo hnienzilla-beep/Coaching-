@@ -3,14 +3,18 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
 import { findByName } from '../lib/names'
-import { Button, Card, Field, Input, Select } from '../components/ui'
+import { Button, Field, Input, ListRow, Select } from '../components/ui'
+import Sheet from '../components/Sheet'
 import type { Supplement, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
+
+type Draft = { name: string; defaultDose: string; defaultTiming: SupplementTiming; notes: string }
 
 export default function SupplementDatabasePage() {
   const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
   const [query, setQuery] = useState('')
-  const [showForm, setShowForm] = useState(false)
+  // null = zu, 'new' = anlegen, sonst der bearbeitete Eintrag
+  const [editing, setEditing] = useState<Supplement | 'new' | null>(null)
 
   const filtered = useMemo(() => {
     if (!supplements) return []
@@ -21,145 +25,111 @@ export default function SupplementDatabasePage() {
   return (
     <div className="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto overscroll-contain p-4 pb-10">
       <header className="flex items-center gap-3 pt-[max(1rem,env(safe-area-inset-top))]">
-        <Link to="/" className="text-muted">
+        <Link to="/" className="text-muted" aria-label="Zurück">
           ←
         </Link>
-        <div>
-          <h1 className="text-lg font-bold text-fg">Supplement-Datenbank</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-bold text-fg">Supplemente</h1>
           <p className="text-xs text-muted">{supplements?.length ?? 0} Einträge</p>
         </div>
+        <Button variant="primary" onClick={() => setEditing('new')}>
+          + Neu
+        </Button>
       </header>
 
-      <Input placeholder="Suchen..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <Input type="search" placeholder="Suchen …" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Supplement suchen" />
 
-      {showForm ? (
-        <NewSupplementForm onDone={() => setShowForm(false)} />
-      ) : (
-        <Button variant="primary" onClick={() => setShowForm(true)}>
-          + Supplement hinzufügen
-        </Button>
-      )}
-
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        {filtered.length === 0 && <p className="px-1 text-sm text-muted">Keine Treffer.</p>}
         {filtered.map((s) => (
-          <SupplementRow key={s.id} supplement={s} />
+          <ListRow
+            key={s.id}
+            title={s.name}
+            subtitle={[s.defaultTiming, s.notes].filter(Boolean).join(' · ')}
+            value={s.defaultDose}
+            onClick={() => setEditing(s)}
+            ariaLabel={`${s.name} bearbeiten`}
+          />
         ))}
       </div>
+
+      <SupplementSheet
+        key={editing === 'new' ? 'new' : (editing?.id ?? 'closed')}
+        supplement={editing}
+        initialName={query.trim()}
+        onClose={() => setEditing(null)}
+      />
     </div>
   )
 }
 
-function SupplementRow({ supplement }: { supplement: Supplement }) {
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState(supplement)
-
-  if (!editing) {
-    return (
-      <Card className="flex items-center justify-between py-2">
-        <div>
-          <div className="text-sm font-medium text-fg">{supplement.name}</div>
-          <div className="text-xs text-muted">
-            {supplement.defaultDose} · {supplement.defaultTiming}
-          </div>
-          {supplement.notes && <div className="text-xs text-muted">{supplement.notes}</div>}
-        </div>
-        <Button variant="ghost" onClick={() => setEditing(true)}>
-          Bearbeiten
-        </Button>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="flex flex-col gap-2">
-      <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Standard-Dosis">
-          <Input value={form.defaultDose} onChange={(e) => setForm({ ...form, defaultDose: e.target.value })} />
-        </Field>
-        <Field label="Standard-Zeitpunkt">
-          <Select
-            value={form.defaultTiming}
-            onChange={(e) => setForm({ ...form, defaultTiming: e.target.value as SupplementTiming })}
-          >
-            {SUPPLEMENT_TIMINGS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-      <Field label="Hinweis (optional)">
-        <Input value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-      </Field>
-      <div className="flex gap-2">
-        <Button
-          variant="primary"
-          className="flex-1"
-          onClick={async () => {
-            await db.supplements.update(supplement.id, form)
-            setEditing(false)
-          }}
-        >
-          Speichern
-        </Button>
-        <Button
-          variant="danger"
-          onClick={async () => {
-            if (confirm(`"${supplement.name}" wirklich löschen?`)) {
-              await db.supplements.delete(supplement.id)
-            }
-          }}
-        >
-          Löschen
-        </Button>
-      </div>
-    </Card>
+function SupplementSheet({
+  supplement,
+  initialName,
+  onClose,
+}: {
+  supplement: Supplement | 'new' | null
+  initialName: string
+  onClose: () => void
+}) {
+  const existing = supplement && supplement !== 'new' ? supplement : undefined
+  const [form, setForm] = useState<Draft>(
+    existing
+      ? { name: existing.name, defaultDose: existing.defaultDose, defaultTiming: existing.defaultTiming, notes: existing.notes ?? '' }
+      : { name: initialName, defaultDose: '', defaultTiming: SUPPLEMENT_TIMINGS[0], notes: '' },
   )
-}
+  const [error, setError] = useState<string | null>(null)
 
-function NewSupplementForm({ onDone }: { onDone: () => void }) {
-  const [form, setForm] = useState<{ name: string; defaultDose: string; defaultTiming: SupplementTiming; notes: string }>({
-    name: '',
-    defaultDose: '',
-    defaultTiming: SUPPLEMENT_TIMINGS[0],
-    notes: '',
-  })
+  if (!supplement) return null
 
-  async function submit() {
+  async function save() {
     const name = form.name.trim()
     if (!name) return
-    if (findByName(await db.supplements.toArray(), name)) {
-      alert(`„${name}" steht schon in der Datenbank.`)
+    const duplicate = findByName(await db.supplements.toArray(), name)
+    if (duplicate && duplicate.id !== existing?.id) {
+      setError(`„${duplicate.name}" steht schon in der Datenbank.`)
       return
     }
-    await db.supplements.add({
-      id: crypto.randomUUID(),
-      name,
-      defaultDose: form.defaultDose,
-      defaultTiming: form.defaultTiming,
-      notes: form.notes || undefined,
-    })
-    onDone()
+    const values = { name, defaultDose: form.defaultDose, defaultTiming: form.defaultTiming, notes: form.notes || undefined }
+    if (existing) await db.supplements.update(existing.id, values)
+    else await db.supplements.add({ id: crypto.randomUUID(), ...values })
+    onClose()
+  }
+
+  async function remove() {
+    if (!existing) return
+    if (!confirm(`„${existing.name}" wirklich löschen?`)) return
+    await db.supplements.delete(existing.id)
+    onClose()
   }
 
   return (
-    <Card className="flex flex-col gap-2">
-      <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+    <Sheet
+      open
+      title={existing ? 'Supplement bearbeiten' : 'Neues Supplement'}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          {existing && (
+            <Button variant="danger" onClick={() => void remove()}>
+              Löschen
+            </Button>
+          )}
+          <Button variant="primary" className="flex-1" disabled={!form.name.trim()} onClick={() => void save()}>
+            {existing ? 'Speichern' : 'Anlegen'}
+          </Button>
+        </div>
+      }
+    >
+      <Field label="Name">
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus={!existing} />
+      </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Standard-Dosis">
-          <Input
-            placeholder="z.B. 5 g"
-            value={form.defaultDose}
-            onChange={(e) => setForm({ ...form, defaultDose: e.target.value })}
-          />
+          <Input placeholder="z.B. 5 g" value={form.defaultDose} onChange={(e) => setForm({ ...form, defaultDose: e.target.value })} />
         </Field>
         <Field label="Standard-Zeitpunkt">
-          <Select
-            value={form.defaultTiming}
-            onChange={(e) => setForm({ ...form, defaultTiming: e.target.value as SupplementTiming })}
-          >
+          <Select value={form.defaultTiming} onChange={(e) => setForm({ ...form, defaultTiming: e.target.value as SupplementTiming })}>
             {SUPPLEMENT_TIMINGS.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -171,14 +141,7 @@ function NewSupplementForm({ onDone }: { onDone: () => void }) {
       <Field label="Hinweis (optional)">
         <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
       </Field>
-      <div className="flex gap-2">
-        <Button variant="primary" className="flex-1" onClick={submit}>
-          Hinzufügen
-        </Button>
-        <Button variant="ghost" onClick={onDone}>
-          Abbrechen
-        </Button>
-      </div>
-    </Card>
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </Sheet>
   )
 }

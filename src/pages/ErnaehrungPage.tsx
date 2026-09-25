@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import NutritionPage from './NutritionPage'
 import NutritionLogPage from './NutritionLogPage'
 import SupplementPlanPage from './SupplementPlanPage'
+import { SegmentedControl } from '../components/ui'
 
 // Das Log steht bewusst vorne und ist die Startansicht: Es ist die Ansicht, die im
 // Alltag mehrmals täglich gebraucht wird, der Plan dagegen selten.
@@ -27,19 +28,7 @@ export default function ErnaehrungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1.5 rounded-xl bg-surface-2 p-1">
-        {VIEWS.map((v) => (
-          <button
-            key={v.key}
-            onClick={() => setView(v.key)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition ${
-              view === v.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl options={VIEWS} value={view} onChange={setView} />
       {view === 'plan' && <NutritionPage />}
       {view === 'log' && <NutritionLogPage />}
       {view === 'supplements' && <SupplementPlanPage />}

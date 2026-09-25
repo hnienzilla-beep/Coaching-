@@ -155,6 +155,12 @@ function servingsLine(line: string): number | undefined {
   return match ? parseNumber(match[1]) : undefined
 }
 
+/** "**Fertiggewicht:** 1200 g" - Gewicht des fertigen Gerichts. */
+function cookedWeightLine(line: string): number | undefined {
+  const match = line.match(/^\*\*Fertiggewicht:\*\*\s*([\d.,]+)\s*g/i)
+  return match ? parseNumber(match[1]) : undefined
+}
+
 /** Eine "## …"-Überschrift (nicht "### …"). */
 function isSectionHeading(line: string): boolean {
   return /^##(?!#)/.test(line.trim())
@@ -552,6 +558,8 @@ export interface ParsedMealPhase {
   isRecipe?: boolean
   /** Aus "**Ergibt:** 2 Portionen" - nur bei Rezepten gesetzt. */
   servings?: number
+  /** Aus "**Fertiggewicht:** 1200 g" - nur bei Rezepten gesetzt. */
+  cookedWeightG?: number
   items: ParsedMealItem[]
 }
 
@@ -601,6 +609,12 @@ export function parseMealPhases(content: string): ParsedMealPhase[] {
     const servings = servingsLine(line)
     if (servings !== undefined && current) {
       current.servings = servings
+      continue
+    }
+
+    const cookedWeight = cookedWeightLine(line)
+    if (cookedWeight !== undefined && current) {
+      current.cookedWeightG = cookedWeight
       continue
     }
 

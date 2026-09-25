@@ -9,11 +9,10 @@ import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, Supplement, SupplementPlanItem, SupplementTiming } from '../models/types'
 import { SUPPLEMENT_TIMINGS } from '../models/types'
-import { Button, Card, Field, Input, Select } from '../components/ui'
-import SearchPicker, { type SearchPickerItem } from '../components/SearchPicker'
-import GroupAddChips from '../components/GroupAddChips'
-import PlanItemRow from '../components/PlanItemRow'
+import { Button, Field, Input, ListRow, SectionHeader, Select } from '../components/ui'
+import CollapsibleCard from '../components/CollapsibleCard'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
+import Sheet from '../components/Sheet'
 import { nextOrder } from '../lib/calculator'
 import { useCoachMode } from '../lib/detailLevel'
 import { useDragSensors } from '../lib/dragSensors'
@@ -27,8 +26,8 @@ export default function SupplementPlanPage() {
   const supplements = useLiveQuery(() => db.supplements.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  // Frisch angelegte Zeilen starten aufgeklappt - dort fehlt das Supplement noch.
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  // Anlegen und Bearbeiten im Sheet: `item` fehlt beim Anlegen, `timing` ist dann die Gruppe.
+  const [sheet, setSheet] = useState<{ item?: SupplementPlanItem; timing: SupplementTiming } | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const currentPlanId = activePlanId ?? plans?.[0]?.id ?? null
@@ -54,11 +53,6 @@ export default function SupplementPlanPage() {
 
   const sensors = useDragSensors()
   const supplementMap = new Map((supplements ?? []).map((s) => [s.id, s]))
-  const pickerItems: SearchPickerItem[] = (supplements ?? []).map((s) => ({
-    id: s.id,
-    label: s.name,
-    sublabel: s.defaultDose,
-  }))
 
   const editing = mode === 'edit' && coachMode
   const allItems = items ?? []
@@ -70,7 +64,6 @@ export default function SupplementPlanPage() {
     items: visibleItems.filter((i) => i.timing === timing),
   })).filter((g) => g.items.length > 0)
 
-  const usedTimings = new Set(groups.map((g) => g.timing))
 
   async function addPhase() {
     const order = nextOrder(plans ?? [])
@@ -90,29 +83,13 @@ export default function SupplementPlanPage() {
     await db.supplementPlans.update(planId, { phaseName: name })
   }
 
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  async function addRow(timing: SupplementTiming) {
-    if (!currentPlanId) return
-    // Ohne Supplement-Vorauswahl: Dosis und Zeitpunkt werden beim Auswählen aus dem
-    // Supplement übernommen, der Zeitpunkt der Gruppe bleibt dabei erhalten.
-    const item: SupplementPlanItem = {
-      id: crypto.randomUUID(),
-      planId: currentPlanId,
-      supplementId: '',
-      dose: '',
-      timing,
-      order: nextOrder(allItems),
+  async function saveItem(values: Pick<SupplementPlanItem, 'supplementId' | 'dose' | 'timing'>) {
+    if (!currentPlanId || !sheet) return
+    if (sheet.item) {
+      await db.supplementPlanItems.update(sheet.item.id, values)
+    } else {
+      await db.supplementPlanItems.add({ id: crypto.randomUUID(), planId: currentPlanId, order: nextOrder(allItems), ...values })
     }
-    await db.supplementPlanItems.add(item)
-    setExpandedIds((prev) => new Set(prev).add(item.id))
   }
 
   // Wie im Ernährungsplan wirkt Drag & Drop nur innerhalb einer Zeitpunkt-Gruppe - der
@@ -195,80 +172,76 @@ export default function SupplementPlanPage() {
       />
 
       {activePlan && (
-        <Card className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {groups.length === 0 && (
-            <p className="text-sm text-muted">
-              💊 Noch keine Supplemente in dieser Phase.
+            <p className="px-1 text-center text-sm text-muted">
+              Noch keine Supplemente in dieser Phase.
               {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
             </p>
           )}
 
-          <div className="flex flex-col gap-4">
-            {groups.map((group) => (
-              <div key={group.timing} className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  {/* text-fg statt text-accent: die Athleten-Akzentfarben sind hell und im
-                      Hell-Modus als Schrift praktisch unlesbar. */}
-                  <div className="text-xs font-semibold uppercase tracking-wide text-fg">{group.timing}</div>
-                  {editing && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => addRow(group.timing)}
+          {groups.map((group) => (
+            <section key={group.timing} className="flex flex-col gap-1.5">
+              <SectionHeader
+                title={group.timing}
+                action={
+                  editing ? (
+                    <button
+                      type="button"
+                      onClick={() => setSheet({ timing: group.timing })}
                       aria-label={`Supplement zu ${group.timing} hinzufügen`}
+                      className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
                     >
-                      + Supplement
-                    </Button>
-                  )}
-                </div>
-
-                {editing ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={(e) => void handleDragEndInGroup(group.items, e)}
-                  >
-                    <SortableContext items={group.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                      <div className="flex flex-col gap-1.5">
-                        {group.items.map((item) => (
-                          <SupplementRow
-                            key={item.id}
-                            item={item}
-                            supplement={supplementMap.get(item.supplementId)}
-                            supplementMap={supplementMap}
-                            pickerItems={pickerItems}
-                            expanded={expandedIds.has(item.id)}
-                            onToggle={() => toggleExpanded(item.id)}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="flex flex-col gap-1">
+                      +
+                    </button>
+                  ) : undefined
+                }
+              />
+              {editing ? (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEndInGroup(group.items, e)}>
+                  <SortableContext items={group.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                     {group.items.map((item) => (
-                      <div
+                      <SortableSupplementRow
                         key={item.id}
-                        className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-fg">
-                          {supplementMap.get(item.supplementId)?.name ?? '–'}
-                        </span>
-                        <span className="shrink-0 text-muted">{item.dose}</span>
-                      </div>
+                        item={item}
+                        supplement={supplementMap.get(item.supplementId)}
+                        onEdit={() => setSheet({ item, timing: item.timing })}
+                      />
                     ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                group.items.map((item) => (
+                  <ListRow
+                    key={item.id}
+                    title={supplementMap.get(item.supplementId)?.name ?? '–'}
+                    subtitle={supplementMap.get(item.supplementId)?.notes}
+                    value={item.dose}
+                  />
+                ))
+              )}
+            </section>
+          ))}
 
           {editing && (
-            <GroupAddChips label="Einnahmezeitpunkt hinzufügen" options={SUPPLEMENT_TIMINGS} used={usedTimings} onAdd={addRow} />
+            <Button variant="secondary" onClick={() => setSheet({ timing: SUPPLEMENT_TIMINGS[0] })}>
+              + Supplement hinzufügen
+            </Button>
           )}
-        </Card>
+        </div>
       )}
 
+      <SupplementItemSheet
+        key={sheet ? (sheet.item?.id ?? `new-${sheet.timing}`) : 'closed'}
+        state={sheet}
+        supplements={supplements ?? []}
+        onSave={saveItem}
+        onRemove={sheet?.item ? () => db.supplementPlanItems.delete(sheet.item!.id) : undefined}
+        onClose={() => setSheet(null)}
+      />
+
       {activePlan && coachMode && (
+        <CollapsibleCard title="Export & Import" defaultExpanded={false}>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
             Plan exportieren
@@ -287,104 +260,124 @@ export default function SupplementPlanPage() {
             }}
           />
         </div>
+        </CollapsibleCard>
       )}
     </div>
   )
 }
 
-function SupplementRow({
-  item,
-  supplement,
-  supplementMap,
-  pickerItems,
-  expanded,
-  onToggle,
-}: {
-  item: SupplementPlanItem
-  supplement?: Supplement
-  supplementMap: Map<string, Supplement>
-  pickerItems: SearchPickerItem[]
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const [picking, setPicking] = useState(item.supplementId === '')
+function SortableSupplementRow({ item, supplement, onEdit }: { item: SupplementPlanItem; supplement?: Supplement; onEdit: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
-
-  function update(patch: Partial<SupplementPlanItem>) {
-    void db.supplementPlanItems.update(item.id, patch)
-  }
-
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <PlanItemRow
-        title={supplement?.name ?? 'Supplement wählen …'}
-        subtitle={[item.dose, item.timing].filter(Boolean).join(' · ')}
-        expanded={expanded}
-        onToggle={onToggle}
-        onDelete={() => db.supplementPlanItems.delete(item.id)}
-        deleteLabel={`${supplement?.name ?? 'Supplement'} aus dem Plan entfernen`}
-        dragHandle={
-          <button
-            {...attributes}
-            {...listeners}
-            type="button"
-            className="shrink-0 touch-none px-1 text-lg text-muted"
-            aria-label="Verschieben"
-          >
+      <ListRow
+        leading={
+          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
             ⠿
-          </button>
+          </span>
         }
-      >
-        {picking && (
-          <SearchPicker
-            items={pickerItems}
-            value={item.supplementId || undefined}
-            onChange={(id) => {
-              const s = supplementMap.get(id)
-              // Der Zeitpunkt der Gruppe hat Vorrang, sobald einer gesetzt ist - sonst würde
-              // die Zeile beim Auswählen in eine andere Gruppe springen.
-              update({ supplementId: id, dose: item.dose || (s?.defaultDose ?? '') })
-              setPicking(false)
-            }}
-            placeholder="Supplement suchen..."
-          />
-        )}
+        title={supplement?.name ?? 'Supplement wählen …'}
+        value={item.dose}
+        onClick={onEdit}
+        ariaLabel={`${supplement?.name ?? 'Supplement'} bearbeiten`}
+      />
+    </div>
+  )
+}
 
-        <div className="flex items-center gap-2">
-          <div className="w-28 shrink-0">
-            <Input
-              value={item.dose}
-              onChange={(e) => update({ dose: e.target.value })}
-              placeholder="z.B. 5 g"
-              aria-label="Dosis"
-            />
-          </div>
-          <Select
-            value={item.timing}
-            onChange={(e) => update({ timing: e.target.value as SupplementTiming })}
+/**
+ * Supplement im Plan anlegen oder ändern: auswählen (Dosis kommt aus der Datenbank), Dosis und
+ * Zeitpunkt anpassen. Ersetzt die leeren Zeilen, die vorher erst angelegt und dann gefüllt wurden.
+ */
+function SupplementItemSheet({
+  state,
+  supplements,
+  onSave,
+  onRemove,
+  onClose,
+}: {
+  state: { item?: SupplementPlanItem; timing: SupplementTiming } | null
+  supplements: Supplement[]
+  onSave: (values: Pick<SupplementPlanItem, 'supplementId' | 'dose' | 'timing'>) => Promise<void>
+  onRemove?: () => Promise<void>
+  onClose: () => void
+}) {
+  const [supplementId, setSupplementId] = useState(state?.item?.supplementId ?? '')
+  const [dose, setDose] = useState(state?.item?.dose ?? '')
+  const [timing, setTiming] = useState<SupplementTiming>(state?.timing ?? SUPPLEMENT_TIMINGS[0])
+  const [query, setQuery] = useState('')
+
+  if (!state) return null
+  const selected = supplements.find((s) => s.id === supplementId)
+  const q = query.trim().toLowerCase()
+  const matches = supplements.filter((s) => !q || s.name.toLowerCase().includes(q)).slice(0, 30)
+
+  return (
+    <Sheet
+      open
+      tall={!state.item}
+      title={state.item ? (selected?.name ?? 'Supplement') : 'Supplement hinzufügen'}
+      onClose={onClose}
+      footer={
+        <div className="flex gap-2">
+          {onRemove && (
+            <Button
+              variant="danger"
+              onClick={async () => {
+                await onRemove()
+                onClose()
+              }}
+            >
+              Entfernen
+            </Button>
+          )}
+          <Button
+            variant="primary"
             className="flex-1"
-            aria-label="Einnahmezeitpunkt"
+            disabled={!supplementId}
+            onClick={async () => {
+              await onSave({ supplementId, dose, timing })
+              onClose()
+            }}
           >
+            {state.item ? 'Übernehmen' : 'Hinzufügen'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Dosis">
+          <Input value={dose} onChange={(e) => setDose(e.target.value)} placeholder="z.B. 5 g" />
+        </Field>
+        <Field label="Zeitpunkt">
+          <Select value={timing} onChange={(e) => setTiming(e.target.value as SupplementTiming)}>
             {SUPPLEMENT_TIMINGS.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
           </Select>
-        </div>
+        </Field>
+      </div>
+      {selected?.notes && <p className="text-xs text-muted">Hinweis: {selected.notes}</p>}
 
-        {supplement?.notes && (
-          <Field label="Hinweis aus der Supplement-Datenbank">
-            <span className="text-xs text-muted">{supplement.notes}</span>
-          </Field>
-        )}
-
-        <div className="flex gap-1">
-          <Button variant="ghost" onClick={() => setPicking((v) => !v)}>
-            ✎ Supplement tauschen
-          </Button>
-        </div>
-      </PlanItemRow>
-    </div>
+      <Input type="search" placeholder="Supplement suchen …" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Supplement suchen" />
+      <div className="flex flex-col gap-1.5">
+        {matches.length === 0 && <p className="px-1 text-sm text-muted">Keine Treffer – neue Supplemente legst du in der Supplement-Datenbank an.</p>}
+        {matches.map((s) => (
+          <ListRow
+            key={s.id}
+            title={s.name}
+            subtitle={s.defaultTiming}
+            value={s.id === supplementId ? '✓' : s.defaultDose}
+            onClick={() => {
+              setSupplementId(s.id)
+              // Die Standard-Dosis nur übernehmen, solange keine eigene eingetragen ist.
+              if (!dose) setDose(s.defaultDose)
+            }}
+          />
+        ))}
+      </div>
+    </Sheet>
   )
 }
