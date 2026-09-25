@@ -193,10 +193,13 @@ export default function WorkoutLogPage() {
         onDelete={currentLog ? deleteLog : undefined}
         deleteConfirmText="Trainingseinheit dieses Tages mit allen Sätzen löschen?"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <WorkoutTimer startedAt={currentLog?.startedAt} completedAt={currentLog?.completedAt} />
-          {currentLog && <RestTimer />}
-        </div>
+        {/* Ohne Einheit an dem Tag gibt es weder Timer noch Pausentimer - dann auch keine leere Zeile. */}
+        {currentLog && (
+          <div className="flex flex-wrap items-center gap-2">
+            <WorkoutTimer startedAt={currentLog.startedAt} completedAt={currentLog.completedAt} />
+            <RestTimer />
+          </div>
+        )}
       </LogDayHeader>
 
       {currentLog && setsTotal > 0 && (
