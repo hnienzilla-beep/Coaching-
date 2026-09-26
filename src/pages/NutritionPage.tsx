@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { DndContext, closestCenter, useDroppable, type DragEndEvent, type DragOverEvent } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { SortableItem } from '../components/Sortable'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
 import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
 import { shareOrDownloadFile } from '../lib/share'
@@ -18,7 +18,7 @@ import MacroSumTable from '../components/MacroSumTable'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import { macroLine, scaleMacros, sumMacros, type Sums } from '../lib/macros'
 import { useCoachMode } from '../lib/detailLevel'
-import { useDragSensors } from '../lib/dragSensors'
+import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 import { recipeWeight, servingsLabel, servingsOf } from '../lib/recipes'
 
 type Ctx = { athlete: Athlete }
@@ -110,10 +110,12 @@ export default function NutritionPage() {
   // hier aber als eine flache Zutatenliste statt unter "### Snack 1".
   const recipeRowMealType: MealType = visibleMeals[visibleMeals.length - 1]?.mealType ?? mealTypeForTime()
 
+  // Beim Bearbeiten stehen alle Mahlzeiten da, auch leere - als Ziel zum Hineinziehen und
+  // mit eigenem "+". Sonst nur die belegten.
   const mealGroups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
     return { key: mealType, label: mealType, mealType, rows: groupRows, sum: sumMacros(groupRows) }
-  }).filter((g) => g.rows.length > 0)
+  }).filter((g) => g.rows.length > 0 || (editing && !isRecipeView))
 
   const groups = isRecipeView
     ? rows.length
@@ -208,13 +210,37 @@ export default function NutritionPage() {
     setDraftMeals((prev) => (prev ?? []).filter((m) => m.id !== id))
   }
 
-  // Drag & Drop wirkt nur innerhalb einer Mahlzeit-Typ-Gruppe (mealType ändert sich nie
-  // durchs Ziehen, nur über das Dropdown der Zeile) - jede Gruppe bekommt daher ihren
-  // eigenen DndContext, dieser Handler reordnet nur die order-Werte innerhalb der
-  // übergebenen Gruppen-Teilmenge.
-  function handleDragEndInGroup(groupMeals: PlanMeal[], event: DragEndEvent) {
-    const { active, over } = event
+  // Drag & Drop über alle Mahlzeiten hinweg: Landet ein Eintrag über einer anderen Mahlzeit,
+  // wechselt er schon während des Ziehens dorthin (mealType im Entwurf), beim Loslassen wird
+  // innerhalb der Mahlzeit einsortiert. Im Rezept gibt es nur die eine Zutatenliste.
+  const DROP_PREFIX = 'mahlzeit:'
+  function containerOf(id: string): string | undefined {
+    if (id.startsWith(DROP_PREFIX)) return id.slice(DROP_PREFIX.length)
+    const meal = (draftMeals ?? []).find((m) => m.id === id)
+    if (!meal) return undefined
+    return isRecipeView ? 'zutaten' : meal.mealType
+  }
+
+  function handleDragOver({ active, over }: DragOverEvent) {
+    if (!over || isRecipeView) return
+    const from = containerOf(String(active.id))
+    const to = containerOf(String(over.id))
+    if (!from || !to || from === to) return
+    const overMeal = (draftMeals ?? []).find((m) => m.id === over.id)
+    setDraftMeals((prev) =>
+      (prev ?? []).map((m) =>
+        m.id === active.id
+          ? // Vor den Eintrag, über dem der Finger steht - in einer leeren Mahlzeit ans Ende.
+            { ...m, mealType: to as MealType, order: overMeal ? overMeal.order - 0.5 : nextOrder(prev ?? []) }
+          : m,
+      ),
+    )
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return
+    const container = containerOf(String(active.id))
+    const groupMeals = sortDraftMeals(draftMeals ?? []).filter((m) => containerOf(m.id) === container)
     const oldIndex = groupMeals.findIndex((m) => m.id === active.id)
     const newIndex = groupMeals.findIndex((m) => m.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
@@ -258,6 +284,7 @@ export default function NutritionPage() {
     }
   }
 
+  const filledGroupCount = groups.filter((g) => g.rows.length > 0).length
   const entryText = `${rows.length} ${rows.length === 1 ? 'Eintrag' : 'Einträge'}`
   // Beim Rezept sagt die Zahl der Mahlzeiten nichts - es ist ein Gericht. Dort steht
   // stattdessen die Ausbeute, an der die Portionsrechnung im Log haengt.
@@ -265,8 +292,8 @@ export default function NutritionPage() {
     ? activePlan
       ? `${entryText} · ergibt ${servingsLabel(servingsOf(activePlan))}`
       : undefined
-    : groups.length
-      ? `${groups.length} ${groups.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'} · ${entryText}`
+    : filledGroupCount
+      ? `${filledGroupCount} ${filledGroupCount === 1 ? 'Mahlzeit' : 'Mahlzeiten'} · ${entryText}`
       : undefined
 
   const perServing = activePlan && isRecipeView ? scaleMacros(sums, 1 / servingsOf(activePlan)) : null
@@ -428,44 +455,49 @@ export default function NutritionPage() {
             )}
           </Card>
 
-          {groups.length === 0 && (
+          {filledGroupCount === 0 && (!editing || isRecipeView) && (
             <p className="px-1 text-center text-sm text-muted">
               {isRecipeView ? 'Noch keine Zutaten in diesem Rezept.' : 'Noch keine Mahlzeiten in dieser Phase.'}
               {coachMode && !editing ? ' Tippe oben auf „Bearbeiten“, um zu planen.' : ''}
             </p>
           )}
 
-          {groups.map((group) => (
-            <section key={group.key} className="flex flex-col gap-1.5">
-              <SectionHeader
-                title={group.label}
-                meta={
-                  <>
-                    {Math.round(group.sum.kcal)} kcal ·{' '}
-                    <MacroChips protein={group.sum.protein} carbs={group.sum.carbs} fat={group.sum.fat} />
-                  </>
-                }
-                action={
-                  editing ? (
-                    <button
-                      type="button"
-                      onClick={() => setAddMeal(group.mealType)}
-                      aria-label={`${isRecipeView ? 'Zutat' : `Lebensmittel zu ${group.label}`} hinzufügen`}
-                      className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
-                    >
-                      +
-                    </button>
-                  ) : undefined
-                }
-              />
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[verticalOnly]}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            {groups.map((group) => (
+              <section key={group.key} className="flex flex-col gap-1.5">
+                <SectionHeader
+                  title={group.label}
+                  meta={
+                    group.rows.length > 0 && (
+                      <>
+                        {Math.round(group.sum.kcal)} kcal ·{' '}
+                        <MacroChips protein={group.sum.protein} carbs={group.sum.carbs} fat={group.sum.fat} />
+                      </>
+                    )
+                  }
+                  action={
+                    editing ? (
+                      <button
+                        type="button"
+                        onClick={() => setAddMeal(group.mealType)}
+                        aria-label={`${isRecipeView ? 'Zutat' : `Lebensmittel zu ${group.label}`} hinzufügen`}
+                        className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
+                      >
+                        +
+                      </button>
+                    ) : undefined
+                  }
+                />
 
-              {editing ? (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={(e) => handleDragEndInGroup(group.rows.map((r) => r.meal), e)}
-                >
+                {editing ? (
                   <SortableContext items={group.rows.map((r) => r.meal.id)} strategy={verticalListSortingStrategy}>
+                    {group.rows.length === 0 && <EmptyMealDrop id={`${DROP_PREFIX}${group.mealType}`} />}
                     {group.rows.map((row) => (
                       <SortableMealRow
                         key={row.meal.id}
@@ -476,23 +508,23 @@ export default function NutritionPage() {
                       />
                     ))}
                   </SortableContext>
-                </DndContext>
-              ) : (
-                group.rows.map((row) => (
-                  <ListRow
-                    key={row.meal.id}
-                    title={foodMap.get(row.meal.foodItemId)?.name ?? '–'}
-                    subtitle={
-                      <>
-                        {row.meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
-                      </>
-                    }
-                    value={`${Math.round(row.kcal)} kcal`}
-                  />
-                ))
-              )}
-            </section>
-          ))}
+                ) : (
+                  group.rows.map((row) => (
+                    <ListRow
+                      key={row.meal.id}
+                      title={foodMap.get(row.meal.foodItemId)?.name ?? '–'}
+                      subtitle={
+                        <>
+                          {row.meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+                        </>
+                      }
+                      value={`${Math.round(row.kcal)} kcal`}
+                    />
+                  ))
+                )}
+              </section>
+            ))}
+          </DndContext>
 
           {editing && (
             <div className="flex flex-col gap-2">
@@ -554,27 +586,38 @@ export default function NutritionPage() {
 
 function SortableMealRow({ row, foodName, onEdit, onRemove }: { row: Row; foodName?: string; onEdit: () => void; onRemove: () => void }) {
   const { meal } = row
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: meal.id })
-
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <ListRow
-        leading={
-          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
-            ⠿
-          </span>
-        }
-        title={foodName ?? 'Unbekanntes Lebensmittel'}
-        subtitle={
-          <>
-            {meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
-          </>
-        }
-        value={`${Math.round(row.kcal)} kcal`}
-        onClick={onEdit}
-        ariaLabel={`${foodName ?? 'Eintrag'} bearbeiten`}
-        onSwipeDelete={onRemove}
-      />
+    <SortableItem id={meal.id}>
+      {(handle) => (
+        <ListRow
+          handle={handle}
+          title={foodName ?? 'Unbekanntes Lebensmittel'}
+          subtitle={
+            <>
+              {meal.grams} g · <MacroChips protein={row.protein} carbs={row.carbs} fat={row.fat} />
+            </>
+          }
+          value={`${Math.round(row.kcal)} kcal`}
+          onClick={onEdit}
+          ariaLabel={`${foodName ?? 'Eintrag'} bearbeiten`}
+          onSwipeDelete={onRemove}
+        />
+      )}
+    </SortableItem>
+  )
+}
+
+/** Leere Mahlzeit beim Bearbeiten - Ziel, um einen Eintrag hineinzuziehen. */
+function EmptyMealDrop({ id }: { id: string }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border border-dashed px-3 py-2.5 text-center text-xs transition-colors ${
+        isOver ? 'border-accent bg-accent/10 text-fg' : 'border-border text-muted'
+      }`}
+    >
+      Leer – hierher ziehen oder mit + füllen
     </div>
   )
 }

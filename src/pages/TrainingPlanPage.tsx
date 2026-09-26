@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { SortableItem } from '../components/Sortable'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
 import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
@@ -16,7 +16,7 @@ import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import Sheet from '../components/Sheet'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
 import { useCoachMode } from '../lib/detailLevel'
-import { useDragSensors } from '../lib/dragSensors'
+import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
@@ -201,7 +201,7 @@ export default function TrainingPlanPage() {
           )}
 
           {editing ? (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={handleDragEnd}>
               <SortableContext items={allRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                 {allRows.map((row) => (
                   <SortableRow key={row.id} row={row} exercise={exerciseMap.get(row.exerciseId)} onEdit={() => setEditRowId(row.id)} />
@@ -290,23 +290,20 @@ function ExerciseThumb({ exercise }: { exercise?: Exercise }) {
 }
 
 function SortableRow({ row, exercise, onEdit }: { row: TrainingPlanExercise; exercise?: Exercise; onEdit: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id })
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <ListRow
-        leading={
-          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
-            ⠿
-          </span>
-        }
-        title={exercise?.name ?? 'Übung wählen …'}
-        subtitle={exercise?.muscleGroup}
-        value={prescription(row)}
-        onClick={onEdit}
-        ariaLabel={`${exercise?.name ?? 'Übung'} bearbeiten`}
-        onSwipeDelete={() => db.trainingPlanExercises.delete(row.id)}
-      />
-    </div>
+    <SortableItem id={row.id}>
+      {(handle) => (
+        <ListRow
+          handle={handle}
+          title={exercise?.name ?? 'Übung wählen …'}
+          subtitle={exercise?.muscleGroup}
+          value={prescription(row)}
+          onClick={onEdit}
+          ariaLabel={`${exercise?.name ?? 'Übung'} bearbeiten`}
+          onSwipeDelete={() => db.trainingPlanExercises.delete(row.id)}
+        />
+      )}
+    </SortableItem>
   )
 }
 
