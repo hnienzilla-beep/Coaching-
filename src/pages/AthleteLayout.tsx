@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams, Link } from 'react-router-dom'
-import { SWIPE_VIEWS, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
+import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } from 'react-router-dom'
+import { SWIPE_VIEWS, subViewQuery, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { ACCENT_COLORS, clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
@@ -33,7 +33,6 @@ const APP_BUILD_LABEL = new Date(__APP_BUILD__).toLocaleString('de-DE', {
 export default function AthleteLayout() {
   const { athleteId } = useParams()
   const { pathname, state } = useLocation()
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   const detailLevel = useDetailLevel()
@@ -46,10 +45,10 @@ export default function AthleteLayout() {
     [athleteId],
   )
 
-  // Wischen: einen Schritt weiter bzw. zurück in der Reihe aller Ansichten (lib/swipeNavigation).
+  // Wischen: einen Reiter weiter bzw. zurück (lib/swipeNavigation).
   const mainRef = useRef<HTMLElement>(null)
   const swipeContentRef = useRef<HTMLDivElement>(null)
-  const currentView = swipeIndex(pathname.split('/')[3] ?? '', searchParams.get('view'))
+  const currentView = swipeIndex(pathname.split('/')[3] ?? '')
   const activeTab = TABS.findIndex((t) => t.to === (pathname.split('/')[3] ?? ''))
   const swipeTarget = (direction: 'next' | 'prev') =>
     currentView === -1 ? undefined : SWIPE_VIEWS[currentView + (direction === 'next' ? 1 : -1)]
@@ -61,15 +60,12 @@ export default function AthleteLayout() {
     onSwipe: (direction) => {
       const target = swipeTarget(direction)
       if (!athleteId || !target) return
-      const path = `/athlete/${athleteId}${target.path ? `/${target.path}` : ''}${target.view ? `?view=${target.view}` : ''}`
+      const path = `/athlete/${athleteId}${target.path ? `/${target.path}${subViewQuery(target.path)}` : ''}`
       navigate(path, { state: { swipe: direction } })
     },
   })
-  // Reiter mit Unter-Ansichten animieren ihren Inhalt beim Wischen selbst - hier nicht noch
-  // einmal, sonst liefe die Bewegung doppelt.
-  const swipe = (state as { swipe?: unknown } | null)?.swipe
-  const hasSubViews = /\/(ernaehrung|training)$/.test(pathname)
-  const outerAnimation = swipe && hasSubViews ? '' : swipeAnimationClass(swipe)
+  // Beim Wischen gleitet die ganze Seite aus der Wischrichtung herein.
+  const outerAnimation = swipeAnimationClass((state as { swipe?: unknown } | null)?.swipe)
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
   const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
 
@@ -362,7 +358,7 @@ export default function AthleteLayout() {
         {TABS.map((tab) => (
           <NavLink
             key={tab.label}
-            to={`/athlete/${athleteId}${tab.to ? `/${tab.to}` : ''}`}
+            to={`/athlete/${athleteId}${tab.to ? `/${tab.to}${subViewQuery(tab.to)}` : ''}`}
             end={tab.end}
             className={({ isActive }) =>
               `relative truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition-colors duration-300 active:scale-95 ${

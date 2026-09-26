@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { caloriesFromMacros } from '../lib/calculator'
-import { GRAM_PRESETS, macroLine, sumMacros, type Sums } from '../lib/macros'
+import { macroLine, sumMacros, type Sums } from '../lib/macros'
+import {
+  DEFAULT_PORTIONS,
+  normalizePortions,
+  saveStandardPortions,
+  suggestPortions,
+  useFoodPortionHistory,
+  useStandardPortions,
+} from '../lib/portionPresets'
 import { findExistingFood, onlineFoodName, type OnlineFood } from '../lib/openFoodFacts'
 import { importOnlineFood, useOnlineFoodSearch } from '../lib/useOnlineFoodSearch'
 import {
@@ -82,6 +90,7 @@ export default function AddFoodSheet({
     setServings(1)
     setRecipeUnit('servings')
     setTargetMeal(mealType)
+    prefilledFor.current = null
   }, [open, mealType])
 
   const online = useOnlineFoodSearch(query, open && selection === null)
@@ -103,6 +112,19 @@ export default function AddFoodSheet({
     [selectedRecipe?.id],
   )
   const foodMap = useMemo(() => new Map(foods.map((f) => [f.id, f])), [foods])
+
+  // Mengen-Vorschläge: für ein eigenes Lebensmittel zuerst die gewohnten Mengen, die häufigste
+  // ist beim Auswählen gleich vorbelegt (einmal je Lebensmittel, danach zählt die eigene Eingabe).
+  const standards = useStandardPortions()
+  const selectedFoodId = selection?.kind === 'food' ? selection.food.id : undefined
+  const history = useFoodPortionHistory(selectedFoodId)
+  const suggestion = suggestPortions(history ?? [], standards)
+  const prefilledFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!selectedFoodId || history === undefined || prefilledFor.current === selectedFoodId) return
+    prefilledFor.current = selectedFoodId
+    setGrams(suggestion.preferred ?? 100)
+  }, [selectedFoodId, history, suggestion.preferred])
 
   function back() {
     setSelection(null)
@@ -289,7 +311,7 @@ export default function AddFoodSheet({
             label="Portionen"
           />
         ) : (
-          <AmountInput value={grams} onChange={setGrams} presets={GRAM_PRESETS} unit="g" label="Menge in Gramm" />
+          <AmountInput value={grams} onChange={setGrams} presets={standards} editableStandards unit="g" label="Menge in Gramm" />
         )}
         {mealSelect}
         <Preview sums={recipePreview} empty={(recipeMeals?.length ?? 0) === 0 ? 'Dieses Rezept hat noch keine Zutaten.' : undefined} />
@@ -310,7 +332,15 @@ export default function AddFoodSheet({
             </p>
           )}
         </div>
-        <AmountInput value={grams} onChange={setGrams} presets={GRAM_PRESETS} unit="g" label="Menge in Gramm" />
+        <AmountInput
+          value={grams}
+          onChange={setGrams}
+          presets={suggestion.presets}
+          learned={suggestion.learned}
+          editableStandards
+          unit="g"
+          label="Menge in Gramm"
+        />
         {mealSelect}
         {selectedMacros && <Preview sums={macrosFor(selectedMacros, grams ?? 0)} />}
       </>
@@ -361,11 +391,17 @@ function Preview({ sums, empty }: { sums: Sums; empty?: string }) {
   )
 }
 
-/** Zahlenfeld mit Schnellauswahl - für Gramm wie für Portionen. */
+/**
+ * Zahlenfeld mit Schnellauswahl - für Gramm wie für Portionen. Gelernte Mengen (aus den
+ * bisherigen Einträgen) tragen einen Punkt; mit `editableStandards` lassen sich über ✎ die
+ * eigenen Standard-Mengen festlegen.
+ */
 export function AmountInput({
   value,
   onChange,
   presets,
+  learned = [],
+  editableStandards = false,
   unit,
   label,
   format = (n: number) => String(n),
@@ -373,10 +409,13 @@ export function AmountInput({
   value: number | undefined
   onChange: (n: number | undefined) => void
   presets: number[]
+  learned?: number[]
+  editableStandards?: boolean
   unit: string
   label: string
   format?: (n: number) => string
 }) {
+  const [editing, setEditing] = useState(false)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -390,14 +429,73 @@ export function AmountInput({
             type="button"
             onClick={() => onChange(p)}
             aria-pressed={value === p}
-            className={`flex-1 rounded-lg border py-1.5 text-xs transition active:scale-95 ${
+            title={learned.includes(p) ? 'Hast du schon öfter eingetragen' : undefined}
+            className={`relative flex-1 rounded-lg border py-1.5 text-xs transition active:scale-95 ${
               value === p ? 'border-fg bg-fg/10 font-medium text-fg' : 'border-border text-muted'
             }`}
           >
             {format(p)}
             {unit === 'g' ? ' g' : ''}
+            {learned.includes(p) && (
+              <span aria-hidden="true" className="absolute top-1 right-1 h-1 w-1 rounded-full bg-accent" />
+            )}
           </button>
         ))}
+        {editableStandards && (
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            aria-label="Standard-Mengen anpassen"
+            aria-expanded={editing}
+            className="shrink-0 rounded-lg border border-border px-2.5 text-xs text-muted transition hover:text-fg active:scale-95"
+          >
+            ✎
+          </button>
+        )}
+      </div>
+      {editing && <StandardPortionsEditor onDone={() => setEditing(false)} />}
+    </div>
+  )
+}
+
+/** Eigene Standard-Mengen als Komma-Liste - gelten für alle Lebensmittel auf diesem Gerät. */
+function StandardPortionsEditor({ onDone }: { onDone: () => void }) {
+  const standards = useStandardPortions()
+  const [text, setText] = useState(() => standards.join(', '))
+  // Komma, Semikolon oder Leerzeichen trennen - Gramm-Mengen brauchen keine Nachkommastellen.
+  const parsed = normalizePortions(text.split(/[\s,;]+/).filter(Boolean).map(Number))
+  return (
+    <div className="anim-pop flex flex-col gap-2 rounded-xl bg-surface-2 p-3">
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Standard-Mengen in g (mit Komma oder Leerzeichen getrennt, bis zu 6)
+        <Input value={text} onChange={(e) => setText(e.target.value)} inputMode="decimal" aria-label="Standard-Mengen" />
+      </label>
+      <p className="text-[11px] text-muted">
+        Vorne stehen immer die Mengen, die du von einem Lebensmittel am häufigsten einträgst (mit Punkt) – aufgefüllt mit
+        diesen.
+      </p>
+      <div className="flex gap-2">
+        <Button
+          variant="ghost"
+          className="flex-1"
+          onClick={() => {
+            saveStandardPortions(DEFAULT_PORTIONS)
+            onDone()
+          }}
+        >
+          Zurücksetzen
+        </Button>
+        <Button
+          variant="primary"
+          className="flex-1"
+          disabled={parsed.length === 0}
+          onClick={() => {
+            saveStandardPortions(parsed)
+            onDone()
+          }}
+        >
+          Speichern
+        </Button>
       </div>
     </div>
   )

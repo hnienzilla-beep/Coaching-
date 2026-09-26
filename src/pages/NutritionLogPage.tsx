@@ -255,7 +255,12 @@ export default function NutritionLogPage() {
               <section key={group.mealType} className="flex flex-col gap-1.5">
                 <SectionHeader
                   title={group.mealType}
-                  meta={`${Math.round(group.sum.kcal)} kcal`}
+                  meta={
+                    <>
+                      {Math.round(group.sum.kcal)} kcal ·{' '}
+                      <MacroChips protein={group.sum.protein} carbs={group.sum.carbs} fat={group.sum.fat} />
+                    </>
+                  }
                   action={
                     <button
                       type="button"

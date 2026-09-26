@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/decimalInput'
 import { useCountUp } from '../lib/countUp'
 import SwipeToDelete from './SwipeToDelete'
@@ -196,6 +196,65 @@ export function SegmentedControl<T extends string>({
           {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+/**
+ * Umschalter für die Unteransichten eines Reiters (Log · Plan · …). Klebt beim Scrollen oben
+ * und lässt sich antippen oder direkt auf der Leiste wischen - das Wischen über die ganze
+ * Seite bleibt den vier unteren Reitern vorbehalten (`data-no-swipe`).
+ */
+export function SubViewBar<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { key: T; label: string }[]
+  value: T
+  onChange: (key: T) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const latest = useRef({ options, value, onChange })
+  useEffect(() => {
+    latest.current = { options, value, onChange }
+  })
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let start: { x: number; y: number } | null = null
+    const onStart = (e: TouchEvent) => {
+      start = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (!start) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      start = null
+      if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return
+      const { options: opts, value: current, onChange: change } = latest.current
+      const next = opts.findIndex((o) => o.key === current) + (dx < 0 ? 1 : -1)
+      if (next >= 0 && next < opts.length) change(opts[next].key)
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchend', onEnd)
+    }
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      data-no-swipe
+      // -top-4: Das Klebe-Rechteck von `main` beginnt erst hinter dessen Innenabstand (p-4) -
+      // ohne den Versatz schiene oberhalb der Leiste der Inhalt durch.
+      className="sticky -top-4 z-20 -mx-4 -mt-4 bg-bg/85 px-4 pt-4 pb-2 backdrop-blur-xl"
+    >
+      <SegmentedControl options={options} value={value} onChange={onChange} />
     </div>
   )
 }

@@ -23,9 +23,6 @@ export const EMPTY_SUMS: Sums = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
 export const CAL_TOLERANCE = 100
 export const MACRO_TOLERANCE = 15
 
-/** Schnellauswahl für Portionsgrößen in Gramm. */
-export const GRAM_PRESETS = [50, 100, 150, 200]
-
 export function sumMacros(rows: Sums[]): Sums {
   return rows.reduce(
     (acc, r) => ({ kcal: acc.kcal + r.kcal, protein: acc.protein + r.protein, carbs: acc.carbs + r.carbs, fat: acc.fat + r.fat }),
