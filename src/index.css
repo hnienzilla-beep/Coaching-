@@ -312,3 +312,22 @@ textarea {
     animation-duration: 250ms;
   }
 }
+
+/* Barcode-Scanner: die Leselinie wandert im Zielrahmen auf und ab. */
+@keyframes scan-line {
+  0%,
+  100% {
+    transform: translateY(-2.2rem);
+  }
+  50% {
+    transform: translateY(2.2rem);
+  }
+}
+.scan-line {
+  animation: scan-line 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-line {
+    animation: none;
+  }
+}

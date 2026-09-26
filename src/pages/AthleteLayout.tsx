@@ -3,12 +3,12 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } 
 import { SWIPE_VIEWS, subViewQuery, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { ACCENT_COLORS, clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
+import { clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
+import ColorWheel from '../components/ColorWheel'
 import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
 import { setLastAthleteId } from '../lib/lastAthlete'
 import { useTheme } from '../lib/theme'
-import { AccentSwatch } from '../components/ui'
 import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
 import type { Athlete } from '../models/types'
 
@@ -130,18 +130,13 @@ export default function AthleteLayout() {
             style={{ background: athlete.accentColor }}
           />
           {colorPickerOpen && (
-            <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
-              {ACCENT_COLORS.map((color) => (
-                <AccentSwatch
-                  key={color}
-                  color={color}
-                  selected={athlete.accentColor === color}
-                  onSelect={(picked) => {
-                    void db.athletes.update(athlete.id, { accentColor: picked })
-                    setColorPickerOpen(false)
-                  }}
-                />
-              ))}
+            <div className="anim-pop absolute left-0 top-[calc(100%+0.5rem)] z-30 rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/50">
+              {/* Vorschau live beim Ziehen, gespeichert wird beim Loslassen. */}
+              <ColorWheel
+                value={athlete.accentColor}
+                onChange={applyAccentColor}
+                onCommit={(picked) => void db.athletes.update(athlete.id, { accentColor: picked })}
+              />
             </div>
           )}
         </div>

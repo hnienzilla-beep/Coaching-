@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { ACCENT_COLORS, createAthlete, todayIso } from '../db/queries'
 import { ACTIVITY_LEVELS, GOALS } from '../lib/calculator'
 import type { Athlete, Gender } from '../models/types'
-import { AccentSwatch, Button, Card, Field, Input, Select } from './ui'
+import { Button, Card, Field, Input, Select } from './ui'
+import ColorWheel from './ColorWheel'
 
 /**
  * Formular zum Anlegen eines Athleten. Wird an zwei Stellen gebraucht: auf der
@@ -93,19 +94,11 @@ export default function NewAthleteForm({
           ))}
         </Select>
       </Field>
-      <Field label="Akzentfarbe">
-        <div className="flex flex-wrap gap-2">
-          {ACCENT_COLORS.map((color) => (
-            <AccentSwatch
-              key={color}
-              color={color}
-              selected={accentColor === color}
-              onSelect={setAccentColor}
-              className="h-7 w-7"
-            />
-          ))}
-        </div>
-      </Field>
+      {/* Kein <Field>: dessen <label> umschlösse den Helligkeitsregler der Kugel. */}
+      <div className="flex flex-col gap-2 text-sm text-muted">
+        Akzentfarbe
+        <ColorWheel value={accentColor} onChange={setAccentColor} onCommit={setAccentColor} />
+      </div>
       <div className="flex gap-2">
         <Button variant="primary" onClick={submit} className="flex-1">
           {submitLabel}
