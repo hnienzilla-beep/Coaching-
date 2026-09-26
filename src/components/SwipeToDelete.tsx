@@ -143,12 +143,15 @@ export default function SwipeToDelete({
     >
       <div
         aria-hidden="true"
-        className={`absolute inset-0 flex items-center justify-end ${rounded} bg-danger px-5 text-sm font-semibold text-white`}
+        className={`pointer-events-none absolute inset-0 flex items-center justify-end ${rounded} bg-danger px-5 text-sm font-semibold text-white`}
         style={{ opacity: dx < 0 ? 0.4 + progress * 0.6 : 0 }}
       >
         <span style={{ transform: `scale(${0.8 + progress * 0.2})` }}>Löschen</span>
       </div>
+      {/* `relative`: liegt über der (positionierten) roten Fläche - sonst finge die unsichtbare
+          Fläche Antippen und den Verschiebe-Griff ab. */}
       <div
+        className="relative"
         style={{
           transform: dx ? `translateX(${dx}px)` : undefined,
           transition: dragging ? 'none' : 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)',

@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { SortableItem } from '../components/Sortable'
 import { db, exportSupplementPlan, importSupplementPlan } from '../db/db'
 import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
@@ -15,7 +15,7 @@ import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import Sheet from '../components/Sheet'
 import { nextOrder } from '../lib/calculator'
 import { useCoachMode } from '../lib/detailLevel'
-import { useDragSensors } from '../lib/dragSensors'
+import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
 
@@ -198,7 +198,7 @@ export default function SupplementPlanPage() {
                 }
               />
               {editing ? (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEndInGroup(group.items, e)}>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={(e) => void handleDragEndInGroup(group.items, e)}>
                   <SortableContext items={group.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                     {group.items.map((item) => (
                       <SortableSupplementRow
@@ -267,22 +267,19 @@ export default function SupplementPlanPage() {
 }
 
 function SortableSupplementRow({ item, supplement, onEdit }: { item: SupplementPlanItem; supplement?: Supplement; onEdit: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}>
-      <ListRow
-        leading={
-          <span {...attributes} {...listeners} className="-ml-1 shrink-0 touch-none px-1 text-lg text-muted" aria-label="Verschieben">
-            ⠿
-          </span>
-        }
-        title={supplement?.name ?? 'Supplement wählen …'}
-        value={item.dose}
-        onClick={onEdit}
-        ariaLabel={`${supplement?.name ?? 'Supplement'} bearbeiten`}
-        onSwipeDelete={() => db.supplementPlanItems.delete(item.id)}
-      />
-    </div>
+    <SortableItem id={item.id}>
+      {(handle) => (
+        <ListRow
+          handle={handle}
+          title={supplement?.name ?? 'Supplement wählen …'}
+          value={item.dose}
+          onClick={onEdit}
+          ariaLabel={`${supplement?.name ?? 'Supplement'} bearbeiten`}
+          onSwipeDelete={() => db.supplementPlanItems.delete(item.id)}
+        />
+      )}
+    </SortableItem>
   )
 }
 
