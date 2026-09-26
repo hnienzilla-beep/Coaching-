@@ -8,13 +8,14 @@ import { useDragSensors } from '../lib/dragSensors'
 import { shareOrDownloadFile } from '../lib/share'
 import { db, exportAllData, exportAthletes, importAllData, importSelectedAthletes } from '../db/db'
 import { dedupeAfterImport } from '../db/dedupe'
-import { ACCENT_COLORS, deleteAthlete, sortAthletes, todayIso } from '../db/queries'
-import { AccentSwatch, Button, Card, ListRow } from '../components/ui'
+import { deleteAthlete, sortAthletes, todayIso } from '../db/queries'
+import { Button, Card, ListRow } from '../components/ui'
+import ColorWheel from '../components/ColorWheel'
 import Sheet from '../components/Sheet'
 import SwipeToDelete from '../components/SwipeToDelete'
 import NewAthleteForm from '../components/NewAthleteForm'
 import type { Athlete } from '../models/types'
-import { useOverviewAccent } from '../lib/accentColor'
+import { applyAccentColor, useOverviewAccent } from '../lib/accentColor'
 import { clearLastAthleteId, getLastAthleteId } from '../lib/lastAthlete'
 
 /**
@@ -148,20 +149,22 @@ export default function AthleteListPage() {
             />
           </button>
           {accentPickerOpen && (
-            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+            <div className="anim-pop absolute right-0 top-[calc(100%+0.5rem)] z-30 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/50">
+              <ColorWheel
+                value={overviewAccent ?? '#ffffff'}
+                onChange={applyAccentColor}
+                onCommit={setOverviewAccent}
+              />
               <button
                 type="button"
                 onClick={() => setOverviewAccent(null)}
                 aria-pressed={overviewAccent === null}
-                className={`rounded-lg border px-2 py-1 text-xs ${
+                className={`rounded-lg border px-2 py-1.5 text-xs ${
                   overviewAccent === null ? 'border-accent text-fg' : 'border-border text-muted'
                 }`}
               >
-                Standard
+                Standard (Theme-Farbe)
               </button>
-              {ACCENT_COLORS.map((color) => (
-                <AccentSwatch key={color} color={color} selected={overviewAccent === color} onSelect={setOverviewAccent} />
-              ))}
             </div>
           )}
         </div>

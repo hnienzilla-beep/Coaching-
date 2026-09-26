@@ -11,6 +11,7 @@ import { findByName } from './names'
 import type { FoodItem } from '../models/types'
 
 const SEARCH_URL = 'https://de.openfoodfacts.org/cgi/search.pl'
+const PRODUCT_URL = 'https://de.openfoodfacts.org/api/v2/product'
 
 /** Ein Suchtreffer, schon auf das Datenmodell der App zugeschnitten (Werte je 100 g). */
 export interface OnlineFood {
@@ -104,6 +105,31 @@ export async function searchOpenFoodFacts(query: string, signal?: AbortSignal): 
     result.push(food)
   }
   return result
+}
+
+/** Nur Ziffern; EAN-8, UPC (12), EAN-13 und GTIN-14 sind 8 bis 14 Stellen lang. */
+export function normalizeBarcode(raw: string): string | undefined {
+  const digits = raw.replace(/\D/g, '')
+  return digits.length >= 8 && digits.length <= 14 ? digits : undefined
+}
+
+/** Antwort der Produkt-API → `OnlineFood`; `null`, wenn das Produkt fehlt oder Makros fehlen. */
+export function productFromResponse(data: { status?: number; product?: OffHit }, barcode: string): OnlineFood | null {
+  if (data.status !== 1 || !data.product) return null
+  return mapHit({ ...data.product, code: data.product.code || barcode }) ?? null
+}
+
+/**
+ * Schlägt einen gescannten Barcode bei Open Food Facts nach. `null` heißt: Produkt unbekannt
+ * (oder ohne vollständige Nährwerte); Netzwerkfehler werfen.
+ */
+export async function lookupBarcode(barcode: string, signal?: AbortSignal): Promise<OnlineFood | null> {
+  const params = new URLSearchParams({ fields: 'code,product_name,product_name_de,brands,nutriments', lc: 'de' })
+  const res = await fetch(`${PRODUCT_URL}/${barcode}.json?${params}`, { signal })
+  // Unbekannte Barcodes beantwortet die API mit 404 und status 0.
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Open Food Facts: HTTP ${res.status}`)
+  return productFromResponse((await res.json()) as { status?: number; product?: OffHit }, barcode)
 }
 
 /**
