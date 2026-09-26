@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
@@ -6,6 +8,8 @@ import { getLastExercisePerformance, getOrCreateWorkoutLog, todayIso } from '../
 import type { Athlete, TrainingPlanExercise, WorkoutLog, WorkoutSet } from '../models/types'
 import { Button, Card, DecimalInput, Field, Input, Select, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
+import { SortableItem } from '../components/Sortable'
+import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import RestTimer from '../components/RestTimer'
 import StrengthChart from '../components/StrengthChart'
@@ -89,16 +93,22 @@ export default function WorkoutLogPage() {
   const planMap = new Map((trainingPlans ?? []).map((p) => [p.id, p]))
   const planExerciseByExerciseId = new Map((planExercises ?? []).map((pe) => [pe.exerciseId, pe]))
 
-  // Reihenfolge folgt dem Trainingsplan (order); Übungen ohne Plan-Zuordnung (z.B. manuell
-  // ergänzt) bleiben ans Ende sortiert, sortierstabil in ihrer bisherigen Reihenfolge.
-  const sortedRows = [...(rows ?? [])].sort((a, b) => {
-    const orderA = planExerciseByExerciseId.get(a.exerciseId)?.order
-    const orderB = planExerciseByExerciseId.get(b.exerciseId)?.order
-    if (orderA !== undefined && orderB !== undefined) return orderA - orderB
-    if (orderA !== undefined) return -1
-    if (orderB !== undefined) return 1
-    return (a.order ?? 0) - (b.order ?? 0)
-  })
+  // Reihenfolge nach `order`: Beim Übernehmen eines Trainingstags in Plan-Reihenfolge vergeben,
+  // manuell ergänzte Übungen hinten angehängt - und per Griff frei umsortierbar.
+  const sortedRows = [...(rows ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  const sensors = useDragSensors()
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sortedRows.findIndex((r) => r.id === active.id)
+    const newIndex = sortedRows.findIndex((r) => r.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(sortedRows, oldIndex, newIndex)
+    await db.transaction('rw', db.workoutLogExercises, async () => {
+      for (let i = 0; i < reordered.length; i++) await db.workoutLogExercises.update(reordered[i].id, { order: i })
+    })
+  }
 
   const setsTotal = daySets?.length ?? 0
   const setsDone = (daySets ?? []).filter((s) => s.done).length
@@ -228,24 +238,32 @@ export default function WorkoutLogPage() {
           )}
         </Card>
 
-        <div className="flex flex-col gap-3">
-          {sortedRows.map((row) => (
-            <WorkoutExerciseRow
-              key={row.id}
-              rowId={row.id}
-              exerciseId={row.exerciseId}
-              exerciseName={exerciseMap.get(row.exerciseId)?.name}
-              notes={row.notes}
-              muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
-              imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
-              planExercise={planExerciseByExerciseId.get(row.exerciseId)}
-              athleteId={athlete.id}
-              date={selectedDate}
-              onSwap={() => setPicker({ swapRowId: row.id, currentId: row.exerciseId })}
-              onDelete={() => deleteExerciseRow(row.id)}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={handleDragEnd}>
+          <SortableContext items={sortedRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-3">
+              {sortedRows.map((row) => (
+                <SortableItem key={row.id} id={row.id} rounded="rounded-2xl">
+                  {(handle) => (
+                    <WorkoutExerciseRow
+                      handle={handle}
+                      rowId={row.id}
+                      exerciseId={row.exerciseId}
+                      exerciseName={exerciseMap.get(row.exerciseId)?.name}
+                      notes={row.notes}
+                      muscleGroup={exerciseMap.get(row.exerciseId)?.muscleGroup}
+                      imageDataUrl={exerciseMap.get(row.exerciseId)?.imageDataUrl}
+                      planExercise={planExerciseByExerciseId.get(row.exerciseId)}
+                      athleteId={athlete.id}
+                      date={selectedDate}
+                      onSwap={() => setPicker({ swapRowId: row.id, currentId: row.exerciseId })}
+                      onDelete={() => deleteExerciseRow(row.id)}
+                    />
+                  )}
+                </SortableItem>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         <Button variant={sortedRows.length === 0 ? 'primary' : 'secondary'} className="py-3" onClick={() => setPicker({})}>
           + Übung hinzufügen
@@ -318,6 +336,7 @@ export default function WorkoutLogPage() {
 }
 
 function WorkoutExerciseRow({
+  handle,
   rowId,
   exerciseId,
   exerciseName,
@@ -330,6 +349,7 @@ function WorkoutExerciseRow({
   onSwap,
   onDelete,
 }: {
+  handle: ReactNode
   rowId: string
   exerciseId: string
   exerciseName?: string
@@ -389,6 +409,7 @@ function WorkoutExerciseRow({
   return (
     <div className={`reveal flex flex-col gap-2 rounded-2xl border bg-surface p-3 shadow-lg shadow-black/30 transition-colors duration-300 ${allDone ? 'border-ok/50' : 'border-border'}`}>
       <div className="flex items-center gap-2">
+        {handle}
         {imageDataUrl && <img src={imageDataUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />}
         <button
           type="button"

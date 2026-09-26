@@ -281,6 +281,7 @@ export function ListRow({
   subtitle,
   value,
   leading,
+  handle,
   trailing,
   onClick,
   ariaLabel,
@@ -291,6 +292,8 @@ export function ListRow({
   subtitle?: ReactNode
   value?: ReactNode
   leading?: ReactNode
+  /** Griff zum Verschieben - steht außerhalb der antippbaren Fläche (kein Knopf im Knopf). */
+  handle?: ReactNode
   trailing?: ReactNode
   onClick?: () => void
   ariaLabel?: string
@@ -311,6 +314,7 @@ export function ListRow({
   )
   const row = (
     <div className="reveal flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
+      {handle}
       {onClick ? (
         <button
           type="button"
