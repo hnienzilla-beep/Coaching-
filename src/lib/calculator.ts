@@ -118,6 +118,29 @@ export function rollingAverage7(points: WeightPoint[], index: number): number | 
   return sum / values.length
 }
 
+/**
+ * Geglätteter Wert eines beliebigen Feldes: Mittel der letzten `count` Messungen bis `index`
+ * (nicht der letzten Kalendertage - KFA und Maße werden oft nur wöchentlich erfasst, ein
+ * Tagesfenster enthielte dann nur einen Wert). Nur an Tagen mit Messung, sonst `undefined`.
+ */
+export function smoothedValue<T>(points: T[], index: number, key: keyof T, count = 5): number | undefined {
+  if (typeof points[index]?.[key] !== 'number') return undefined
+  const values: number[] = []
+  for (let i = index; i >= 0 && values.length < count; i--) {
+    const v = points[i][key]
+    if (typeof v === 'number') values.push(v)
+  }
+  return values.reduce((a, b) => a + b, 0) / values.length
+}
+
+/** Veränderung seit der ersten Messung des Feldes - nur an Tagen mit Messung. */
+export function deltaFromFirst<T>(points: T[], index: number, key: keyof T): number | undefined {
+  const current = points[index]?.[key]
+  if (typeof current !== 'number') return undefined
+  const first = points.find((p) => typeof p[key] === 'number')?.[key]
+  return typeof first === 'number' ? Math.round((current - first) * 10) / 10 : undefined
+}
+
 // Entspricht der Δ-Woche-Formel: Differenz zum Gewicht vor genau 7 Tagen, erst ab Tag 8.
 export function weeklyDelta(points: WeightPoint[], index: number): number | undefined {
   if (index < 7) return undefined
