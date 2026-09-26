@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findExistingFood, foodFromOnline, mapHit, onlineFoodName } from './openFoodFacts'
+import { findExistingFood, foodFromOnline, mapHit, normalizeBarcode, onlineFoodName, productFromResponse } from './openFoodFacts'
 import type { FoodItem } from '../models/types'
 
 describe('mapHit', () => {
@@ -59,5 +59,25 @@ describe('Übernahme in die eigene Datenbank', () => {
 
   it('legt neue Einträge mit Quelle und Barcode an', () => {
     expect(foodFromOnline(online)).toMatchObject({ name: 'Skyr (Arla)', source: 'off', barcode: '42', protein: 11 })
+  })
+})
+
+describe('Barcode', () => {
+  it('normalisiert Eingaben auf 8 bis 14 Ziffern', () => {
+    expect(normalizeBarcode(' 4 000417 025005 ')).toBe('4000417025005')
+    expect(normalizeBarcode('1234')).toBeUndefined()
+    expect(normalizeBarcode('123456789012345')).toBeUndefined()
+  })
+
+  it('liest die Produkt-Antwort', () => {
+    const food = productFromResponse(
+      {
+        status: 1,
+        product: { product_name: 'Skyr', brands: 'Milbona', nutriments: { proteins_100g: 11, carbohydrates_100g: 4, fat_100g: 0.2 } },
+      },
+      '4056489000000',
+    )
+    expect(food).toMatchObject({ barcode: '4056489000000', name: 'Skyr', brand: 'Milbona', protein: 11 })
+    expect(productFromResponse({ status: 0 }, '4056489000000')).toBeNull()
   })
 })

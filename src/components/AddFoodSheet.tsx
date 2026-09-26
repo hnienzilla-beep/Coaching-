@@ -11,7 +11,7 @@ import {
   useFoodPortionHistory,
   useStandardPortions,
 } from '../lib/portionPresets'
-import { findExistingFood, onlineFoodName, type OnlineFood } from '../lib/openFoodFacts'
+import { findExistingFood, lookupBarcode, normalizeBarcode, onlineFoodName, type OnlineFood } from '../lib/openFoodFacts'
 import { importOnlineFood, useOnlineFoodSearch } from '../lib/useOnlineFoodSearch'
 import {
   SERVING_PRESETS,
@@ -25,6 +25,7 @@ import {
 } from '../lib/recipes'
 import type { FoodItem, MealType, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
+import BarcodeScanner from './BarcodeScanner'
 import QuickAddFood from './QuickAddFood'
 import Sheet from './Sheet'
 import { Button, DecimalInput, Field, Input, ListRow, SegmentedControl, Select, SourceBadge, UnconfirmedBadge } from './ui'
@@ -46,6 +47,7 @@ type Selection =
   | { kind: 'online'; online: OnlineFood }
   | { kind: 'recipe'; recipe: NutritionPlan }
   | { kind: 'create' }
+  | { kind: 'scan' }
 
 /**
  * Hinzufügen eines Lebensmittels oder Rezepts in zwei Schritten: suchen (eigene Datenbank,
@@ -80,6 +82,10 @@ export default function AddFoodSheet({
   const [recipeUnit, setRecipeUnit] = useState<'servings' | 'grams'>('servings')
   const [targetMeal, setTargetMeal] = useState<MealType>(mealType)
   const [saving, setSaving] = useState(false)
+  // Barcode: 'scanning' = Kamera läuft, sonst das Ergebnis der Nachfrage bei Open Food Facts.
+  const [scan, setScan] = useState<{ status: 'scanning' | 'loading' | 'notfound' | 'error'; code?: string }>({
+    status: 'scanning',
+  })
 
   // Jedes Öffnen beginnt mit einer leeren Suche in der Mahlzeit, von der aus geöffnet wurde.
   useEffect(() => {
@@ -128,6 +134,36 @@ export default function AddFoodSheet({
 
   function back() {
     setSelection(null)
+  }
+
+  function startScan() {
+    setScan({ status: 'scanning' })
+    setSelection({ kind: 'scan' })
+  }
+
+  /**
+   * Gescannter Barcode: zuerst in der eigenen Datenbank (schon einmal übernommen), sonst bei
+   * Open Food Facts - ein Treffer landet direkt bei der Mengenwahl.
+   */
+  async function handleBarcode(raw: string) {
+    const code = normalizeBarcode(raw) ?? raw
+    const own = foods.find((f) => f.barcode === code)
+    if (own) {
+      setSelection({ kind: 'food', food: own })
+      return
+    }
+    setScan({ status: 'loading', code })
+    try {
+      const online = await lookupBarcode(code)
+      if (!online) {
+        setScan({ status: 'notfound', code })
+        return
+      }
+      const existing = findExistingFood(foods, online)
+      setSelection(existing ? { kind: 'food', food: existing } : { kind: 'online', online })
+    } catch {
+      setScan({ status: 'error', code })
+    }
   }
 
   async function confirm() {
@@ -194,14 +230,25 @@ export default function AddFoodSheet({
   if (selection === null) {
     body = (
       <>
-        <Input
-          autoFocus
-          type="search"
-          placeholder="Lebensmittel oder Rezept suchen …"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Suchen"
-        />
+        <div className="flex gap-2">
+          <Input
+            autoFocus
+            type="search"
+            placeholder="Lebensmittel oder Rezept suchen …"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Suchen"
+          />
+          <button
+            type="button"
+            onClick={startScan}
+            aria-label="Barcode scannen"
+            title="Barcode scannen"
+            className="flex shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2 px-3 text-fg transition hover:border-accent active:scale-95"
+          >
+            <BarcodeIcon />
+          </button>
+        </div>
 
         {recipeMatches.length > 0 && onAddRecipe && (
           <ResultSection title="Rezepte">
@@ -265,6 +312,42 @@ export default function AddFoodSheet({
         <Button variant="ghost" onClick={() => setSelection({ kind: 'create' })}>
           + Eigenes Lebensmittel anlegen
         </Button>
+      </>
+    )
+  } else if (selection.kind === 'scan') {
+    body = (
+      <>
+        <BackLink onClick={back} />
+        {scan.status === 'scanning' ? (
+          <BarcodeScanner onCode={(code) => void handleBarcode(code)} />
+        ) : (
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface-2 px-4 py-6 text-center">
+            <p className="text-xs tabular-nums text-muted">Barcode {scan.code}</p>
+            <p className="text-sm text-fg">
+              {scan.status === 'loading'
+                ? 'Suche bei Open Food Facts …'
+                : scan.status === 'notfound'
+                  ? 'Dieses Produkt kennt Open Food Facts nicht (oder ohne vollständige Nährwerte).'
+                  : 'Open Food Facts ist gerade nicht erreichbar.'}
+            </p>
+            {scan.status !== 'loading' && (
+              <div className="flex w-full gap-2">
+                <Button variant="secondary" className="flex-1" onClick={startScan}>
+                  Nochmal scannen
+                </Button>
+                {scan.status === 'notfound' ? (
+                  <Button variant="primary" className="flex-1" onClick={() => setSelection({ kind: 'create' })}>
+                    Selbst anlegen
+                  </Button>
+                ) : (
+                  <Button variant="primary" className="flex-1" onClick={() => scan.code && void handleBarcode(scan.code)}>
+                    Erneut versuchen
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </>
     )
   } else if (selection.kind === 'create') {
@@ -354,7 +437,7 @@ export default function AddFoodSheet({
       onClose={onClose}
       tall
       footer={
-        selection && selection.kind !== 'create' ? (
+        selection && selection.kind !== 'create' && selection.kind !== 'scan' ? (
           <Button variant="primary" disabled={!canConfirm || saving} onClick={() => void confirm()}>
             Hinzufügen
           </Button>
@@ -372,6 +455,19 @@ function ResultSection({ title, children }: { title: string; children: ReactNode
       <h3 className="px-1 text-xs font-medium uppercase tracking-wide text-muted">{title}</h3>
       {children}
     </section>
+  )
+}
+
+function BarcodeIcon() {
+  return (
+    <svg width="22" height="18" viewBox="0 0 22 18" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="2" height="14" rx="0.5" />
+      <rect x="5" y="2" width="1" height="14" />
+      <rect x="8" y="2" width="2.5" height="14" rx="0.5" />
+      <rect x="12.5" y="2" width="1" height="14" />
+      <rect x="15.5" y="2" width="2" height="14" rx="0.5" />
+      <rect x="19.5" y="2" width="1.5" height="14" />
+    </svg>
   )
 }
 
