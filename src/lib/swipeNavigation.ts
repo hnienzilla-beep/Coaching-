@@ -1,24 +1,72 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 /**
- * Alle Ansichten eines Athleten als eine flache Reihe - Wischen nach links geht einen Schritt
- * weiter, nach rechts einen zurück. Unter-Reiter (Log/Plan/…) stehen als `?view=` in der
- * Adresse, damit auch sie in der Reihe vorkommen.
+ * Die vier unteren Reiter als Reihe - Wischen nach links geht einen Reiter weiter, nach rechts
+ * einen zurück. Die Unteransichten (Log/Plan/…) wechselt man über die schwebende Leiste oben
+ * (`SubViewBar`), nicht per Wischen über die ganze Seite.
  */
-export const SWIPE_VIEWS: { path: string; view?: string; label: string }[] = [
+export const SWIPE_VIEWS: { path: string; label: string }[] = [
   { path: '', label: 'Dashboard' },
   { path: 'tracking', label: 'Tracking' },
-  { path: 'ernaehrung', view: 'log', label: 'Ernährung · Log' },
-  { path: 'ernaehrung', view: 'plan', label: 'Ernährung · Plan' },
-  { path: 'ernaehrung', view: 'supplements', label: 'Supplements' },
-  { path: 'training', view: 'log', label: 'Training · Log' },
-  { path: 'training', view: 'plan', label: 'Training · Plan' },
+  { path: 'ernaehrung', label: 'Ernährung' },
+  { path: 'training', label: 'Training' },
 ]
 
-/** Position in `SWIPE_VIEWS`; ohne `?view=` gilt die erste Ansicht des Reiters (Log). */
-export function swipeIndex(path: string, view: string | null): number {
-  const exact = SWIPE_VIEWS.findIndex((v) => v.path === path && (v.view === undefined || v.view === view))
-  return exact !== -1 ? exact : SWIPE_VIEWS.findIndex((v) => v.path === path)
+/** Position des Reiters in `SWIPE_VIEWS`. */
+export function swipeIndex(path: string): number {
+  return SWIPE_VIEWS.findIndex((v) => v.path === path)
+}
+
+// Zuletzt genutzte Unteransicht je Reiter - Wischen und die untere Leiste öffnen Ernährung und
+// Training wieder dort, wo man war. In sessionStorage, damit es ein Neuladen übersteht.
+const SUB_VIEW_KEY = 'coach.subViews'
+
+function readSubViews(): Record<string, string> {
+  try {
+    return JSON.parse(sessionStorage.getItem(SUB_VIEW_KEY) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+export function rememberSubView(tab: string, view: string): void {
+  try {
+    sessionStorage.setItem(SUB_VIEW_KEY, JSON.stringify({ ...readSubViews(), [tab]: view }))
+  } catch {
+    // Ohne Speicher öffnet der Reiter eben mit seiner Startansicht.
+  }
+}
+
+/** `?view=…` für den Reiter, falls er eine gemerkte Unteransicht hat - sonst leer. */
+export function subViewQuery(tab: string): string {
+  const view = readSubViews()[tab]
+  return view ? `?view=${encodeURIComponent(view)}` : ''
+}
+
+/**
+ * Unteransicht eines Reiters (Log/Plan/…) aus `?view=` - mit der Richtung, in die der Inhalt beim
+ * Umschalten gleitet (nach rechts in der Leiste = von rechts herein). Die Wahl wird für den
+ * Reiter gemerkt (`rememberSubView`).
+ */
+export function useSubView<T extends string>(tab: string, views: readonly { key: T }[]) {
+  const [params, setParams] = useSearchParams()
+  const view: T = views.find((v) => v.key === params.get('view'))?.key ?? views[0].key
+  const [direction, setDirection] = useState<SwipeDirection | null>(null)
+
+  useEffect(() => rememberSubView(tab, view), [tab, view])
+
+  function select(next: T) {
+    if (next === view) return
+    const from = views.findIndex((v) => v.key === view)
+    const to = views.findIndex((v) => v.key === next)
+    setDirection(to > from ? 'next' : 'prev')
+    setParams({ view: next }, { replace: true })
+    // Die neue Ansicht beginnt oben - sonst stünde man mitten in einer fremden Liste.
+    document.querySelector('main')?.scrollTo({ top: 0 })
+  }
+
+  return { view, direction, select }
 }
 
 /** Richtung, aus der die neue Ansicht hereingleitet - steht im Navigations-State. */

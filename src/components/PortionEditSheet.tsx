@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { caloriesFromMacros } from '../lib/calculator'
-import { GRAM_PRESETS, macroLine } from '../lib/macros'
+import { macroLine } from '../lib/macros'
+import { suggestPortions, useFoodPortionHistory, useStandardPortions } from '../lib/portionPresets'
 import type { FoodItem, MealType } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
 import { AmountInput } from './AddFoodSheet'
@@ -20,7 +21,7 @@ export default function PortionEditSheet({
   onClose,
 }: {
   entry: { grams: number; mealType: MealType } | null
-  food?: Pick<FoodItem, 'name' | 'protein' | 'carbs' | 'fat'>
+  food?: Pick<FoodItem, 'name' | 'protein' | 'carbs' | 'fat'> & { id?: string }
   showMealType?: boolean
   onSave: (grams: number, mealType: MealType) => void | Promise<void>
   onRemove: () => void | Promise<void>
@@ -28,6 +29,8 @@ export default function PortionEditSheet({
 }) {
   const [grams, setGrams] = useState<number | undefined>(entry?.grams)
   const [mealType, setMealType] = useState<MealType>(entry?.mealType ?? MEAL_TYPES[0])
+  const standards = useStandardPortions()
+  const suggestion = suggestPortions(useFoodPortionHistory(food?.id) ?? [], standards)
 
   useEffect(() => {
     if (!entry) return
@@ -78,7 +81,15 @@ export default function PortionEditSheet({
         </div>
       }
     >
-      <AmountInput value={grams} onChange={setGrams} presets={GRAM_PRESETS} unit="g" label="Menge in Gramm" />
+      <AmountInput
+        value={grams}
+        onChange={setGrams}
+        presets={suggestion.presets}
+        learned={suggestion.learned}
+        editableStandards
+        unit="g"
+        label="Menge in Gramm"
+      />
       {showMealType && (
         <Field label="Mahlzeit">
           <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
