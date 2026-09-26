@@ -58,6 +58,9 @@ export interface FoodItem {
   source?: 'off'
   barcode?: string
   brand?: string
+  // Eigene Mengen-Schnellauswahl in Gramm (z. B. Ei: 60, 120, 180) - ohne gilt die Automatik
+  // aus gelernten Mengen und den Standard-Mengen.
+  portions?: number[]
 }
 
 export interface NutritionPlan {

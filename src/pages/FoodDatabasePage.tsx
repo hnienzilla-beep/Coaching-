@@ -8,9 +8,10 @@ import { importOnlineFood, useOnlineFoodSearch } from '../lib/useOnlineFoodSearc
 import { Button, DecimalInput, Field, Input, ListRow, MacroChips, SourceBadge, UnconfirmedBadge } from '../components/ui'
 import Sheet from '../components/Sheet'
 import { caloriesFromMacros } from '../lib/calculator'
+import { parsePortionList } from '../lib/portionPresets'
 import type { FoodItem } from '../models/types'
 
-type Draft = { name: string; protein: number; carbs: number; fat: number }
+type Draft = { name: string; protein: number; carbs: number; fat: number; portions: string }
 
 /**
  * Eigene Lebensmittel-Datenbank. Eine Suche über beides: die eigenen Einträge und - ab drei
@@ -146,8 +147,14 @@ function FoodSheet({ food, initialName, onClose }: { food: FoodItem | 'new' | nu
   const existing = food && food !== 'new' ? food : undefined
   const [form, setForm] = useState<Draft>(
     existing
-      ? { name: existing.name, protein: existing.protein, carbs: existing.carbs, fat: existing.fat }
-      : { name: initialName, protein: 0, carbs: 0, fat: 0 },
+      ? {
+          name: existing.name,
+          protein: existing.protein,
+          carbs: existing.carbs,
+          fat: existing.fat,
+          portions: existing.portions?.join(', ') ?? '',
+        }
+      : { name: initialName, protein: 0, carbs: 0, fat: 0, portions: '' },
   )
   const [error, setError] = useState<string | null>(null)
 
@@ -161,7 +168,16 @@ function FoodSheet({ food, initialName, onClose }: { food: FoodItem | 'new' | nu
       setError(`„${duplicate.name}" steht schon in der Datenbank.`)
       return
     }
-    const values = { ...form, name, kcal: caloriesFromMacros(form.protein, form.carbs, form.fat) }
+    const portions = parsePortionList(form.portions)
+    const values = {
+      name,
+      protein: form.protein,
+      carbs: form.carbs,
+      fat: form.fat,
+      kcal: caloriesFromMacros(form.protein, form.carbs, form.fat),
+      // Leer = Automatik (gelernte und Standard-Mengen).
+      portions: portions.length > 0 ? portions : undefined,
+    }
     if (existing) {
       // Der Nutzer hat die Werte gesehen und bestätigt - der Schätzwert-Hinweis kann weg.
       await db.foodItems.update(existing.id, { ...values, unconfirmed: undefined })
@@ -213,6 +229,14 @@ function FoodSheet({ food, initialName, onClose }: { food: FoodItem | 'new' | nu
       <p className="text-xs text-muted">
         {Math.round(caloriesFromMacros(form.protein, form.carbs, form.fat))} kcal je 100 g (aus Makros berechnet)
       </p>
+      <Field label="Mengen-Schnellauswahl in g (optional)">
+        <Input
+          value={form.portions}
+          onChange={(e) => setForm({ ...form, portions: e.target.value })}
+          placeholder="z. B. 40, 60, 80 – leer = automatisch"
+          inputMode="decimal"
+        />
+      </Field>
       {existing?.source === 'off' && (
         <p className="text-xs text-muted">
           Übernommen aus Open Food Facts{existing.barcode ? ` · Barcode ${existing.barcode}` : ''}.
