@@ -20,6 +20,11 @@ export function normalizePortions(values: number[]): number[] {
   return [...new Set(clean)].sort((a, b) => a - b).slice(0, MAX_PORTIONS)
 }
 
+/** Freitext wie "40, 60 80" → Mengenliste. Komma, Semikolon und Leerzeichen trennen. */
+export function parsePortionList(text: string): number[] {
+  return normalizePortions(text.split(/[\s,;]+/).filter(Boolean).map(Number))
+}
+
 export function loadStandardPortions(): number[] {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as unknown
@@ -66,9 +71,11 @@ export type PortionSuggestion = {
 
 /**
  * Mengen-Vorschläge aus der Historie (älteste zuerst): die häufigsten Mengen, bei Gleichstand
- * die zuletzt genutzte; höchstens drei gelernte, der Rest aus den Standards.
+ * die zuletzt genutzte; höchstens drei gelernte, der Rest aus den Standards. Hat das
+ * Lebensmittel eigene Mengen (`own`), gelten genau diese - vorbelegt wird dann die häufigste
+ * Menge, falls sie darunter ist, sonst die erste.
  */
-export function suggestPortions(history: number[], standards: number[]): PortionSuggestion {
+export function suggestPortions(history: number[], standards: number[], own?: number[]): PortionSuggestion {
   const total = Math.min(MAX_PORTIONS, Math.max(DEFAULT_PORTIONS.length, standards.length))
   const stats = new Map<number, { count: number; last: number }>()
   history.forEach((raw, i) => {
@@ -78,6 +85,11 @@ export function suggestPortions(history: number[], standards: number[]): Portion
     stats.set(grams, { count: s.count + 1, last: i })
   })
   const ranked = [...stats.entries()].sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last).map(([g]) => g)
+  const custom = own ? normalizePortions(own) : []
+  if (custom.length > 0) {
+    const preferred = custom.includes(ranked[0]) ? ranked[0] : custom[0]
+    return { presets: custom, preferred, learned: ranked.slice(0, MAX_LEARNED).filter((g) => custom.includes(g)) }
+  }
   const learned = ranked.slice(0, MAX_LEARNED)
   const fill = standards.filter((s) => !learned.includes(s)).slice(0, Math.max(0, total - learned.length))
   return { presets: [...learned, ...fill].sort((a, b) => a - b), preferred: ranked[0], learned }

@@ -21,7 +21,7 @@ export default function PortionEditSheet({
   onClose,
 }: {
   entry: { grams: number; mealType: MealType } | null
-  food?: Pick<FoodItem, 'name' | 'protein' | 'carbs' | 'fat'> & { id?: string }
+  food?: Pick<FoodItem, 'name' | 'protein' | 'carbs' | 'fat' | 'portions'> & { id?: string }
   showMealType?: boolean
   onSave: (grams: number, mealType: MealType) => void | Promise<void>
   onRemove: () => void | Promise<void>
@@ -30,7 +30,7 @@ export default function PortionEditSheet({
   const [grams, setGrams] = useState<number | undefined>(entry?.grams)
   const [mealType, setMealType] = useState<MealType>(entry?.mealType ?? MEAL_TYPES[0])
   const standards = useStandardPortions()
-  const suggestion = suggestPortions(useFoodPortionHistory(food?.id) ?? [], standards)
+  const suggestion = suggestPortions(useFoodPortionHistory(food?.id) ?? [], standards, food?.portions)
 
   useEffect(() => {
     if (!entry) return
@@ -87,6 +87,7 @@ export default function PortionEditSheet({
         presets={suggestion.presets}
         learned={suggestion.learned}
         editableStandards
+        food={food?.id ? { id: food.id, name: food.name, portions: food.portions } : undefined}
         unit="g"
         label="Menge in Gramm"
       />

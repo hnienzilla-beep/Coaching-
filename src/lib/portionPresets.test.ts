@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PORTIONS, normalizePortions, suggestPortions } from './portionPresets'
+import { DEFAULT_PORTIONS, normalizePortions, parsePortionList, suggestPortions } from './portionPresets'
 
 describe('suggestPortions', () => {
   it('ohne Historie gelten die Standards', () => {
@@ -31,5 +31,27 @@ describe('suggestPortions', () => {
 describe('normalizePortions', () => {
   it('sortiert, entfernt Doppelte und Ungültiges, höchstens sechs', () => {
     expect(normalizePortions([200, 50, 50, -1, Number.NaN, 30, 1, 2, 3, 4])).toEqual([1, 2, 3, 4, 30, 50])
+  })
+})
+
+describe('eigene Mengen je Lebensmittel', () => {
+  it('ersetzen Standards und gelernte Mengen', () => {
+    const s = suggestPortions([80, 80], DEFAULT_PORTIONS, [60, 120, 180])
+    expect(s.presets).toEqual([60, 120, 180])
+    expect(s.preferred).toBe(60)
+    expect(s.learned).toEqual([])
+  })
+
+  it('vorbelegt die häufigste Menge, wenn sie dazugehört', () => {
+    expect(suggestPortions([40, 80, 80], DEFAULT_PORTIONS, [40, 60, 80]).preferred).toBe(80)
+  })
+
+  it('leere eigene Liste = Automatik', () => {
+    expect(suggestPortions([], DEFAULT_PORTIONS, []).presets).toEqual(DEFAULT_PORTIONS)
+  })
+
+  it('parst Freitext', () => {
+    expect(parsePortionList('80, 40 60;60')).toEqual([40, 60, 80])
+    expect(parsePortionList('abc')).toEqual([])
   })
 })
