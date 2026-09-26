@@ -5,7 +5,7 @@ import { caloriesFromMacros } from '../lib/calculator'
 import { macroLine, sumMacros, type Sums } from '../lib/macros'
 import {
   DEFAULT_PORTIONS,
-  normalizePortions,
+  parsePortionList,
   saveStandardPortions,
   suggestPortions,
   useFoodPortionHistory,
@@ -124,7 +124,8 @@ export default function AddFoodSheet({
   const standards = useStandardPortions()
   const selectedFoodId = selection?.kind === 'food' ? selection.food.id : undefined
   const history = useFoodPortionHistory(selectedFoodId)
-  const suggestion = suggestPortions(history ?? [], standards)
+  const selectedFood = selection?.kind === 'food' ? (foodMap.get(selection.food.id) ?? selection.food) : undefined
+  const suggestion = suggestPortions(history ?? [], standards, selectedFood?.portions)
   const prefilledFor = useRef<string | null>(null)
   useEffect(() => {
     if (!selectedFoodId || history === undefined || prefilledFor.current === selectedFoodId) return
@@ -421,6 +422,7 @@ export default function AddFoodSheet({
           presets={suggestion.presets}
           learned={suggestion.learned}
           editableStandards
+          food={selectedFood}
           unit="g"
           label="Menge in Gramm"
         />
@@ -487,10 +489,13 @@ function Preview({ sums, empty }: { sums: Sums; empty?: string }) {
   )
 }
 
+/** Lebensmittel, dessen eigene Mengen der ✎-Editor bearbeitet. */
+export type PortionTarget = { id: string; name: string; portions?: number[] }
+
 /**
  * Zahlenfeld mit Schnellauswahl - für Gramm wie für Portionen. Gelernte Mengen (aus den
- * bisherigen Einträgen) tragen einen Punkt; mit `editableStandards` lassen sich über ✎ die
- * eigenen Standard-Mengen festlegen.
+ * bisherigen Einträgen) tragen einen Punkt. Mit `editableStandards` öffnet ✎ einen Editor:
+ * mit `food` für die Mengen genau dieses Lebensmittels, sonst für die Standard-Mengen.
  */
 export function AmountInput({
   value,
@@ -498,6 +503,7 @@ export function AmountInput({
   presets,
   learned = [],
   editableStandards = false,
+  food,
   unit,
   label,
   format = (n: number) => String(n),
@@ -507,6 +513,7 @@ export function AmountInput({
   presets: number[]
   learned?: number[]
   editableStandards?: boolean
+  food?: PortionTarget
   unit: string
   label: string
   format?: (n: number) => string
@@ -541,7 +548,7 @@ export function AmountInput({
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
-            aria-label="Standard-Mengen anpassen"
+            aria-label={food ? `Mengen für ${food.name} anpassen` : 'Standard-Mengen anpassen'}
             aria-expanded={editing}
             className="shrink-0 rounded-lg border border-border px-2.5 text-xs text-muted transition hover:text-fg active:scale-95"
           >
@@ -549,50 +556,71 @@ export function AmountInput({
           </button>
         )}
       </div>
-      {editing && <StandardPortionsEditor onDone={() => setEditing(false)} />}
+      {editing && <PortionsEditor food={food} current={presets} onDone={() => setEditing(false)} />}
     </div>
   )
 }
 
-/** Eigene Standard-Mengen als Komma-Liste - gelten für alle Lebensmittel auf diesem Gerät. */
-function StandardPortionsEditor({ onDone }: { onDone: () => void }) {
-  const standards = useStandardPortions()
-  const [text, setText] = useState(() => standards.join(', '))
-  // Komma, Semikolon oder Leerzeichen trennen - Gramm-Mengen brauchen keine Nachkommastellen.
-  const parsed = normalizePortions(text.split(/[\s,;]+/).filter(Boolean).map(Number))
+/**
+ * Mengen als Komma-Liste bearbeiten - mit `food` die eigenen Mengen dieses Lebensmittels
+ * (gespeichert am Eintrag), sonst die Standard-Mengen für alle auf diesem Gerät.
+ */
+function PortionsEditor({ food, current, onDone }: { food?: PortionTarget; current: number[]; onDone: () => void }) {
+  const [text, setText] = useState(() => current.join(', '))
+  const parsed = parsePortionList(text)
+  const hasOwn = !!food?.portions?.length
+
+  async function save() {
+    if (food) await db.foodItems.update(food.id, { portions: parsed })
+    else saveStandardPortions(parsed)
+    onDone()
+  }
+
+  async function reset() {
+    if (food) await db.foodItems.update(food.id, { portions: undefined })
+    else saveStandardPortions(DEFAULT_PORTIONS)
+    onDone()
+  }
+
   return (
     <div className="anim-pop flex flex-col gap-2 rounded-xl bg-surface-2 p-3">
       <label className="flex flex-col gap-1 text-xs text-muted">
-        Standard-Mengen in g (mit Komma oder Leerzeichen getrennt, bis zu 6)
-        <Input value={text} onChange={(e) => setText(e.target.value)} inputMode="decimal" aria-label="Standard-Mengen" />
+        {food ? `Mengen für ${food.name} in g` : 'Standard-Mengen in g'} (mit Komma oder Leerzeichen getrennt, bis zu 6)
+        <Input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          inputMode="decimal"
+          aria-label={food ? 'Eigene Mengen' : 'Standard-Mengen'}
+        />
       </label>
       <p className="text-[11px] text-muted">
-        Vorne stehen immer die Mengen, die du von einem Lebensmittel am häufigsten einträgst (mit Punkt) – aufgefüllt mit
-        diesen.
+        {food
+          ? 'Gilt nur für dieses Lebensmittel. Ohne eigene Mengen stehen vorne deine häufigsten Mengen (mit Punkt), aufgefüllt mit den Standard-Mengen.'
+          : 'Vorne stehen immer die Mengen, die du von einem Lebensmittel am häufigsten einträgst (mit Punkt) – aufgefüllt mit diesen.'}
       </p>
       <div className="flex gap-2">
-        <Button
-          variant="ghost"
-          className="flex-1"
-          onClick={() => {
-            saveStandardPortions(DEFAULT_PORTIONS)
-            onDone()
-          }}
-        >
-          Zurücksetzen
+        {(!food || hasOwn) && (
+          <Button variant="ghost" className="flex-1" onClick={() => void reset()}>
+            {food ? 'Automatisch' : 'Zurücksetzen'}
+          </Button>
+        )}
+        <Button variant="primary" className="flex-1" disabled={parsed.length === 0} onClick={() => void save()}>
+          Speichern
         </Button>
-        <Button
-          variant="primary"
-          className="flex-1"
+      </div>
+      {food && (
+        <button
+          type="button"
           disabled={parsed.length === 0}
           onClick={() => {
             saveStandardPortions(parsed)
             onDone()
           }}
+          className="self-center text-[11px] text-muted underline disabled:opacity-40"
         >
-          Speichern
-        </Button>
-      </div>
+          Stattdessen als Standard für alle Lebensmittel übernehmen
+        </button>
+      )}
     </div>
   )
 }
