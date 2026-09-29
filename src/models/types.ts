@@ -1,3 +1,4 @@
+import type { Muscle } from '../lib/muscles'
 export type Gender = 'Männlich' | 'Weiblich'
 
 export interface Athlete {
@@ -19,6 +20,7 @@ export interface Athlete {
   targetDate?: string // ISO date
   ffmi?: number // Fettfreie-Masse-Index (kg/m²), manuell erfasst - dient zur Rückrechnung des KFA
   waterGoalMl?: number // eigenes Trinkziel; ohne gilt 35 ml je kg Körpergewicht
+  muscleTargets?: Partial<Record<Muscle, number>> // eigene Wochen-Richtwerte (Sätze) je Muskel
 }
 
 export interface BackgroundPhoto {
@@ -162,6 +164,7 @@ export interface Exercise {
   muscleGroup: MuscleGroup
   favorite?: boolean
   imageDataUrl?: string // herunterskaliertes Übungsbild als Base64-Data-URL
+  primaryMuscle?: Muscle // Hauptmuskel für die Heatmap; ohne wird er aus dem Namen erkannt
 }
 
 export interface TrainingPlan {

@@ -16,6 +16,8 @@ import { autoStartRestTimer } from '../lib/restTimer'
 import { celebrateOnce, haptic } from '../lib/feedback'
 import StrengthChart from '../components/StrengthChart'
 import MuscleHeatmap from '../components/MuscleHeatmap'
+import { useMuscleRecords } from '../lib/useMuscleRecords'
+import { todaysFocus } from '../lib/muscles'
 import WorkoutTimer from '../components/WorkoutTimer'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
@@ -112,6 +114,9 @@ export default function WorkoutLogPage() {
       for (let i = 0; i < reordered.length; i++) await db.workoutLogExercises.update(reordered[i].id, { order: i })
     })
   }
+
+  const muscleRecords = useMuscleRecords(athlete.id)
+  const focus = muscleRecords ? todaysFocus(muscleRecords, todayIso(), athlete.muscleTargets) : []
 
   const setsTotal = daySets?.length ?? 0
   const setsDone = (daySets ?? []).filter((s) => s.done).length
@@ -343,9 +348,15 @@ export default function WorkoutLogPage() {
         emptyText="🏋️ Noch keine Trainingseinheiten aufgezeichnet."
       />
 
-      <CollapsibleCard title="Muskel-Heatmap · 7 Tage" defaultExpanded>
-        <MuscleHeatmap athleteId={athlete.id} />
-      </CollapsibleCard>
+      {muscleRecords && (
+        <CollapsibleCard
+          title="Muskel-Heatmap"
+          storageKey="heatmap-log"
+          summary={focus.length ? `Heute dran: ${focus.join(' · ')}` : '7 Tage'}
+        >
+          <MuscleHeatmap athlete={athlete} records={muscleRecords} focus={focus} />
+        </CollapsibleCard>
+      )}
 
       {!simple && (
         <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
