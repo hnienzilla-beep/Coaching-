@@ -6,6 +6,7 @@ import { sortByOrder, usePrefs } from '../lib/prefs'
 import { formatUnit, useUnits } from '../lib/units'
 import { nextStep, nextTrainingPlan } from '../lib/nextStep'
 import { waterGoalFor } from '../lib/water'
+import { useTakesCreatine } from '../lib/useCreatine'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { Button, Card, CountUp, DecimalInput, Field, Input, ListRow, PageSkeleton, Select } from '../components/ui'
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   const [profileOpen, setProfileOpen] = useState(false)
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
+  const creatine = useTakesCreatine(athlete.id)
   const navigate = useNavigate()
   const [hidden] = useHiddenDashboardCards()
   const show = (id: DashboardCardId) => !hidden.includes(id)
@@ -110,7 +112,7 @@ export default function DashboardPage() {
     weighedToday: weightToday !== undefined,
     proteinLeft: result.proteinG - tracked.protein,
     kcalLeft: remaining,
-    waterLeftMl: waterGoalFor(athlete, bodyWeight) - (todayEntry?.waterMl ?? 0),
+    waterLeftMl: waterGoalFor(athlete, bodyWeight, creatine) - (todayEntry?.waterMl ?? 0),
     hour: new Date().getHours(),
     hidden: prefs.hiddenHints,
     formatWater: prefs.volumeUnit === 'oz' ? (ml) => formatUnit(ml, 'volume', 0) : undefined,
