@@ -25,9 +25,12 @@ export default function DailySummary({
   sums,
   target,
   evaluate = false,
+  reached = false,
 }: {
   sums: Sums
   target: MacroTarget
+  /** Tagesziel geschafft - der Ring leuchtet. */
+  reached?: boolean
   /** Ampelfarben erst für vergangene Tage - tagsüber liegt naturgemäß alles unter dem Ziel. */
   evaluate?: boolean
 }) {
@@ -47,7 +50,10 @@ export default function DailySummary({
 
   return (
     <Card className="flex flex-col items-center gap-4">
-      <div className="relative" style={{ width: RING_SIZE, height: RING_SIZE }}>
+      <div
+        className={`relative rounded-full transition-[filter] duration-700 ${reached ? 'ring-glow' : ''}`}
+        style={{ width: RING_SIZE, height: RING_SIZE }}
+      >
         <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90" aria-hidden="true">
           <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS} fill="none" stroke="var(--color-surface-2)" strokeWidth={STROKE} />
           {/* Immer gezeichnet, damit die Transition auch greift, wenn die Daten erst nach dem
@@ -69,7 +75,7 @@ export default function DailySummary({
           <span className={`text-3xl font-bold tabular-nums ${over ? 'text-danger' : 'text-fg'}`}>
             <CountUp value={Math.abs(remaining)} />
           </span>
-          <span className="text-xs text-muted">{over ? 'kcal drüber' : 'kcal übrig'}</span>
+          <span className="text-xs text-muted">{reached ? '🎉 Ziel erreicht' : over ? 'kcal drüber' : 'kcal übrig'}</span>
           <span className="mt-1 text-[11px] tabular-nums text-muted">
             <CountUp value={sums.kcal} /> / {formatInt(target.targetCalories)}
           </span>

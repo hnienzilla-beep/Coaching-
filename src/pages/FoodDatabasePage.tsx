@@ -29,7 +29,8 @@ export default function FoodDatabasePage() {
   const filtered = useMemo(() => {
     if (!foods) return []
     const q = query.trim().toLowerCase()
-    const matched = q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
+    const pool = foods.filter((f) => !f.quick)
+    const matched = q ? pool.filter((f) => f.name.toLowerCase().includes(q)) : pool
     return [...matched].sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false))
   }, [foods, query])
 

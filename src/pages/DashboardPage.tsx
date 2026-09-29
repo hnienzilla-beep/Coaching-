@@ -11,8 +11,11 @@ import { addDays, repairStaleFfmiBodyFat, todayIso, upsertDailyEntry } from '../
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
+import WeekStoryCard from '../components/WeekStory'
 import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
 import { useGrowIn } from '../lib/countUp'
+import { forecastGoal, type Forecast } from '../lib/goalForecast'
+import { haptic } from '../lib/feedback'
 
 type Ctx = { athlete: Athlete }
 
@@ -163,6 +166,8 @@ export default function DashboardPage() {
         <Tile label="Trainings · 7 Tage" value={<CountUp value={workoutsThisWeek} />} large />
       </div>
 
+      <WeekStoryCard athlete={athlete} entries={entries ?? []} targetKcal={result.targetCalories} />
+
       {athlete.targetWeightKg !== undefined && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
 
       <CalendarOverview entries={entries ?? []} workoutLogs={workoutLogs ?? []} />
@@ -279,6 +284,7 @@ function WeightSheet({
       weightKg: weight,
       ...(kfa !== undefined && Number.isFinite(kfa) ? { bodyFatPct: Math.round(kfa * 10) / 10 } : {}),
     })
+    haptic('success')
     onClose()
   }
 
@@ -484,6 +490,7 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
   const currentDelta = currentWeight - startWeight
   const pct = totalDelta === 0 ? 100 : Math.min(100, Math.max(0, (currentDelta / totalDelta) * 100))
   const remaining = Math.abs(athlete.targetWeightKg - currentWeight)
+  const forecast = forecastGoal(weighed, athlete.targetWeightKg, todayIso())
 
   return (
     <Card className="flex flex-col gap-2">
@@ -500,6 +507,34 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
         {currentWeight} kg → {athlete.targetWeightKg} kg · noch {remaining.toFixed(1)} kg
         {athlete.targetDate ? ` · bis ${new Date(`${athlete.targetDate}T00:00:00`).toLocaleDateString('de-DE')}` : ''}
       </p>
+      <ForecastLine forecast={forecast} targetKg={athlete.targetWeightKg} targetDate={athlete.targetDate} />
     </Card>
+  )
+}
+
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+/** Ein Satz zur Zielprognose aus dem Trend der letzten 4 Wochen (siehe `forecastGoal`). */
+function ForecastLine({ forecast, targetKg, targetDate }: { forecast: Forecast; targetKg: number; targetDate?: string }) {
+  if (forecast.kind === 'insufficient') {
+    return <p className="text-xs text-muted">📈 Prognose ab 5 Wiegungen innerhalb von 4 Wochen.</p>
+  }
+  if (forecast.kind === 'reached') return <p className="text-xs text-fg">🎯 Ziel laut Trend erreicht – stark!</p>
+  const tempo = `${forecast.perWeek > 0 ? '+' : '−'}${Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche`
+  if (forecast.kind === 'away') {
+    return (
+      <p className="text-xs text-muted">
+        📉 Aktueller Trend {tempo} – so wird {targetKg} kg gerade nicht erreicht.
+      </p>
+    )
+  }
+  const onTime = targetDate ? forecast.date <= targetDate : undefined
+  return (
+    <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs text-fg">
+      📈 Bei deinem Tempo ({tempo}) erreichst du {targetKg} kg etwa am <span className="font-semibold">{formatDate(forecast.date)}</span>
+      {onTime === undefined ? '.' : onTime ? ' – vor deinem Zieldatum ✓' : ' – nach deinem Zieldatum.'}
+    </p>
   )
 }

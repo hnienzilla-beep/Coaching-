@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { claimTouch } from '../lib/swipeNavigation'
+import { haptic } from '../lib/feedback'
 
 const DECIDE_AFTER = 8 // px, ab denen feststeht, ob waagerecht gewischt oder senkrecht gescrollt wird
 const DELETE_AT = 100 // px nach links - oder 40 % der Breite, je nachdem was kleiner ist
@@ -101,6 +102,7 @@ export default function SwipeToDelete({
         snapBack()
         return
       }
+      haptic('warning')
       setDragging(false)
       setHeight(el.offsetHeight)
       setRemoving(true)

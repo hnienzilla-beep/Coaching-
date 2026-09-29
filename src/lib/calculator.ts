@@ -172,7 +172,7 @@ export function weeklyDelta(points: WeightPoint[], index: number): number | unde
   return current - previous
 }
 
-function mondayOf(dateIso: string): string {
+export function mondayOf(dateIso: string): string {
   const d = new Date(dateIso + 'T00:00:00Z')
   const day = d.getUTCDay() // 0=So, 1=Mo, ..., 6=Sa
   return addDays(dateIso, day === 0 ? -6 : 1 - day)

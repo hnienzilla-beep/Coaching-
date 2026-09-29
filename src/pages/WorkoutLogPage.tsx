@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useOutletContext } from 'react-router-dom'
@@ -12,7 +12,10 @@ import { SortableItem } from '../components/Sortable'
 import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import RestTimer from '../components/RestTimer'
+import { autoStartRestTimer } from '../lib/restTimer'
+import { celebrateOnce, haptic } from '../lib/feedback'
 import StrengthChart from '../components/StrengthChart'
+import MuscleHeatmap from '../components/MuscleHeatmap'
 import WorkoutTimer from '../components/WorkoutTimer'
 import LogDayHeader, { type LogDayStatus } from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
@@ -112,6 +115,19 @@ export default function WorkoutLogPage() {
 
   const setsTotal = daySets?.length ?? 0
   const setsDone = (daySets ?? []).filter((s) => s.done).length
+
+  // Alle Sätze des Tages abgehakt: einmal Konfetti je Trainingseinheit.
+  useEffect(() => {
+    if (currentLog && setsTotal > 0 && setsDone === setsTotal && selectedDate === todayIso()) {
+      celebrateOnce(`training-${currentLog.id}`)
+    }
+  }, [currentLog, setsTotal, setsDone, selectedDate])
+
+  /** Satz abgehakt: kurz vibrieren und - außer nach dem letzten Satz - die Pause starten. */
+  function handleSetCompleted() {
+    haptic('tap')
+    if (setsDone + 1 < setsTotal) autoStartRestTimer()
+  }
   const volumeKg = (daySets ?? []).reduce((sum, s) => sum + (s.reps !== undefined && s.weightKg !== undefined ? s.reps * s.weightKg : 0), 0)
   const elapsed = durationSeconds(currentLog?.startedAt, currentLog?.completedAt)
 
@@ -255,6 +271,7 @@ export default function WorkoutLogPage() {
                       planExercise={planExerciseByExerciseId.get(row.exerciseId)}
                       athleteId={athlete.id}
                       date={selectedDate}
+                      onSetCompleted={handleSetCompleted}
                       onSwap={() => setPicker({ swapRowId: row.id, currentId: row.exerciseId })}
                       onDelete={() => deleteExerciseRow(row.id)}
                     />
@@ -326,6 +343,10 @@ export default function WorkoutLogPage() {
         emptyText="🏋️ Noch keine Trainingseinheiten aufgezeichnet."
       />
 
+      <CollapsibleCard title="Muskel-Heatmap · 7 Tage" defaultExpanded>
+        <MuscleHeatmap athleteId={athlete.id} />
+      </CollapsibleCard>
+
       {!simple && (
         <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
           <StrengthChart athleteId={athlete.id} />
@@ -337,6 +358,7 @@ export default function WorkoutLogPage() {
 
 function WorkoutExerciseRow({
   handle,
+  onSetCompleted,
   rowId,
   exerciseId,
   exerciseName,
@@ -350,6 +372,7 @@ function WorkoutExerciseRow({
   onDelete,
 }: {
   handle: ReactNode
+  onSetCompleted: () => void
   rowId: string
   exerciseId: string
   exerciseName?: string
@@ -469,7 +492,10 @@ function WorkoutExerciseRow({
                 >
                   <button
                     type="button"
-                    onClick={() => db.workoutSets.update(set.id, { done: !set.done })}
+                    onClick={() => {
+                      void db.workoutSets.update(set.id, { done: !set.done })
+                      if (!set.done) onSetCompleted()
+                    }}
                     aria-label={set.done ? `Satz ${set.setNumber} als offen markieren` : `Satz ${set.setNumber} als erledigt markieren`}
                     className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm ${
                       set.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'

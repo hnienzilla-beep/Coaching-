@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   upsertDailyEntry,
+  addDays,
   todayIso,
   getTrackingSeries,
   syncBodyFatToDailyEntry,
@@ -27,6 +28,7 @@ import type { DayMarker } from '../components/DayStrip'
 import { shareOrDownloadFile } from '../lib/share'
 import { useSimpleMode } from '../lib/detailLevel'
 import { chartLineAnimation } from '../lib/countUp'
+import { forecastGoal } from '../lib/goalForecast'
 
 type Ctx = { athlete: Athlete }
 
@@ -70,6 +72,24 @@ export default function TrackingPage() {
     chestDelta: deltaFromFirst(series, i, 'chest'),
     legDelta: deltaFromFirst(series, i, 'leg'),
   }))
+  // Zielprognose als gestrichelte Linie: vom heutigen Trendwert bis zum Zielgewicht, höchstens
+  // 120 Tage voraus (weiter wäre die Achse nur noch Zukunft).
+  const todayIso_ = todayIso()
+  const forecast = athlete.targetWeightKg !== undefined ? forecastGoal(series, athlete.targetWeightKg, todayIso_) : undefined
+  const projectionDays = forecast?.kind === 'eta' && forecast.days <= 120 ? forecast.days : 0
+  const chartRows: (typeof chartData[number] & { projection?: number })[] = chartData.map((row, i) =>
+    projectionDays && series[i]?.date === todayIso_ && forecast?.kind === 'eta' ? { ...row, projection: forecast.current } : row,
+  )
+  if (projectionDays && forecast?.kind === 'eta') {
+    const lastDate = series[series.length - 1]?.date ?? todayIso_
+    for (let d = 1; d <= projectionDays; d++) {
+      const date = addDays(todayIso_, d)
+      if (date <= lastDate) continue
+      const projection = forecast.current + (forecast.perWeek / 7) * d
+      chartRows.push({ date: date.slice(5), projection } as (typeof chartRows)[number])
+    }
+  }
+
   const measures = MEASURES.map((m) => {
     const measured = series.filter((e) => e[m.key] !== undefined)
     const latest = measured[measured.length - 1]?.[m.key]
@@ -193,7 +213,7 @@ export default function TrackingPage() {
         )}
         <div key={chart} className="anim-page h-52">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
+            <LineChart data={chart === 'weight' || simple ? chartRows : chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="date" {...axis} minTickGap={24} />
               {chart === 'measures' && !simple ? (
@@ -224,6 +244,20 @@ export default function TrackingPage() {
                   {/* Rohgewicht bewusst gedimmt, der geglättete 7-Tage-Schnitt trägt den Akzent. */}
                   <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name="Gewicht (kg)" connectNulls />
                   <Line {...lineAnimation} type="monotone" dataKey="weightAvg7" stroke="var(--color-accent)" dot={false} strokeWidth={2.5} name="Ø 7 Tage" connectNulls />
+                  {projectionDays > 0 && (
+                    <Line
+                      {...lineAnimation}
+                      type="linear"
+                      dataKey="projection"
+                      stroke="var(--color-accent)"
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      strokeOpacity={0.7}
+                      dot={false}
+                      name="Prognose"
+                      connectNulls
+                    />
+                  )}
                   {athlete.targetWeightKg !== undefined && (
                     <ReferenceLine
                       y={athlete.targetWeightKg}
@@ -250,7 +284,15 @@ export default function TrackingPage() {
                   <Line {...lineAnimation} type="basis" dataKey="bodyFatAvg" stroke="#f472b6" strokeWidth={2.5} dot={false} name="KFA geglättet (%)" connectNulls />
                 </>
               )}
-              {!simple && chart === 'measures' && (
+              {(simple || chart === 'weight') && forecast?.kind === 'eta' && (
+          <p className="text-xs text-muted">
+            <span className="text-accent">- - -</span> Prognose: {athlete.targetWeightKg} kg etwa am{' '}
+            {new Date(`${forecast.date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })} (
+            {forecast.perWeek > 0 ? '+' : '−'}
+            {Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche)
+          </p>
+        )}
+        {!simple && chart === 'measures' && (
                 <>
                   <ReferenceLine y={0} stroke="var(--color-muted)" strokeOpacity={0.6} />
                   {measures.map((m) => (

@@ -27,6 +27,10 @@ export interface RestTimerState {
   remaining: number
   /** Zeitpunkt, an dem die letzte Pause abgelaufen ist - für den Hinweis "Pause vorbei". */
   finishedAt: number | null
+  /** Pause startet von selbst, sobald ein Satz abgehakt wird. */
+  auto: boolean
+  /** Die Timer-Zeile im Trainingslog ist sichtbar - dann braucht es die schwebende Anzeige nicht. */
+  inlineVisible: boolean
 }
 
 export const REST_DURATIONS = [30, 45, 60, 90, 120, 150, 180]
@@ -46,9 +50,10 @@ const CATCH_UP_MS = 2 * 60_000
 interface PersistedState {
   duration: number
   endTime: number | null
+  auto: boolean
 }
 
-const EMPTY: PersistedState = { duration: DEFAULT_DURATION, endTime: null }
+const EMPTY: PersistedState = { duration: DEFAULT_DURATION, endTime: null, auto: true }
 
 function readStorage(): PersistedState {
   try {
@@ -58,6 +63,7 @@ function readStorage(): PersistedState {
     return {
       duration: typeof parsed.duration === 'number' && parsed.duration > 0 ? parsed.duration : DEFAULT_DURATION,
       endTime: typeof parsed.endTime === 'number' ? parsed.endTime : null,
+      auto: parsed.auto !== false,
     }
   } catch {
     return EMPTY
@@ -83,6 +89,8 @@ let state: RestTimerState = {
   endTime: restored.endTime,
   remaining: remainingFor(restored.endTime),
   finishedAt: null,
+  auto: restored.auto,
+  inlineVisible: false,
 }
 
 const listeners = new Set<() => void>()
@@ -105,12 +113,14 @@ function setState(patch: Partial<RestTimerState>): void {
     next.duration === state.duration &&
     next.endTime === state.endTime &&
     next.remaining === state.remaining &&
-    next.finishedAt === state.finishedAt
+    next.finishedAt === state.finishedAt &&
+    next.auto === state.auto &&
+    next.inlineVisible === state.inlineVisible
   ) {
     return
   }
   state = next
-  writeStorage({ duration: state.duration, endTime: state.endTime })
+  writeStorage({ duration: state.duration, endTime: state.endTime, auto: state.auto })
   listeners.forEach((l) => l())
 }
 
@@ -218,6 +228,19 @@ export function startRestTimer(seconds: number = state.duration): void {
   pendingSignalAt = null
   setState({ duration: seconds, endTime: Date.now() + seconds * 1000, remaining: seconds, finishedAt: null })
   ensureTicker()
+}
+
+export function setRestTimerInlineVisible(inlineVisible: boolean): void {
+  setState({ inlineVisible })
+}
+
+export function setAutoRest(auto: boolean): void {
+  setState({ auto })
+}
+
+/** Nach einem abgehakten Satz: Pause starten, wenn die Automatik an ist. */
+export function autoStartRestTimer(): void {
+  if (state.auto) startRestTimer(state.duration)
 }
 
 export function cancelRestTimer(): void {
