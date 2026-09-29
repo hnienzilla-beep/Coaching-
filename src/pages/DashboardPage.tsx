@@ -7,8 +7,7 @@ import CollapsibleCard from '../components/CollapsibleCard'
 import Sheet from '../components/Sheet'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
-import { addDays, syncBodyFatToDailyEntry, todayIso, upsertDailyEntry } from '../db/queries'
-import { CAL_TOLERANCE, MACRO_TOLERANCE } from '../lib/macros'
+import { addDays, repairStaleFfmiBodyFat, todayIso, upsertDailyEntry } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
@@ -61,8 +60,6 @@ export default function DashboardPage() {
     fat: todayEntry?.fat ?? 0,
   }
   const remaining = result.targetCalories - tracked.kcal
-  // Grün, solange die Vorgabe (plus Toleranz) nicht überschritten ist - sonst Rot.
-  const kcalOver = tracked.kcal > result.targetCalories + CAL_TOLERANCE
   const grown = useGrowIn()
   const [weightOpen, setWeightOpen] = useState(false)
 
@@ -73,13 +70,18 @@ export default function DashboardPage() {
     .sort((a, b) => b.date.localeCompare(a.date))[0]?.weightKg
   const bodyWeight = weightToday ?? lastWeighed
   const bmi = calculateBmi(bodyWeight ?? athlete.weightKg, athlete.heightCm)
+  // KFA aus dem FFMI mit dem aktuellen Gewicht - nicht mit dem Profilgewicht (Startgewicht).
+  // Nur zur Anzeige: In den Tageseintrag schreibt das Tracking bzw. das Gewicht-Sheet, jeweils
+  // mit dem Gewicht des Tages. Früher schrieb das Dashboard hier bei jedem Öffnen den Wert
+  // aus dem Startgewicht in den heutigen Eintrag und überdeckte damit echte Messungen.
   const bodyFatFromFfmi =
-    athlete.ffmi !== undefined ? calculateBodyFatFromFfmi(athlete.ffmi, athlete.weightKg, athlete.heightCm) : undefined
+    athlete.ffmi !== undefined
+      ? calculateBodyFatFromFfmi(athlete.ffmi, bodyWeight ?? athlete.weightKg, athlete.heightCm)
+      : undefined
 
   useEffect(() => {
-    if (bodyFatFromFfmi === undefined || !Number.isFinite(bodyFatFromFfmi)) return
-    void syncBodyFatToDailyEntry(athlete.id, todayIso(), bodyFatFromFfmi)
-  }, [athlete.id, bodyFatFromFfmi])
+    void repairStaleFfmiBodyFat(athlete)
+  }, [athlete])
 
   const bmiOk = bmi !== undefined && bmi >= 18.5 && bmi <= 24.9
   // Aktueller KFA: heute gemessen, sonst die letzte Messung, sonst aus dem FFMI.
@@ -102,7 +104,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-1.5">
-              <CountUp value={tracked.kcal} className={`text-4xl font-bold tabular-nums ${kcalOver ? 'text-danger' : 'text-ok'}`} />
+              <CountUp value={tracked.kcal} className="text-4xl font-bold tabular-nums text-accent" />
               <span className="text-sm text-muted">kcal</span>
             </div>
             <span className="text-right text-sm tabular-nums text-muted">
@@ -111,7 +113,7 @@ export default function DashboardPage() {
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
             <div
-              className={`h-full rounded-full transition-[width] duration-[900ms] ease-out ${kcalOver ? 'bg-danger' : 'bg-ok'}`}
+              className="h-full rounded-full bg-accent transition-[width] duration-[900ms] ease-out"
               style={{ width: `${grown ? percent(tracked.kcal, result.targetCalories) : 0}%` }}
             />
           </div>
@@ -196,6 +198,8 @@ export default function DashboardPage() {
         athleteId={athlete.id}
         date={today}
         initial={weightToday ?? lastWeighed}
+        ffmi={athlete.ffmi}
+        heightCm={athlete.heightCm}
         onClose={() => setWeightOpen(false)}
       />
 
@@ -244,12 +248,16 @@ function WeightSheet({
   athleteId,
   date,
   initial,
+  ffmi,
+  heightCm,
   onClose,
 }: {
   open: boolean
   athleteId: string
   date: string
   initial?: number
+  ffmi?: number
+  heightCm: number
   onClose: () => void
 }) {
   const [weight, setWeight] = useState<number | undefined>(initial)
@@ -262,7 +270,15 @@ function WeightSheet({
   const valid = weight !== undefined && weight > 20 && weight < 400
   async function save() {
     if (!valid) return
-    await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, date, weightKg: weight })
+    // Mit FFMI ergibt sich der KFA des Tages aus dem neuen Gewicht - wie im Tracking.
+    const kfa = ffmi !== undefined ? calculateBodyFatFromFfmi(ffmi, weight, heightCm) : undefined
+    await upsertDailyEntry({
+      id: crypto.randomUUID(),
+      athleteId,
+      date,
+      weightKg: weight,
+      ...(kfa !== undefined && Number.isFinite(kfa) ? { bodyFatPct: Math.round(kfa * 10) / 10 } : {}),
+    })
     onClose()
   }
 
@@ -299,18 +315,16 @@ function percent(value: number, target: number): number {
 
 /** Makro-Kachel der Heute-Karte: getrackt gegen Vorgabe, mit anwachsendem Balken. */
 function MacroTile({ label, value, target, grown, delay }: { label: string; value: number; target: number; grown: boolean; delay: number }) {
-  // Wie bei den Kalorien: grün bis zur Vorgabe (plus Toleranz), darüber rot.
-  const over = value > target + MACRO_TOLERANCE
   return (
     <div className="flex flex-col gap-1.5 rounded-xl bg-surface-2 px-2.5 py-2">
       <span className="text-[11px] text-muted">{label}</span>
       <span className="whitespace-nowrap text-[13px] tabular-nums">
-        <CountUp value={value} className={`font-semibold ${over ? 'text-danger' : 'text-ok'}`} />
+        <CountUp value={value} className="font-semibold text-accent" />
         <span className="text-muted"> / {Math.round(target)} g</span>
       </span>
       <div className="h-1.5 overflow-hidden rounded-full bg-bg">
         <div
-          className={`h-full rounded-full transition-[width] duration-700 ease-out ${over ? 'bg-danger' : 'bg-ok'}`}
+          className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
           style={{ width: `${grown ? percent(value, target) : 0}%`, transitionDelay: `${delay}ms` }}
         />
       </div>
@@ -426,7 +440,7 @@ function ProfileSheet({
             </Field>
           </div>
           {bodyFatFromFfmi !== undefined && (
-            <p className="text-xs text-muted">KFA aus FFMI: {bodyFatFromFfmi.toFixed(1)} % – wird in den heutigen Tracking-Eintrag übernommen.</p>
+            <p className="text-xs text-muted">KFA aus FFMI bei aktuellem Gewicht: {bodyFatFromFfmi.toFixed(1)} % – wird beim Eintragen des Gewichts für den Tag übernommen.</p>
           )}
           <Field label="Startdatum (Tag 1)">
             <Input
