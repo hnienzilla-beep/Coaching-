@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { addDays, todayIso } from '../db/queries'
 import Sheet from './Sheet'
+import { mealLabel } from '../lib/prefs'
 import { Button, Input } from './ui'
 
 function dayLabel(iso: string): string {
@@ -35,7 +36,7 @@ export default function CopyMealSheet({
   }
 
   return (
-    <Sheet open={mealType !== null} title={`„${mealType ?? ''}“ kopieren`} onClose={onClose}>
+    <Sheet open={mealType !== null} title={`„${mealType ? mealLabel(mealType) : ''}“ kopieren`} onClose={onClose}>
       <p className="text-sm text-muted">Alle Einträge dieser Mahlzeit werden in den gewählten Tag übernommen.</p>
       <div className="grid grid-cols-2 gap-2">
         {quick.map((d) => (

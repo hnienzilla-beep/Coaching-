@@ -3,6 +3,7 @@ import { calculateBodyFatFromFfmi } from '../lib/calculator'
 import { upsertDailyEntry } from '../db/queries'
 import { haptic } from '../lib/feedback'
 import Sheet from './Sheet'
+import { displayValue, useUnits } from '../lib/units'
 import { Button, DecimalInput } from './ui'
 
 /** Heutiges Gewicht eintragen - landet im selben Tageseintrag wie im Tracking. */
@@ -23,13 +24,17 @@ export default function WeightSheet({
   heightCm: number
   onClose: () => void
 }) {
-  const [weight, setWeight] = useState<number | undefined>(initial)
+  // Eingabe in der eingestellten Einheit (kg/lbs), gespeichert wird in kg.
+  const units = useUnits()
+  const [shown, setShown] = useState<number | undefined>(units.show(initial, 'weight'))
   // Beim Öffnen mit dem letzten Gewicht vorbelegen. `initial` ändert sich erst nach dem
   // Speichern, also nicht mitten im Tippen.
+  const unit = units.label('weight')
   useEffect(() => {
-    if (open) setWeight(initial)
-  }, [open, initial])
+    if (open) setShown(displayValue(initial, 'weight'))
+  }, [open, initial, unit])
 
+  const weight = units.parse(shown, 'weight')
   const valid = weight !== undefined && weight > 20 && weight < 400
   async function save() {
     if (!valid) return
@@ -59,13 +64,13 @@ export default function WeightSheet({
     >
       <div className="flex items-baseline gap-2">
         <DecimalInput
-          value={weight}
-          onChange={setWeight}
+          value={shown}
+          onChange={setShown}
           autoFocus
-          aria-label="Gewicht in kg"
+          aria-label={`Gewicht in ${unit}`}
           className="text-3xl! font-bold"
         />
-        <span className="text-lg text-muted">kg</span>
+        <span className="text-lg text-muted">{unit}</span>
       </div>
       <p className="text-xs text-muted">Wird wie im Tracking für heute gespeichert und fließt in Verlauf, BMI und Ø 7 Tage ein.</p>
     </Sheet>

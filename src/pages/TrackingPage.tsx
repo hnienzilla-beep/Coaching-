@@ -31,7 +31,10 @@ import { useSimpleMode } from '../lib/detailLevel'
 import { chartLineAnimation } from '../lib/countUp'
 import { forecastGoal } from '../lib/goalForecast'
 import ChartBubble from '../components/ChartBubble'
+import TourHint from '../components/TourHint'
 import { chartCursor } from '../lib/chartCursor'
+import { usePrefs, type TrackingCard } from '../lib/prefs'
+import { useUnits } from '../lib/units'
 
 type Ctx = { athlete: Athlete }
 
@@ -49,15 +52,6 @@ const RANGES = [
   { key: 'all', label: 'Alle', days: undefined },
 ] as const
 type ChartRange = (typeof RANGES)[number]['key']
-const RANGE_KEY = 'coach.tracking.range'
-function readRange(): ChartRange {
-  try {
-    const v = localStorage.getItem(RANGE_KEY)
-    return RANGES.some((r) => r.key === v) ? (v as ChartRange) : '1m'
-  } catch {
-    return '1m'
-  }
-}
 
 /** "09-24" → "24.09." */
 function formatChartDate(mmdd: string): string {
@@ -82,22 +76,27 @@ export default function TrackingPage() {
   const series = loadedSeries ?? []
   const importProgressInputRef = useRef<HTMLInputElement>(null)
 
+  const prefs = usePrefs()
+  const u = useUnits()
+  // Diagramme in der eingestellten Einheit (gespeichert bleibt metrisch).
+  const w = (kg: number | undefined) => u.show(kg, 'weight', 2)
+  const len = (cm: number | undefined) => u.show(cm, 'length', 1)
   const chartData = series.map((entry, i) => ({
     date: entry.date.slice(5),
-    weight: entry.weightKg,
+    weight: w(entry.weightKg),
     bodyFat: entry.bodyFatPct,
-    weightAvg7: rollingAverage7(series, i),
+    weightAvg7: w(rollingAverage7(series, i)),
     bodyFatAvg: smoothedValue(series, i, 'bodyFatPct', 7),
-    waist: entry.waist,
-    arm: entry.arm,
-    chest: entry.chest,
-    leg: entry.leg,
+    waist: len(entry.waist),
+    arm: len(entry.arm),
+    chest: len(entry.chest),
+    leg: len(entry.leg),
     // Maße als Veränderung seit der ersten Messung - absolut lägen Arm (~38) und Brust (~100)
     // so weit auseinander, dass ein paar cm Veränderung in der Achse untergingen.
-    waistDelta: deltaFromFirst(series, i, 'waist'),
-    armDelta: deltaFromFirst(series, i, 'arm'),
-    chestDelta: deltaFromFirst(series, i, 'chest'),
-    legDelta: deltaFromFirst(series, i, 'leg'),
+    waistDelta: len(deltaFromFirst(series, i, 'waist')),
+    armDelta: len(deltaFromFirst(series, i, 'arm')),
+    chestDelta: len(deltaFromFirst(series, i, 'chest')),
+    legDelta: len(deltaFromFirst(series, i, 'leg')),
   }))
   // Zielprognose als gestrichelte Linie: vom heutigen Trendwert bis zum Zielgewicht, höchstens
   // 120 Tage voraus (weiter wäre die Achse nur noch Zukunft).
@@ -105,7 +104,7 @@ export default function TrackingPage() {
   const forecast = athlete.targetWeightKg !== undefined ? forecastGoal(series, athlete.targetWeightKg, todayIso_) : undefined
   const projectionDays = forecast?.kind === 'eta' && forecast.days <= 120 ? forecast.days : 0
   const chartRows: (typeof chartData[number] & { projection?: number })[] = chartData.map((row, i) =>
-    projectionDays && series[i]?.date === todayIso_ && forecast?.kind === 'eta' ? { ...row, projection: forecast.current } : row,
+    projectionDays && series[i]?.date === todayIso_ && forecast?.kind === 'eta' ? { ...row, projection: w(forecast.current) } : row,
   )
   if (projectionDays && forecast?.kind === 'eta') {
     const lastDate = series[series.length - 1]?.date ?? todayIso_
@@ -113,7 +112,7 @@ export default function TrackingPage() {
       const date = addDays(todayIso_, d)
       if (date <= lastDate) continue
       const projection = forecast.current + (forecast.perWeek / 7) * d
-      chartRows.push({ date: date.slice(5), projection } as (typeof chartRows)[number])
+      chartRows.push({ date: date.slice(5), projection: w(projection) } as (typeof chartRows)[number])
     }
   }
 
@@ -121,7 +120,7 @@ export default function TrackingPage() {
     const measured = series.filter((e) => e[m.key] !== undefined)
     const latest = measured[measured.length - 1]?.[m.key]
     const first = measured[0]?.[m.key]
-    return { ...m, latest, delta: latest !== undefined && first !== undefined ? Math.round((latest - first) * 10) / 10 : undefined }
+    return { ...m, latest: len(latest), delta: latest !== undefined && first !== undefined ? len(latest - first) : undefined }
   }).filter((m) => m.latest !== undefined)
   // Maße-Achse symmetrisch um 0 und eng (siehe measureRange weiter unten, nach dem Zeitraum).
   const today = todayIso()
@@ -149,16 +148,17 @@ export default function TrackingPage() {
     }
   }
 
-  const [chart, setChart] = useState<'weight' | 'bodyFat' | 'measures'>('weight')
-  const [range, setRange] = useState<ChartRange>(readRange)
-  function chooseRange(next: ChartRange) {
-    setRange(next)
-    try {
-      localStorage.setItem(RANGE_KEY, next)
-    } catch {
-      // Ohne Speicher gilt die Wahl nur bis zum Neuladen.
-    }
-  }
+  // Diagramme nur für eingeschaltete Werte (Einstellungen → Tracking).
+  const chartOptions = [
+    { key: 'weight' as const, label: 'Gewicht' },
+    ...(prefs.trackingValues.includes('bodyFat') ? [{ key: 'bodyFat' as const, label: 'KFA' }] : []),
+    ...(prefs.trackingValues.includes('measures') ? [{ key: 'measures' as const, label: 'Maße' }] : []),
+  ]
+  const [chosenChart, setChart] = useState<'weight' | 'bodyFat' | 'measures'>('weight')
+  const chart = chartOptions.some((o) => o.key === chosenChart) ? chosenChart : 'weight'
+  const show = (card: TrackingCard) => !prefs.trackingHidden.includes(card)
+  // Startet mit dem Standard-Zeitraum aus den Einstellungen; die Chips ändern nur die Ansicht.
+  const [range, chooseRange] = useState<ChartRange>(prefs.trackingRange)
   const rangeDays = RANGES.find((r) => r.key === range)?.days
   const rangeStart = rangeDays ? addDays(todayIso_, -(rangeDays - 1)) : ''
   // Zeitraum: nur Tage ab `rangeStart`; die Prognose (Zeilen hinter dem letzten Eintrag) bleibt.
@@ -188,6 +188,7 @@ export default function TrackingPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <TourHint id="tracking" />
       <LogDayHeader
         title="Tracking"
         selectedDate={selectedDate}
@@ -210,6 +211,7 @@ export default function TrackingPage() {
         />
       </div>
 
+      {show('wochenvergleich') && (
       <Card className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold text-muted">Kalenderwoche im Vergleich</h2>
         {calendarWeekComparison ? (
@@ -220,35 +222,27 @@ export default function TrackingPage() {
                 : (
                     <>
                       {calendarWeekComparison.deltaKg < 0 ? '−' : '+'}
-                      <CountUp value={Math.abs(calendarWeekComparison.deltaKg)} decimals={1} /> kg
+                      <CountUp value={u.show(Math.abs(calendarWeekComparison.deltaKg), 'weight')} decimals={1} /> {u.label('weight')}
                     </>
                   )}
             </p>
             <p className="text-xs text-muted">
-              Ø {calendarWeekComparison.thisWeekAvg.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg diese Woche · Ø {calendarWeekComparison.lastWeekAvg.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg letzte
-              Woche
+              Ø {u.format(calendarWeekComparison.thisWeekAvg, 'weight')} diese Woche · Ø {u.format(calendarWeekComparison.lastWeekAvg, 'weight')} letzte Woche
             </p>
           </>
         ) : (
           <p className="text-sm text-muted">Noch nicht genug Daten für einen Vergleich.</p>
         )}
       </Card>
+      )}
 
+      {show('diagramm') && (
       <Card className="flex flex-col gap-3">
         {/* Ein Diagramm mit Umschalter statt drei untereinander - die Seite bleibt kurz. */}
-        {simple ? (
+        {simple || chartOptions.length === 1 ? (
           <h2 className="text-sm font-semibold text-muted">Gewicht</h2>
         ) : (
-          <SegmentedControl
-            size="sm"
-            options={[
-              { key: 'weight', label: 'Gewicht' },
-              { key: 'bodyFat', label: 'KFA' },
-              { key: 'measures', label: 'Maße' },
-            ]}
-            value={chart}
-            onChange={setChart}
-          />
+          <SegmentedControl size="sm" options={chartOptions} value={chart} onChange={setChart} />
         )}
         <div className="flex gap-1.5" role="group" aria-label="Zeitraum">
           {RANGES.map((r) => (
@@ -291,7 +285,7 @@ export default function TrackingPage() {
                         ? (value, name, row) => {
                             const m = MEASURES.find((x) => x.label === name)
                             const abs = m ? (row[m.key] as number | undefined) : undefined
-                            return `${formatSigned(Number(value))} cm${abs !== undefined ? ` (${formatCm(abs)})` : ''}`
+                            return `${formatSigned(Number(value))} ${u.label('length')}${abs !== undefined ? ` (${formatCm(abs)})` : ''}`
                           }
                         : (value) => (typeof value === 'number' ? value.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : String(value))
                     }
@@ -301,7 +295,7 @@ export default function TrackingPage() {
               {(simple || chart === 'weight') && (
                 <>
                   {/* Rohgewicht bewusst gedimmt, der geglättete 7-Tage-Schnitt trägt den Akzent. */}
-                  <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name="Gewicht (kg)" connectNulls />
+                  <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="#a1a1aa" dot={false} name={`Gewicht (${u.label('weight')})`} connectNulls />
                   <Line {...lineAnimation} type="monotone" dataKey="weightAvg7" stroke="var(--color-accent)" dot={false} strokeWidth={2.5} name="Ø 7 Tage" connectNulls />
                   {projectionDays > 0 && (
                     <Line
@@ -319,7 +313,7 @@ export default function TrackingPage() {
                   )}
                   {athlete.targetWeightKg !== undefined && (
                     <ReferenceLine
-                      y={athlete.targetWeightKg}
+                      y={w(athlete.targetWeightKg)}
                       stroke="#f472b6"
                       strokeDasharray="4 4"
                       label={{ value: 'Ziel', position: 'insideTopRight', fill: '#f472b6', fontSize: 10 }}
@@ -366,10 +360,10 @@ export default function TrackingPage() {
         </div>
         {(simple || chart === 'weight') && forecast?.kind === 'eta' && (
           <p className="text-xs text-muted">
-            <span className="text-accent">- - -</span> Prognose: {athlete.targetWeightKg} kg etwa am{' '}
+            <span className="text-accent">- - -</span> Prognose: {u.format(athlete.targetWeightKg, 'weight')} etwa am{' '}
             {new Date(`${forecast.date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })} (
             {forecast.perWeek > 0 ? '+' : '−'}
-            {Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche)
+            {u.format(Math.abs(forecast.perWeek), 'weight', 2)}/Woche)
           </p>
         )}
         {!simple && chart === 'measures' && (
@@ -379,25 +373,30 @@ export default function TrackingPage() {
                 <div key={m.key} className="flex items-center gap-1.5 tabular-nums">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: m.color }} aria-hidden="true" />
                   <span className="text-muted">{m.label}</span>
-                  <span className="text-fg">{formatCm(m.latest!)} cm</span>
+                  <span className="text-fg">{formatCm(m.latest!)} {u.label('length')}</span>
                   {m.delta !== undefined && m.delta !== 0 && <span className="text-muted">· {formatSigned(m.delta)}</span>}
                 </div>
               ))}
-              <p className="col-span-2 pt-1 text-[11px] text-muted">Linien: Veränderung seit der ersten Messung in cm.</p>
+              <p className="col-span-2 pt-1 text-[11px] text-muted">Linien: Veränderung seit der ersten Messung in {u.label('length')}.</p>
             </div>
           ) : (
             <p className="text-xs text-muted">Noch keine Maße erfasst.</p>
           )
         )}
       </Card>
+      )}
 
+      {show('verlauf') && (
       <LogHistoryList
         entries={[...series]
           .reverse()
           .filter((e) => e.weightKg !== undefined || e.bodyFatPct !== undefined)
           .map((e) => ({
             date: e.date,
-            summary: [e.weightKg !== undefined ? `${e.weightKg.toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg` : undefined, e.bodyFatPct !== undefined ? `${e.bodyFatPct.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %` : undefined]
+            summary: [
+              e.weightKg !== undefined ? u.format(e.weightKg, 'weight') : undefined,
+              e.bodyFatPct !== undefined && prefs.trackingValues.includes('bodyFat') ? `${e.bodyFatPct.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %` : undefined,
+            ]
               .filter(Boolean)
               .join(' · '),
           }))}
@@ -405,8 +404,9 @@ export default function TrackingPage() {
         onSelect={setSelectedDate}
         emptyText="Noch keine Einträge."
       />
+      )}
 
-      {!simple && (
+      {!simple && show('export') && (
         <CollapsibleCard title="Fortschritt teilen" defaultExpanded={false}>
           <p className="text-xs text-muted">
             Exportiert die letzten 7 Tage aus Tracking, Ernährungs-Log und Trainings-Log zum Versenden. Beim Importieren
@@ -456,6 +456,8 @@ function DayEditor({
   simple: boolean
 }) {
   const current: DailyEntry = entry ?? { id: crypto.randomUUID(), athleteId, date }
+  const prefs = usePrefs()
+  const units = useUnits()
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [showSaved, setShowSaved] = useState(false)
 
@@ -518,6 +520,18 @@ function DayEditor({
     }
   }
 
+  // Gewicht und Maße werden in der eingestellten Einheit angezeigt und metrisch gespeichert.
+  function unitField<K extends keyof DailyEntry>(key: K, kind: 'weight' | 'length') {
+    return {
+      value: units.show(current[key] as number | undefined, kind, kind === 'weight' ? 1 : 1),
+      onChange: (n: number | undefined) => persist({ [key]: units.parse(n, kind) } as Partial<DailyEntry>),
+    }
+  }
+
+  const values = prefs.trackingValues
+  const lengthUnit = units.label('length')
+  const weightUnit = units.label('weight')
+
   return (
     <>
       <Card className="flex flex-col gap-4">
@@ -526,21 +540,43 @@ function DayEditor({
           <span className={`text-xs text-ok transition-opacity duration-500 ${showSaved ? 'opacity-100' : 'opacity-0'}`}><Check size={13} className="mr-0.5 inline -translate-y-px" />Gespeichert</span>
         </div>
         {/* Gewicht ist der tägliche Eintrag schlechthin - groß und zuerst. */}
-        <div className="grid grid-cols-2 gap-3">
-          <BigField label="Gewicht" unit="kg">
-            <DecimalInput {...decimalField('weightKg')} placeholder="–" className="border-0! bg-transparent! px-0! py-0! text-3xl! font-bold" />
+        <div className={`grid gap-3 ${values.includes('bodyFat') ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <BigField label="Gewicht" unit={weightUnit}>
+            <DecimalInput {...unitField('weightKg', 'weight')} placeholder="–" className="border-0! bg-transparent! px-0! py-0! text-3xl! font-bold" />
           </BigField>
-          <BigField label="KFA" unit="%">
-            <DecimalInput {...decimalField('bodyFatPct')} placeholder="–" className="border-0! bg-transparent! px-0! py-0! text-3xl! font-bold" />
-          </BigField>
+          {values.includes('bodyFat') && (
+            <BigField label="KFA" unit="%">
+              <DecimalInput {...decimalField('bodyFatPct')} placeholder="–" className="border-0! bg-transparent! px-0! py-0! text-3xl! font-bold" />
+            </BigField>
+          )}
         </div>
-        {bodyFatFromFfmi !== undefined && <p className="-mt-2 text-xs text-muted">KFA automatisch aus FFMI berechnet.</p>}
+        {values.includes('bodyFat') && bodyFatFromFfmi !== undefined && <p className="-mt-2 text-xs text-muted">KFA automatisch aus FFMI berechnet.</p>}
+        {(values.includes('sleep') || values.includes('steps')) && (
+          <div className="grid grid-cols-2 gap-3">
+            {values.includes('sleep') && (
+              <BigField label="Schlaf" unit="h">
+                <DecimalInput {...decimalField('sleepH')} placeholder="–" className="border-0! bg-transparent! px-0! py-0! text-xl! font-semibold" />
+              </BigField>
+            )}
+            {values.includes('steps') && (
+              <BigField label="Schritte" unit="">
+                <DecimalInput
+                  value={current.steps}
+                  onChange={(n) => persist({ steps: n === undefined ? undefined : Math.round(n) })}
+                  placeholder="–"
+                  inputMode="numeric"
+                  className="border-0! bg-transparent! px-0! py-0! text-xl! font-semibold"
+                />
+              </BigField>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-surface-2 px-3 py-2">
             <p className="text-[11px] text-muted">Ø 7 Tage</p>
             <p className="text-base font-semibold tabular-nums text-fg">{avg7 !== undefined ? (
                 <>
-                  <CountUp value={avg7} decimals={1} /> kg
+                  <CountUp value={units.show(avg7, 'weight')} decimals={1} /> {weightUnit}
                 </>
               ) : (
                 '–'
@@ -549,7 +585,9 @@ function DayEditor({
           <div className="rounded-xl bg-surface-2 px-3 py-2">
             <p className="text-[11px] text-muted">Δ zur Vorwoche</p>
             <p className={`text-base font-semibold tabular-nums ${delta !== undefined && delta < 0 ? 'text-ok' : 'text-fg'}`}>
-              {delta !== undefined ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg` : '–'}
+              {delta !== undefined
+                ? `${delta > 0 ? '+' : ''}${(units.show(delta, 'weight') ?? 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${weightUnit}`
+                : '–'}
             </p>
           </div>
         </div>
@@ -580,18 +618,32 @@ function DayEditor({
             <Field label="Fett (g)">
               <Input type="number" {...field('fat')} />
             </Field>
-            <Field label="Bauch (cm)">
-              <DecimalInput {...decimalField('waist')} />
-            </Field>
-            <Field label="Arm (cm)">
-              <DecimalInput {...decimalField('arm')} />
-            </Field>
-            <Field label="Brust (cm)">
-              <DecimalInput {...decimalField('chest')} />
-            </Field>
-            <Field label="Bein (cm)">
-              <DecimalInput {...decimalField('leg')} />
-            </Field>
+            {values.includes('measures') &&
+              (
+                [
+                  ['waist', 'Bauch'],
+                  ['arm', 'Arm'],
+                  ['chest', 'Brust'],
+                  ['leg', 'Bein'],
+                ] as const
+              ).map(([key, label]) => (
+                <Field key={key} label={`${label} (${lengthUnit})`}>
+                  <DecimalInput {...unitField(key, 'length')} />
+                </Field>
+              ))}
+            {values.includes('extraMeasures') &&
+              (
+                [
+                  ['hip', 'Hüfte'],
+                  ['glute', 'Po'],
+                  ['calf', 'Wade'],
+                  ['neck', 'Nacken'],
+                ] as const
+              ).map(([key, label]) => (
+                <Field key={key} label={`${label} (${lengthUnit})`}>
+                  <DecimalInput {...unitField(key, 'length')} />
+                </Field>
+              ))}
           </div>
         </CollapsibleCard>
       )}

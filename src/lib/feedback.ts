@@ -3,6 +3,8 @@
 // Vibration gibt es nur dort, wo der Browser `navigator.vibrate` anbietet (Android). Safari auf
 // dem iPhone kennt die Schnittstelle nicht - dort bleibt es still, ohne Fehler.
 
+import { getPrefs } from './prefs'
+
 type Haptic = 'tap' | 'success' | 'warning'
 
 const PATTERNS: Record<Haptic, number | number[]> = {
@@ -16,6 +18,7 @@ function reducedMotion(): boolean {
 }
 
 export function haptic(kind: Haptic = 'tap'): void {
+  if (!getPrefs().haptics) return
   try {
     if (typeof navigator !== 'undefined') navigator.vibrate?.(PATTERNS[kind])
   } catch {
@@ -44,7 +47,8 @@ const COLORS = ['#a3e635', '#22d3ee', '#f472b6', '#facc15', '#fb923c', '#c084fc'
 /** Konfetti über den ganzen Bildschirm, rund 2 Sekunden, dazu ein Erfolgs-Vibrieren. */
 export function celebrate(): void {
   haptic('success')
-  if (typeof document === 'undefined' || reducedMotion()) return
+  const prefs = getPrefs()
+  if (typeof document === 'undefined' || reducedMotion() || !prefs.confetti || prefs.animations === 'off') return
 
   const canvas = document.createElement('canvas')
   const dpr = Math.min(2, window.devicePixelRatio || 1)

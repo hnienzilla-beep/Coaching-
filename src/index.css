@@ -561,3 +561,48 @@ textarea {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------------------
+   Darstellung aus den Einstellungen (lib/appearance.ts): Schriftgröße, Kontrast, Bewegung.
+   Tailwind rechnet in rem - die Wurzel-Schriftgröße skaliert also die ganze Oberfläche.
+   --------------------------------------------------------------------------------------- */
+html.font-small {
+  font-size: 14px;
+}
+html.font-large {
+  font-size: 18px;
+}
+
+/* Hoher Kontrast: kräftigere Ränder und hellerer Nebentext. */
+html.contrast-high {
+  --color-border: #5b5b63;
+  --color-muted: #c4c4cc;
+  --color-surface: #111113;
+  --color-surface-2: #1d1d21;
+}
+html.contrast-high.light {
+  --color-border: #8a8a93;
+  --color-muted: #3a3a40;
+  --color-surface-2: #e6e6ea;
+}
+
+/* Reduziert: nur noch Einblenden, keine Wege und kein Dauer-Leuchten. */
+html.motion-reduced *,
+html.motion-reduced *::before,
+html.motion-reduced *::after {
+  animation-name: fade-in !important;
+  animation-duration: 200ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+/* Aus: keine Animationen und Übergänge. */
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation: none !important;
+  transition: none !important;
+}
+html.motion-off .reveal-ready .reveal:not([data-revealed]) {
+  opacity: 1;
+  transform: none;
+}

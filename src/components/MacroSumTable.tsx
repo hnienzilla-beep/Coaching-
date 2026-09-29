@@ -1,4 +1,4 @@
-import { CAL_TOLERANCE, MACRO_TOLERANCE, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
+import { MACRO_TOLERANCE, calTolerance, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
 
 /**
  * Ist/Ziel/Differenz in Zahlen - die genaue Ansicht für Coaches. Im Ernährungslog liegt
@@ -38,7 +38,7 @@ export default function MacroSumTable({ sums, target }: { sums: Sums; target: Ma
         </tr>
         <tr className="font-medium">
           <td className="text-muted">Differenz</td>
-          <td className={diffToneClass(diffKcal, CAL_TOLERANCE)}>{diffKcal.toFixed(0)}</td>
+          <td className={diffToneClass(diffKcal, calTolerance())}>{diffKcal.toFixed(0)}</td>
           <td className={diffToneClass(diffProtein, MACRO_TOLERANCE)}>{diffProtein.toFixed(0)}</td>
           <td className={diffToneClass(diffCarbs, MACRO_TOLERANCE)}>{diffCarbs.toFixed(0)}</td>
           <td className={diffToneClass(diffFat, MACRO_TOLERANCE)}>{diffFat.toFixed(0)}</td>

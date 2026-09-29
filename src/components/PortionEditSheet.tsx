@@ -4,6 +4,7 @@ import { macroLine } from '../lib/macros'
 import { suggestPortions, useFoodPortionHistory, useStandardPortions } from '../lib/portionPresets'
 import type { FoodItem, MealType } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
+import MealOptions from './MealOptions'
 import { AmountInput } from './AddFoodSheet'
 import Sheet from './Sheet'
 import { Button, Field, Select } from './ui'
@@ -94,11 +95,7 @@ export default function PortionEditSheet({
       {showMealType && (
         <Field label="Mahlzeit">
           <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
-            {MEAL_TYPES.map((mt) => (
-              <option key={mt} value={mt}>
-                {mt}
-              </option>
-            ))}
+            <MealOptions current={mealType} />
           </Select>
         </Field>
       )}

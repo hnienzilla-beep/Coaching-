@@ -5,11 +5,11 @@ import { Droplet, Dumbbell, Plus, Scale, Utensils } from 'lucide-react'
 import { db } from '../db/db'
 import { todayIso, upsertDailyEntry } from '../db/queries'
 import { haptic } from '../lib/feedback'
+import { usePrefs } from '../lib/prefs'
+import { toDisplay } from '../lib/units'
 import type { Athlete } from '../models/types'
 import Sheet from './Sheet'
 import WeightSheet from './WeightSheet'
-
-const WATER_STEPS = [250, 500, 750]
 
 /**
  * Schwebender „+“-Knopf rechts unten: Essen, Gewicht, Wasser oder Training eintragen - von
@@ -29,6 +29,7 @@ export default function QuickAddButton({ athlete, bottomOffset }: { athlete: Ath
     [athlete.id, today],
   )
   const [waterAdded, setWaterAdded] = useState<number | null>(null)
+  const prefs = usePrefs()
 
   function go(path: string) {
     setOpen(false)
@@ -94,11 +95,13 @@ export default function QuickAddButton({ athlete, bottomOffset }: { athlete: Ath
             <span>
               Wasser{' '}
               <span className="text-xs text-muted tabular-nums">
-                {(((todayEntry?.waterMl ?? 0) as number) / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} l
+                {prefs.volumeUnit === 'oz'
+                  ? `${Math.round(toDisplay(todayEntry?.waterMl ?? 0, 'volume'))} oz`
+                  : `${((todayEntry?.waterMl ?? 0) / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} l`}
               </span>
             </span>
             <div className="flex w-full gap-1">
-              {WATER_STEPS.map((ml) => (
+              {prefs.waterAmounts.filter((ml) => ml > 0).map((ml) => (
                 <button
                   key={ml}
                   type="button"
@@ -107,7 +110,7 @@ export default function QuickAddButton({ athlete, bottomOffset }: { athlete: Ath
                     waterAdded === ml ? 'bg-accent text-accent-fg' : 'bg-surface text-fg'
                   }`}
                 >
-                  +{ml}
+                  +{prefs.volumeUnit === 'oz' ? Math.round(toDisplay(ml, 'volume')) : ml}
                 </button>
               ))}
             </div>

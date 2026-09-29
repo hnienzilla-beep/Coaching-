@@ -4,6 +4,8 @@ import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-ki
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { ArrowLeftRight, Check, CircleCheck, ChevronDown, Minus, Plus, Trash2, X } from 'lucide-react'
 import { smartWeightStep, WEIGHT_STEPS } from '../lib/weightStep'
+import { usePrefs, type TrainingCard } from '../lib/prefs'
+import { useUnits } from '../lib/units'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { getLastExercisePerformance, getOrCreateWorkoutLog, todayIso } from '../db/queries'
@@ -67,6 +69,10 @@ async function ensureStarted(log: WorkoutLog): Promise<void> {
 export default function WorkoutLogPage() {
   const { athlete } = useOutletContext<Ctx>()
   const simple = useSimpleMode()
+  // Karten im Log (Einstellungen → Training).
+  const prefs = usePrefs()
+  const showCard = (card: TrainingCard) => !prefs.trainingHidden.includes(card)
+  const units = useUnits()
   const logs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const trainingPlans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -135,7 +141,8 @@ export default function WorkoutLogPage() {
     haptic('tap')
     if (setsDone + 1 < setsTotal) autoStartRestTimer()
   }
-  const volumeKg = (daySets ?? []).reduce((sum, s) => sum + (s.reps !== undefined && s.weightKg !== undefined ? s.reps * s.weightKg : 0), 0)
+  // Aufwärmsätze zählen nicht ins Volumen.
+  const volumeKg = (daySets ?? []).reduce((sum, s) => sum + (!s.warmup && s.reps !== undefined && s.weightKg !== undefined ? s.reps * s.weightKg : 0), 0)
   const elapsed = durationSeconds(currentLog?.startedAt, currentLog?.completedAt)
 
   const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, l.completedAt ? 'done' : 'open']))
@@ -255,7 +262,7 @@ export default function WorkoutLogPage() {
         {currentLog && (
           <div className="flex flex-wrap items-center gap-2">
             <WorkoutTimer startedAt={currentLog.startedAt} completedAt={currentLog.completedAt} />
-            <RestTimer />
+            {showCard('timer') && <RestTimer />}
           </div>
         )}
       </LogDayHeader>
@@ -265,7 +272,7 @@ export default function WorkoutLogPage() {
         {currentLog && setsTotal > 0 && (
           <div className="grid grid-cols-3 gap-2">
             <StatBadge label="Sätze" value={`${setsDone} / ${setsTotal}`} tone={setsDone === setsTotal ? 'ok' : 'default'} />
-            <StatBadge label="Volumen" value={`${Math.round(volumeKg).toLocaleString('de-DE')} kg`} />
+            <StatBadge label="Volumen" value={units.format(volumeKg, 'weight', 0)} />
             {/* Die laufende Dauer steht schon im Tageskopf - hier zählt, wie viel Programm
                 noch vor einem liegt. */}
             <StatBadge label="Übungen" value={`${sortedRows.length}`} />
@@ -325,7 +332,7 @@ export default function WorkoutLogPage() {
         </Button>
 
         <Card className="flex flex-col gap-3">
-          <Field label="Notizen zum Training">
+          {showCard('notizen') && <Field label="Notizen zum Training">
             <textarea
               value={currentLog?.notes ?? ''}
               onChange={(e) => setNotes(e.target.value)}
@@ -333,7 +340,7 @@ export default function WorkoutLogPage() {
               placeholder="Wie lief die Einheit?"
               className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg outline-none focus:border-accent"
             />
-          </Field>
+          </Field>}
 
           {currentLog?.completedAt ? (
             <div className="flex flex-col items-center gap-1">
@@ -365,7 +372,7 @@ export default function WorkoutLogPage() {
         onClose={() => setPicker(null)}
       />
 
-      <LogHistoryList
+      {showCard('verlauf') && <LogHistoryList
         entries={(logs ?? []).map((log) => {
           const seconds = durationSeconds(log.startedAt, log.completedAt)
           return {
@@ -379,9 +386,9 @@ export default function WorkoutLogPage() {
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
         emptyText="Noch keine Trainingseinheiten aufgezeichnet."
-      />
+      />}
 
-      {muscleRecords && (
+      {showCard('heatmap') && muscleRecords && (
         <CollapsibleCard
           title="Muskel-Heatmap"
           storageKey="heatmap-log"
@@ -391,7 +398,7 @@ export default function WorkoutLogPage() {
         </CollapsibleCard>
       )}
 
-      {!simple && (
+      {!simple && showCard('kraft') && (
         <CollapsibleCard title="Kraft-Verlauf" defaultExpanded={false}>
           <StrengthChart athleteId={athlete.id} />
         </CollapsibleCard>
@@ -446,6 +453,15 @@ function WorkoutExerciseRow({
     return all.map((x) => x.weightKg ?? 0)
   }, [athleteId, exerciseId])
   const weightStep = smartWeightStep(exerciseName ?? '', historyWeights ?? [], weightStepKg)
+  const prefs = usePrefs()
+  const units = useUnits()
+  const lbs = prefs.weightUnit === 'lbs'
+  // In lbs springen die Knöpfe in runden Pfund-Schritten (2 kg → 5 lbs, 1,25 kg → 2,5 lbs).
+  const displayStep = lbs ? Math.max(2.5, Math.round((weightStep.step * 2.20462) / 2.5) * 2.5) : weightStep.step
+  const grid = prefs.showRpe ? SET_GRID : SET_GRID_NO_RPE
+  // Langes Drücken auf den Satz-Kreis markiert einen Aufwärmsatz.
+  const pressTimer = useRef<number | undefined>(undefined)
+  const longPressed = useRef(false)
 
   const [expanded, setExpanded] = useState(true)
   const [notesOpen, setNotesOpen] = useState(!!notes)
@@ -530,36 +546,48 @@ function WorkoutExerciseRow({
               {/* Spaltenköpfe: die Platzhalter in den Feldern verschwinden, sobald ein Wert
                   drinsteht - ohne Kopfzeile weiß danach niemand mehr, was welche Zahl ist.
                   Die Satznummer steht im Abhak-Kreis. */}
-              <div className={`grid ${SET_GRID} items-center gap-1 text-[10px] uppercase tracking-wide text-muted`}>
+              <div className={`grid ${grid} items-center gap-1 text-[10px] uppercase tracking-wide text-muted`}>
                 <span />
                 <span>Vorher</span>
                 <span className="text-center">Wdh.</span>
-                <span className="text-center">kg</span>
-                <span className="text-center">RPE</span>
+                <span className="text-center">{units.label('weight')}</span>
+                {prefs.showRpe && <span className="text-center">RPE</span>}
                 <span />
               </div>
               {sets.map((set, i) => {
                 const before = lastPerformance?.sets[i]
                 return (
-                  <div key={set.id} className={`grid ${SET_GRID} items-center gap-1 transition-opacity ${set.done ? 'opacity-60' : ''}`}>
+                  <div key={set.id} className={`grid ${grid} items-center gap-1 transition-opacity ${set.done ? 'opacity-60' : ''}`}>
                     <button
                       type="button"
+                      onPointerDown={() => {
+                        longPressed.current = false
+                        pressTimer.current = window.setTimeout(() => {
+                          longPressed.current = true
+                          haptic('success')
+                          void db.workoutSets.update(set.id, { warmup: !set.warmup })
+                        }, 500)
+                      }}
+                      onPointerUp={() => window.clearTimeout(pressTimer.current)}
+                      onPointerLeave={() => window.clearTimeout(pressTimer.current)}
+                      onContextMenu={(e) => e.preventDefault()}
                       onClick={() => {
+                        if (longPressed.current) return
                         void db.workoutSets.update(set.id, { done: !set.done })
                         if (!set.done) onSetCompleted()
                       }}
-                      aria-label={set.done ? `Satz ${set.setNumber} als offen markieren` : `Satz ${set.setNumber} als erledigt markieren`}
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold tabular-nums transition active:scale-90 ${
-                        set.done ? 'border-accent bg-accent text-accent-fg' : 'border-border text-muted'
+                      aria-label={`${set.warmup ? 'Aufwärmsatz' : 'Satz'} ${set.setNumber} als ${set.done ? 'offen' : 'erledigt'} markieren (lange drücken: Aufwärmsatz)`}
+                      className={`flex h-8 w-8 select-none items-center justify-center rounded-full border text-xs font-semibold tabular-nums transition active:scale-90 ${
+                        set.done ? 'border-accent bg-accent text-accent-fg' : set.warmup ? 'border-dashed border-accent text-accent' : 'border-border text-muted'
                       }`}
                     >
-                      {set.done ? <Check size={15} strokeWidth={3} /> : set.setNumber}
+                      {set.done ? <Check size={15} strokeWidth={3} /> : set.warmup ? 'W' : set.setNumber}
                     </button>
                     <span className="truncate text-[11px] leading-tight tabular-nums text-muted" title="Letztes Mal">
                       {before ? (
                         <>
                           {before.reps ?? '–'}×<br />
-                          {before.weightKg !== undefined ? before.weightKg.toLocaleString('de-DE') : '–'}
+                          {before.weightKg !== undefined ? units.show(before.weightKg, 'weight')!.toLocaleString('de-DE') : '–'}
                         </>
                       ) : (
                         '–'
@@ -572,18 +600,20 @@ function WorkoutExerciseRow({
                       onChange={(n) => db.workoutSets.update(set.id, { reps: n === undefined ? undefined : Math.round(n) })}
                     />
                     <SetStepper
-                      value={set.weightKg}
-                      step={weightStep.step}
-                      label={`Gewicht in kg, Satz ${set.setNumber}`}
-                      onChange={(n) => db.workoutSets.update(set.id, { weightKg: n })}
+                      value={units.show(set.weightKg, 'weight', 1)}
+                      step={displayStep}
+                      label={`Gewicht in ${units.label('weight')}, Satz ${set.setNumber}`}
+                      onChange={(n) => db.workoutSets.update(set.id, { weightKg: units.parse(n, 'weight') })}
                     />
-                    <DecimalInput
-                      value={set.rpe}
-                      onChange={(n) => db.workoutSets.update(set.id, { rpe: n })}
-                      aria-label={`RPE Satz ${set.setNumber}`}
-                      placeholder="–"
-                      className="px-1! text-center"
-                    />
+                    {prefs.showRpe && (
+                      <DecimalInput
+                        value={set.rpe}
+                        onChange={(n) => db.workoutSets.update(set.id, { rpe: n })}
+                        aria-label={`RPE Satz ${set.setNumber}`}
+                        placeholder="–"
+                        className="px-1! text-center"
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => deleteSet(set.id)}
@@ -595,7 +625,9 @@ function WorkoutExerciseRow({
                   </div>
                 )
               })}
-              <label className="flex items-center justify-end gap-1.5 text-[11px] text-muted">
+              <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
+              <span>Lange drücken = Aufwärmsatz (W)</span>
+              <label className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                 ± Schritt
                 <select
                   value={weightStepKg ?? ''}
@@ -613,6 +645,7 @@ function WorkoutExerciseRow({
                   ))}
                 </select>
               </label>
+              </div>
             </div>
           )}
 
@@ -651,6 +684,7 @@ function WorkoutExerciseRow({
 }
 
 const SET_GRID = 'grid-cols-[2rem_1.75rem_1fr_1.25fr_2.25rem_1.25rem]'
+const SET_GRID_NO_RPE = 'grid-cols-[2rem_2rem_1fr_1.35fr_1.25rem]'
 
 /** Kompaktes Feld mit − und + für eine Satzzeile. */
 function SetStepper({ value, step, label, onChange }: { value: number | undefined; step: number; label: string; onChange: (n: number | undefined) => void }) {

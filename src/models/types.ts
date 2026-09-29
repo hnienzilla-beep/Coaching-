@@ -42,6 +42,12 @@ export interface DailyEntry {
   arm?: number
   chest?: number
   leg?: number
+  hip?: number // weitere Maße (einschaltbar in den Einstellungen)
+  glute?: number
+  calf?: number
+  neck?: number
+  sleepH?: number // Schlaf der letzten Nacht in Stunden
+  steps?: number
   notes?: string
   waterMl?: number // getrunkenes Wasser des Tages
 }
@@ -97,6 +103,8 @@ export interface NutritionPlan {
   cookedWeightG?: number
 }
 
+// Die ersten sieben Plätze sind Standard; der achte lässt sich in den Einstellungen einschalten.
+// Gespeichert wird der Platz-Schlüssel, der Anzeigename kommt aus den Einstellungen (mealLabel).
 export const MEAL_TYPES = [
   'Frühstück',
   'Snack 1',
@@ -105,6 +113,7 @@ export const MEAL_TYPES = [
   'Pre-Workout',
   'Post-Workout',
   'Abendessen',
+  'Mahlzeit 8',
 ] as const
 
 export type MealType = (typeof MEAL_TYPES)[number]
@@ -212,6 +221,7 @@ export interface WorkoutSet {
   weightKg?: number
   rpe?: number // gefühlte Anstrengung (RPE), 1-10
   done?: boolean // während des Trainings per Häkchen als erledigt markiert
+  warmup?: boolean // Aufwärmsatz - zählt nicht ins Volumen und nicht in Rekorde
 }
 
 export interface NutritionLog {

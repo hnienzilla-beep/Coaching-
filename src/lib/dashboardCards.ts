@@ -1,6 +1,6 @@
-import { useStoredSet } from './storedSet'
+import { toggleInList, usePrefs } from './prefs'
 
-/** Karten des Dashboards, die sich in den Einstellungen ausblenden lassen. "Heute" bleibt immer. */
+/** Karten des Dashboards, die sich in den Einstellungen sortieren und ausblenden lassen. "Heute" bleibt immer oben. */
 export const DASHBOARD_CARDS = [
   { id: 'naechsterSchritt', label: 'Nächster Schritt', hint: 'Was heute noch offen ist' },
   { id: 'trainingHeute', label: 'Training heute', hint: 'Plan-Tag mit Start-Knopf' },
@@ -13,6 +13,7 @@ export const DASHBOARD_CARDS = [
 ] as const
 export type DashboardCardId = (typeof DASHBOARD_CARDS)[number]['id']
 
-export function useHiddenDashboardCards() {
-  return useStoredSet<DashboardCardId>('coach.dashboard.hidden')
+export function useHiddenDashboardCards(): [DashboardCardId[], (id: DashboardCardId, hidden: boolean) => void] {
+  const prefs = usePrefs()
+  return [prefs.dashboardHidden as DashboardCardId[], (id, hidden) => toggleInList('dashboardHidden', id, hidden)]
 }

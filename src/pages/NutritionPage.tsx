@@ -5,7 +5,9 @@ import { DndContext, closestCenter, useDroppable, type DragEndEvent, type DragOv
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableItem } from '../components/Sortable'
 import { db, exportNutritionPlan, importNutritionPlan } from '../db/db'
-import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
+import { calculate, caloriesFromMacros, nextOrder } from '../lib/calculator'
+import { suggestedMeal } from '../lib/meals'
+import { activeMeals, mealLabel } from '../lib/prefs'
 import { shareOrDownloadFile } from '../lib/share'
 import type { Athlete, MealType, NutritionPlan, PlanMeal } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
@@ -108,14 +110,14 @@ export default function NutritionPage() {
   // Im Rezept ist die Mahlzeit bedeutungslos - gewählt wird sie erst beim Einfügen ins Log.
   // Die Zeilen behalten trotzdem ihren Mahlzeit-Typ (der Vault-Export braucht einen), stehen
   // hier aber als eine flache Zutatenliste statt unter "### Snack 1".
-  const recipeRowMealType: MealType = visibleMeals[visibleMeals.length - 1]?.mealType ?? mealTypeForTime()
+  const recipeRowMealType: MealType = visibleMeals[visibleMeals.length - 1]?.mealType ?? suggestedMeal()
 
   // Beim Bearbeiten stehen alle Mahlzeiten da, auch leere - als Ziel zum Hineinziehen und
   // mit eigenem "+". Sonst nur die belegten.
   const mealGroups = MEAL_TYPES.map((mealType) => {
     const groupRows = rows.filter((r) => r.meal.mealType === mealType)
-    return { key: mealType, label: mealType, mealType, rows: groupRows, sum: sumMacros(groupRows) }
-  }).filter((g) => g.rows.length > 0 || (editing && !isRecipeView))
+    return { key: mealType, label: mealLabel(mealType), mealType, rows: groupRows, sum: sumMacros(groupRows) }
+  }).filter((g) => g.rows.length > 0 || (editing && !isRecipeView && activeMeals().some((m) => m.slot === g.mealType)))
 
   const groups = isRecipeView
     ? rows.length
@@ -528,7 +530,7 @@ export default function NutritionPage() {
 
           {editing && (
             <div className="flex flex-col gap-2">
-              <Button variant="secondary" onClick={() => setAddMeal(isRecipeView ? recipeRowMealType : mealTypeForTime())}>
+              <Button variant="secondary" onClick={() => setAddMeal(isRecipeView ? recipeRowMealType : suggestedMeal())}>
                 {isRecipeView ? '+ Zutat hinzufügen' : '+ Lebensmittel hinzufügen'}
               </Button>
               <Button variant="ghost" onClick={cancelEdit}>
@@ -544,7 +546,7 @@ export default function NutritionPage() {
         onClose={() => setAddMeal(null)}
         title={isRecipeView ? 'Zutat hinzufügen' : 'Lebensmittel hinzufügen'}
         foods={foods ?? []}
-        mealType={addMeal ?? mealTypeForTime()}
+        mealType={addMeal ?? suggestedMeal()}
         showMealType={!isRecipeView}
         onAddFood={addDraftFood}
       />
