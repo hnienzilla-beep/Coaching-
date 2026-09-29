@@ -14,7 +14,7 @@ export const STORY_SLIDES = [
   { id: 'topFood', label: 'Top-Lebensmittel', hint: 'Wovon du die größte Menge gegessen hast' },
   { id: 'serien', label: 'Serien', hint: 'Tage in Folge geloggt' },
   { id: 'vergleich', label: 'Vergleich', hint: 'Zur Vorwoche bzw. zum Vormonat' },
-  { id: 'prognose', label: 'Zielprognose', hint: 'Wann du dein Zielgewicht erreichst (Trend der letzten 3 Wochen)' },
+  { id: 'prognose', label: 'Zielprognose', hint: 'Wann du dein Zielgewicht erreichst (Trend der letzten 2 Wochen)' },
   { id: 'masse', label: 'Körpermaße', hint: 'Veränderung von Bauch, Arm …' },
   { id: 'highlights', label: 'Highlights', hint: 'Schwerster Satz, bester Tag' },
   { id: 'tipps', label: 'Coach-Tipps', hint: '1–3 Tipps für die nächste Zeit' },
