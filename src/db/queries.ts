@@ -1,6 +1,7 @@
 import { db } from './db'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 import { byName, nameKey } from '../lib/names'
+import { repairedFfmiBodyFat } from '../lib/calculator'
 import type {
   Athlete,
   BackgroundPhoto,
@@ -267,6 +268,34 @@ export async function syncBodyFatToDailyEntry(athleteId: string, date: string, b
       await db.dailyEntries.add({ id: crypto.randomUUID(), athleteId, date, bodyFatPct: rounded })
     }
   })
+}
+
+/**
+ * Einmalige Reparatur je Athlet (siehe `repairedFfmiBodyFat`): entfernt bzw. korrigiert die
+ * KFA-Werte, die das Dashboard früher aus dem Startgewicht in die Tageseinträge schrieb.
+ */
+export async function repairStaleFfmiBodyFat(athlete: Athlete): Promise<void> {
+  const flag = `coach.ffmiKfaRepaired.${athlete.id}`
+  try {
+    if (localStorage.getItem(flag)) return
+  } catch {
+    return
+  }
+  if (athlete.ffmi !== undefined) {
+    const entries = await db.dailyEntries.where('athleteId').equals(athlete.id).toArray()
+    await db.transaction('rw', db.dailyEntries, async () => {
+      for (const e of entries) {
+        const fixed = repairedFfmiBodyFat(e, athlete.ffmi!, athlete.weightKg, athlete.heightCm)
+        if (fixed === undefined) continue
+        await db.dailyEntries.update(e.id, { bodyFatPct: fixed ?? undefined })
+      }
+    })
+  }
+  try {
+    localStorage.setItem(flag, '1')
+  } catch {
+    // Ohne Speicher läuft die Reparatur beim nächsten Mal erneut - sie ist wiederholbar.
+  }
 }
 
 export async function addPlanMeal(meal: PlanMeal): Promise<void> {
