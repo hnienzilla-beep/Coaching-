@@ -5,6 +5,7 @@ import { db } from '../db/db'
 import { findByName } from '../lib/names'
 import { Button, Field, Input, ListRow, Select } from '../components/ui'
 import Sheet from '../components/Sheet'
+import { MUSCLES, primaryMuscle, type Muscle } from '../lib/muscles'
 import { fileToResizedDataUrl } from '../lib/image'
 import type { Exercise, MuscleGroup } from '../models/types'
 import { MUSCLE_GROUPS } from '../models/types'
@@ -154,9 +155,9 @@ function ExerciseSheet({
   onClose: () => void
 }) {
   const existing = exercise && exercise !== 'new' ? exercise : undefined
-  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string }>(
+  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string; primaryMuscle?: Muscle }>(
     existing
-      ? { name: existing.name, muscleGroup: existing.muscleGroup, imageDataUrl: existing.imageDataUrl }
+      ? { name: existing.name, muscleGroup: existing.muscleGroup, imageDataUrl: existing.imageDataUrl, primaryMuscle: existing.primaryMuscle }
       : { name: initialName, muscleGroup: MUSCLE_GROUPS[0] },
   )
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +172,7 @@ function ExerciseSheet({
       setError(`„${duplicate.name}" steht schon in der Datenbank.`)
       return
     }
-    const values = { name, muscleGroup: form.muscleGroup, imageDataUrl: form.imageDataUrl }
+    const values = { name, muscleGroup: form.muscleGroup, imageDataUrl: form.imageDataUrl, primaryMuscle: form.primaryMuscle }
     if (existing) await db.exercises.update(existing.id, values)
     else await db.exercises.add({ id: crypto.randomUUID(), ...values })
     onClose()
@@ -208,6 +209,21 @@ function ExerciseSheet({
       <Field label="Muskelgruppe">
         <Select value={form.muscleGroup} onChange={(e) => setForm({ ...form, muscleGroup: e.target.value as MuscleGroup })}>
           {MUSCLE_GROUPS.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Hauptmuskel (Heatmap)">
+        <Select
+          value={form.primaryMuscle ?? ''}
+          onChange={(e) => setForm({ ...form, primaryMuscle: (e.target.value || undefined) as Muscle | undefined })}
+        >
+          <option value="">
+            Automatisch ({primaryMuscle({ name: form.name, muscleGroup: form.muscleGroup }) ?? 'keiner'})
+          </option>
+          {MUSCLES.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
