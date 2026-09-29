@@ -103,7 +103,9 @@ export default function AddFoodSheet({
 
   const q = query.trim().toLowerCase()
   const localMatches = useMemo(() => {
-    const matched = q ? foods.filter((f) => f.name.toLowerCase().includes(q)) : foods
+    // Schnell-Einträge gehören zu einem Tag, nicht in die Auswahl.
+    const pool = foods.filter((f) => !f.quick)
+    const matched = q ? pool.filter((f) => f.name.toLowerCase().includes(q)) : pool
     return [...matched]
       .sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false) || a.name.localeCompare(b.name, 'de'))
       .slice(0, q ? 30 : 15)

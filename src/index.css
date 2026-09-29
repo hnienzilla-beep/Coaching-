@@ -331,3 +331,65 @@ textarea {
     animation: none;
   }
 }
+
+/* Tagesziel erreicht: der Kalorien-Ring glüht in der Akzentfarbe. */
+@keyframes ring-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-accent) 45%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--color-accent) 75%, transparent));
+  }
+}
+.ring-glow {
+  animation: ring-glow 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-glow {
+    animation: none;
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--color-accent) 60%, transparent));
+  }
+}
+
+/* Wasser-Tracker: die Wasseroberfläche schwappt leicht hin und her. */
+@keyframes water-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(64px);
+  }
+}
+.water-wave {
+  animation: water-wave 2.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .water-wave {
+    animation: none;
+  }
+}
+
+/* Muskel-Heatmap: voll trainierte Gruppen glühen leicht. */
+.muscle-glow {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-accent) 70%, transparent));
+}
+
+/* Wochen-Story: Fortschrittsbalken der aktuellen Folie und Ring um eine neue Story. */
+@keyframes story-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.story-progress {
+  animation: story-progress linear forwards;
+}
+.story-ring {
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    conic-gradient(from 0deg, var(--color-accent), #f472b6, #facc15, var(--color-accent)) border-box;
+  border: 2.5px solid transparent;
+}

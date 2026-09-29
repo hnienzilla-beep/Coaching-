@@ -6,6 +6,7 @@ import { db } from '../db/db'
 import { clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
 import ColorWheel from '../components/ColorWheel'
+import FloatingRestTimer from '../components/FloatingRestTimer'
 import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
 import { setLastAthleteId } from '../lib/lastAthlete'
 import { useTheme } from '../lib/theme'
@@ -339,6 +340,7 @@ export default function AthleteLayout() {
           Unterkante liegt. Der volle Systemabstand (34px) schob die Beschriftungen
           spürbar vom Rand weg, ohne dass es etwas bringt. */}
       <nav className="relative grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-1 backdrop-blur-xl">
+        <FloatingRestTimer />
         {/* Die Markierung gleitet zum aktiven Reiter - beim Antippen wie beim Wischen. */}
         {activeTab !== -1 && (
           <span

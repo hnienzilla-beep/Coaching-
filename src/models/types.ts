@@ -18,6 +18,7 @@ export interface Athlete {
   targetWeightKg?: number
   targetDate?: string // ISO date
   ffmi?: number // Fettfreie-Masse-Index (kg/m²), manuell erfasst - dient zur Rückrechnung des KFA
+  waterGoalMl?: number // eigenes Trinkziel; ohne gilt 35 ml je kg Körpergewicht
 }
 
 export interface BackgroundPhoto {
@@ -40,6 +41,7 @@ export interface DailyEntry {
   chest?: number
   leg?: number
   notes?: string
+  waterMl?: number // getrunkenes Wasser des Tages
 }
 
 export interface FoodItem {
@@ -61,6 +63,9 @@ export interface FoodItem {
   // Eigene Mengen-Schnellauswahl in Gramm (z. B. Ei: 60, 120, 180) - ohne gilt die Automatik
   // aus gelernten Mengen und den Standard-Mengen.
   portions?: number[]
+  // Schnell-Eintrag ("Restaurant ca. 900 kcal"): Werte gelten für die ganze Portion (als 100 g
+  // gespeichert). Taucht nicht in Suche und Datenbank auf, nur im Log.
+  quick?: boolean
 }
 
 export interface NutritionPlan {

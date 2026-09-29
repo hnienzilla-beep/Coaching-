@@ -1,9 +1,11 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import {
   REST_DURATIONS,
   cancelRestTimer,
   getRestTimer,
+  setAutoRest,
   setRestDuration,
+  setRestTimerInlineVisible,
   startRestTimer,
   subscribeRestTimer,
 } from '../lib/restTimer'
@@ -16,14 +18,27 @@ import { Button, Select } from './ui'
  * Seitenwechsel und ein Neuladen überlebt.
  */
 export default function RestTimer() {
-  const { duration, endTime, remaining, finishedAt } = useSyncExternalStore(subscribeRestTimer, getRestTimer)
+  const { duration, endTime, remaining, finishedAt, auto } = useSyncExternalStore(subscribeRestTimer, getRestTimer)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Solange diese Zeile im Bild ist, bleibt die schwebende Anzeige (FloatingRestTimer) weg.
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => setRestTimerInlineVisible(entry.isIntersecting))
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      setRestTimerInlineVisible(false)
+    }
+  }, [])
 
   const running = endTime !== null
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
   const ss = String(remaining % 60).padStart(2, '0')
 
   return (
-    <div className="flex min-w-[9.5rem] flex-1 items-center gap-2 rounded-xl bg-surface-2 px-2 py-1.5">
+    <div ref={ref} className="flex min-w-[9.5rem] flex-1 items-center gap-2 rounded-xl bg-surface-2 px-2 py-1.5">
       {running ? (
         <>
           <span className="text-[11px] uppercase tracking-wide text-muted">Pause</span>
@@ -57,6 +72,17 @@ export default function RestTimer() {
               </option>
             ))}
           </Select>
+          <button
+            type="button"
+            onClick={() => setAutoRest(!auto)}
+            aria-pressed={auto}
+            title="Pause startet automatisch nach jedem abgehakten Satz"
+            className={`shrink-0 rounded-lg border px-2 py-1.5 text-[11px] font-medium ${
+              auto ? 'border-accent text-fg' : 'border-border text-muted'
+            }`}
+          >
+            Auto
+          </button>
           <Button variant="primary" onClick={() => startRestTimer(duration)} className="shrink-0 py-1.5">
             Pause
           </Button>

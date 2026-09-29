@@ -10,6 +10,7 @@ import type {
   MealType,
   MuscleGroup,
   NutritionLog,
+  NutritionLogItem,
   PlanMeal,
   WorkoutLog,
   WorkoutSet,
@@ -296,6 +297,36 @@ export async function repairStaleFfmiBodyFat(athlete: Athlete): Promise<void> {
   } catch {
     // Ohne Speicher läuft die Reparatur beim nächsten Mal erneut - sie ist wiederholbar.
   }
+}
+
+/**
+ * Log-Einträge (eines Tages oder einer Mahlzeit) in einen anderen Tag kopieren - hinten angehängt,
+ * mit neuen Ids. `mealType` legt alle in diese Mahlzeit, sonst behalten sie ihre.
+ */
+export async function copyNutritionItems(
+  athleteId: string,
+  items: Pick<NutritionLogItem, 'foodItemId' | 'grams' | 'mealType'>[],
+  targetDate: string,
+  mealType?: MealType,
+): Promise<number> {
+  const valid = items.filter((i) => i.foodItemId !== '' && i.grams > 0)
+  if (valid.length === 0) return 0
+  const log = await getOrCreateNutritionLog(athleteId, targetDate)
+  await db.transaction('rw', db.nutritionLogItems, async () => {
+    const existing = await db.nutritionLogItems.where('nutritionLogId').equals(log.id).toArray()
+    let order = existing.reduce((max, i) => Math.max(max, i.order + 1), 0)
+    for (const item of valid) {
+      await db.nutritionLogItems.add({
+        id: crypto.randomUUID(),
+        nutritionLogId: log.id,
+        mealType: mealType ?? item.mealType,
+        foodItemId: item.foodItemId,
+        grams: item.grams,
+        order: order++,
+      })
+    }
+  })
+  return valid.length
 }
 
 export async function addPlanMeal(meal: PlanMeal): Promise<void> {
