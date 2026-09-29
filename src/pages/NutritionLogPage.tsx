@@ -4,8 +4,10 @@ import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { addDays, copyNutritionItems, getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
-import { calculate, caloriesFromMacros, mealTypeForTime, nextOrder } from '../lib/calculator'
-import { CAL_TOLERANCE, MACRO_TOLERANCE, sumMacros, type Sums } from '../lib/macros'
+import { calculate, caloriesFromMacros, nextOrder } from '../lib/calculator'
+import { suggestedMeal } from '../lib/meals'
+import { mealLabel, usePrefs, type NutritionCard } from '../lib/prefs'
+import { MACRO_TOLERANCE, calTolerance, sumMacros, type Sums } from '../lib/macros'
 import { celebrateOnce, haptic } from '../lib/feedback'
 import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
@@ -44,6 +46,9 @@ export default function NutritionLogPage() {
   const { athlete } = useOutletContext<Ctx>()
   const navigate = useNavigate()
   const coachMode = useCoachMode()
+  // Karten im Log (Einstellungen → Ernährung).
+  const prefs = usePrefs()
+  const showCard = (card: NutritionCard) => !prefs.nutritionHidden.includes(card)
   const logs = useLiveQuery(() => db.nutritionLogs.where('athleteId').equals(athlete.id).reverse().sortBy('date'), [athlete.id])
   const nutritionPlans = useLiveQuery(() => db.nutritionPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const foods = useLiveQuery(() => db.foodItems.toArray(), [])
@@ -113,8 +118,8 @@ export default function NutritionLogPage() {
 
   // Tagesziel geschafft: Kalorien im Zielkorridor und Protein erreicht - einmal Konfetti je Tag.
   const goalReached =
-    sums.kcal >= target.targetCalories - CAL_TOLERANCE &&
-    sums.kcal <= target.targetCalories + CAL_TOLERANCE &&
+    sums.kcal >= target.targetCalories - calTolerance() &&
+    sums.kcal <= target.targetCalories + calTolerance() &&
     sums.protein >= target.proteinG - MACRO_TOLERANCE
   useEffect(() => {
     if (goalReached && selectedDate === todayIso()) celebrateOnce(`tagesziel-${athlete.id}-${selectedDate}`)
@@ -125,7 +130,7 @@ export default function NutritionLogPage() {
     return { mealType, rows: groupRows, sum: sumMacros(groupRows) }
   }).filter((g) => g.rows.length > 0)
 
-  const suggestedMealType = mealTypeForTime()
+  const suggestedMealType = suggestedMeal()
 
   // Vom „+“-Knopf (`?add=1`): gleich die Lebensmittelsuche für heute öffnen.
   const [params, setParams] = useSearchParams()
@@ -133,7 +138,7 @@ export default function NutritionLogPage() {
   useEffect(() => {
     if (!quickAdd) return
     setSelectedDate(todayIso())
-    setAddMeal(mealTypeForTime())
+    setAddMeal(suggestedMeal())
     setParams(
       (p) => {
         p.delete('add')
@@ -339,8 +344,8 @@ export default function NutritionLogPage() {
       <div key={selectedDate} className="anim-page flex flex-col gap-4">
         {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
         <DailySummary sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} reached={goalReached} />
-        <WaterTracker athlete={athlete} date={selectedDate} waterMl={dayEntry?.waterMl ?? 0} weightKg={latestWeight} />
-        {coachMode && (
+        {showCard('wasser') && <WaterTracker athlete={athlete} date={selectedDate} waterMl={dayEntry?.waterMl ?? 0} weightKg={latestWeight} />}
+        {coachMode && showCard('details') && (
           <CollapsibleCard title="Details (Ist / Ziel / Differenz)" defaultExpanded={false}>
             <MacroSumTable sums={sums} target={target} />
           </CollapsibleCard>
@@ -374,7 +379,7 @@ export default function NutritionLogPage() {
             {groups.map((group) => (
               <section key={group.mealType} className="flex flex-col gap-1.5">
                 <SectionHeader
-                  title={group.mealType}
+                  title={mealLabel(group.mealType)}
                   meta={
                     <>
                       {Math.round(group.sum.kcal)} kcal ·{' '}
@@ -386,7 +391,7 @@ export default function NutritionLogPage() {
                       <button
                         type="button"
                         onClick={() => setCopyMeal(group.mealType)}
-                        aria-label={`${group.mealType} kopieren`}
+                        aria-label={`${mealLabel(group.mealType)} kopieren`}
                         title="Mahlzeit in einen anderen Tag kopieren"
                         className="rounded-full px-2 py-0.5 text-base leading-none text-muted hover:text-fg"
                       >
@@ -395,7 +400,7 @@ export default function NutritionLogPage() {
                       <button
                         type="button"
                         onClick={() => setAddMeal(group.mealType)}
-                        aria-label={`Essen zu ${group.mealType} hinzufügen`}
+                        aria-label={`Essen zu ${mealLabel(group.mealType)} hinzufügen`}
                         className="rounded-full px-2.5 py-0.5 text-lg leading-none text-muted hover:text-fg"
                       >
                         +
@@ -432,7 +437,7 @@ export default function NutritionLogPage() {
 
         {/* Erst wenn der Tag schon gut gefüllt ist - bei fast leerem Tag wären ein, zwei
             Lebensmittel kein sinnvoller "Rest". */}
-        {selectedDate === todayIso() && target.targetCalories - sums.kcal <= 1200 && (
+        {showCard('tetris') && selectedDate === todayIso() && target.targetCalories - sums.kcal <= 1200 && (
           <MacroTetris
             remaining={{
               kcal: target.targetCalories - sums.kcal,
@@ -475,7 +480,7 @@ export default function NutritionLogPage() {
         </CollapsibleCard>
       </div>
 
-      <LogHistoryList
+      {showCard('verlauf') && <LogHistoryList
         entries={(logs ?? []).map((log) => ({
           date: log.date,
           summary: historySummary(log.id, log.nutritionPlanId),
@@ -483,7 +488,7 @@ export default function NutritionLogPage() {
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
         emptyText="Noch keine Ernährungstage aufgezeichnet."
-      />
+      />}
 
       <AddFoodSheet
         open={addMeal !== null}

@@ -23,14 +23,21 @@ export function nextStep(input: {
   kcalLeft: number
   waterLeftMl: number
   hour: number
+  /** In den Einstellungen abgeschaltete Hinweise. */
+  hidden?: string[]
+  /** Wassermenge als Text (Einheit aus den Einstellungen) - Standard Liter. */
+  formatWater?: (ml: number) => string
 }): NextStep {
-  if (!input.weighedToday && input.hour < 12) return { kind: 'weight', text: 'Heute noch nicht gewogen – am besten gleich morgens.' }
-  if (input.proteinLeft > 20) return { kind: 'protein', text: `Noch ${Math.round(input.proteinLeft)} g Protein offen.` }
-  if (input.kcalLeft > 300) return { kind: 'kcal', text: `Noch ${Math.round(input.kcalLeft).toLocaleString('de-DE')} kcal Luft für heute.` }
-  if (input.waterLeftMl > 0) {
-    const l = (input.waterLeftMl / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })
-    return { kind: 'water', text: `Noch ${l} l Wasser bis zum Ziel.` }
+  const on = (k: NextStep['kind']) => !input.hidden?.includes(k)
+  if (on('weight') && !input.weighedToday && input.hour < 12) return { kind: 'weight', text: 'Heute noch nicht gewogen – am besten gleich morgens.' }
+  if (on('protein') && input.proteinLeft > 20) return { kind: 'protein', text: `Noch ${Math.round(input.proteinLeft)} g Protein offen.` }
+  if (on('kcal') && input.kcalLeft > 300) return { kind: 'kcal', text: `Noch ${Math.round(input.kcalLeft).toLocaleString('de-DE')} kcal Luft für heute.` }
+  if (on('water') && input.waterLeftMl > 0) {
+    const amount = input.formatWater
+      ? input.formatWater(input.waterLeftMl)
+      : `${(input.waterLeftMl / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} l`
+    return { kind: 'water', text: `Noch ${amount} Wasser bis zum Ziel.` }
   }
-  if (!input.weighedToday) return { kind: 'weight', text: 'Heute noch nicht gewogen.' }
+  if (on('weight') && !input.weighedToday) return { kind: 'weight', text: 'Heute noch nicht gewogen.' }
   return { kind: 'done', text: 'Alles erledigt für heute – stark!' }
 }

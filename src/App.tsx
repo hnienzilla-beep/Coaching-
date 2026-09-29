@@ -94,6 +94,7 @@ function App() {
           <Route path="ernaehrung" element={<ErnaehrungPage />} />
           <Route path="training" element={<TrainingPage />} />
           <Route path="einstellungen" element={<SettingsPage />} />
+          <Route path="einstellungen/:section" element={<SettingsPage />} />
         </Route>
         {/* Ohne Auffangroute rendert eine unbekannte Hash-Adresse eine leere Seite. */}
         <Route path="*" element={<Navigate to="/" replace />} />

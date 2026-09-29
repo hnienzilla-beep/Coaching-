@@ -13,7 +13,7 @@ export function useMuscleRecords(athleteId: string): MuscleSetRecord[] | undefin
     const logExercises = await db.workoutLogExercises.where('workoutLogId').anyOf([...dateByLog.keys()]).toArray()
     const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]))
     const byLogExercise = new Map(logExercises.map((le) => [le.id, le]))
-    const done = await db.workoutSets.where('workoutLogExerciseId').anyOf([...byLogExercise.keys()]).filter((s) => !!s.done).toArray()
+    const done = await db.workoutSets.where('workoutLogExerciseId').anyOf([...byLogExercise.keys()]).filter((s) => !!s.done && !s.warmup).toArray()
     const records: MuscleSetRecord[] = []
     for (const s of done) {
       const le = byLogExercise.get(s.workoutLogExerciseId)

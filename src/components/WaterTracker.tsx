@@ -6,10 +6,20 @@ import { celebrateOnce, haptic } from '../lib/feedback'
 import { useGrowIn } from '../lib/countUp'
 import type { Athlete } from '../models/types'
 import { waterGoalFor } from '../lib/water'
+import { getPrefs, usePrefs } from '../lib/prefs'
+import { fromDisplay, toDisplay } from '../lib/units'
 import { Card, CountUp, DecimalInput } from './ui'
 
-function liters(ml: number): string {
-  return (ml / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+/** Wassermenge in der eingestellten Einheit: Liter bzw. Unzen - ohne Einheit. */
+function volume(ml: number, oz: boolean): string {
+  return oz
+    ? Math.round(toDisplay(ml, 'volume')).toLocaleString('de-DE')
+    : (ml / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+}
+
+/** Beschriftung eines Wasser-Knopfs, z.B. "250 ml" bzw. "8 oz". */
+function amountLabel(ml: number): string {
+  return getPrefs().volumeUnit === 'oz' ? `${Math.round(toDisplay(ml, 'volume'))} oz` : `${ml} ml`
 }
 
 /**
@@ -28,6 +38,11 @@ export default function WaterTracker({
   weightKg?: number
 }) {
   const goal = waterGoalFor(athlete, weightKg)
+  const prefs = usePrefs()
+  const oz = prefs.volumeUnit === 'oz'
+  const unit = oz ? 'oz' : 'l'
+  const amounts = [...prefs.waterAmounts].filter((ml) => ml > 0).sort((a, b) => a - b)
+  const smallest = amounts[0] ?? 250
   const grown = useGrowIn()
   const [editingGoal, setEditingGoal] = useState(false)
   const fraction = Math.min(1, waterMl / goal)
@@ -82,51 +97,51 @@ export default function WaterTracker({
             <label className="flex items-center gap-1 text-xs text-muted">
               Ziel
               <DecimalInput
-                value={goal / 1000}
+                value={oz ? Math.round(toDisplay(goal, 'volume')) : goal / 1000}
                 autoFocus
-                aria-label="Trinkziel in Litern"
+                aria-label={oz ? 'Trinkziel in Unzen' : 'Trinkziel in Litern'}
                 className="w-16! px-2! py-1! text-xs!"
                 onBlur={() => setEditingGoal(false)}
                 onChange={(n) => {
-                  if (n !== undefined && n > 0) void db.athletes.update(athlete.id, { waterGoalMl: Math.round(n * 1000) })
+                  if (n !== undefined && n > 0)
+                    void db.athletes.update(athlete.id, { waterGoalMl: Math.round(oz ? fromDisplay(n, 'volume') : n * 1000) })
                 }}
               />
-              l
+              {unit}
             </label>
           ) : (
             <button type="button" onClick={() => setEditingGoal(true)} className="text-xs text-muted underline-offset-2 hover:underline">
-              Ziel {liters(goal)} l <Pencil size={11} className="inline -translate-y-px" />
+              Ziel {volume(goal, oz)} {unit} <Pencil size={11} className="inline -translate-y-px" />
             </button>
           )}
         </div>
         <div className="flex items-baseline gap-1">
-          <CountUp value={waterMl / 1000} decimals={2} className="text-2xl font-bold tabular-nums text-fg" />
-          <span className="text-sm text-muted">l {reached ? '· geschafft' : `· noch ${liters(goal - waterMl)} l`}</span>
+          <CountUp value={oz ? toDisplay(waterMl, 'volume') : waterMl / 1000} decimals={oz ? 0 : 2} className="text-2xl font-bold tabular-nums text-fg" />
+          <span className="text-sm text-muted">
+            {unit} {reached ? '· geschafft' : `· noch ${volume(goal - waterMl, oz)} ${unit}`}
+          </span>
         </div>
+        {/* Mengen aus den Einstellungen (Dashboard → Wasser-Knöpfe); − nimmt die kleinste zurück. */}
         <div className="flex gap-1.5">
           <button
             type="button"
-            onClick={() => void add(-250)}
+            onClick={() => void add(-smallest)}
             disabled={waterMl <= 0}
-            aria-label="250 ml weniger"
+            aria-label={`${amountLabel(smallest)} weniger`}
             className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition active:scale-95 disabled:opacity-40"
           >
             −
           </button>
-          <button
-            type="button"
-            onClick={() => void add(250)}
-            className="flex-1 rounded-lg bg-sky-500/15 py-1.5 text-sm font-medium text-sky-500 transition active:scale-95"
-          >
-            + 250 ml
-          </button>
-          <button
-            type="button"
-            onClick={() => void add(500)}
-            className="flex-1 rounded-lg bg-sky-500/15 py-1.5 text-sm font-medium text-sky-500 transition active:scale-95"
-          >
-            + 500 ml
-          </button>
+          {amounts.slice(0, 2).map((ml) => (
+            <button
+              key={ml}
+              type="button"
+              onClick={() => void add(ml)}
+              className="flex-1 rounded-lg bg-sky-500/15 py-1.5 text-sm font-medium text-sky-500 transition active:scale-95"
+            >
+              + {amountLabel(ml)}
+            </button>
+          ))}
         </div>
       </div>
     </Card>

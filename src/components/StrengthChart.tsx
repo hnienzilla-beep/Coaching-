@@ -33,7 +33,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   )
   const logExerciseIds = (logExercises ?? []).map((r) => r.id)
   const workoutSets = useLiveQuery(
-    () => (logExerciseIds.length ? db.workoutSets.where('workoutLogExerciseId').anyOf(logExerciseIds).toArray() : []),
+    () => (logExerciseIds.length ? db.workoutSets.where('workoutLogExerciseId').anyOf(logExerciseIds).filter((s) => !s.warmup).toArray() : []),
     [logExerciseIds.join(',')],
   )
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
