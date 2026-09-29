@@ -409,8 +409,8 @@ export default function TrackingPage() {
       {!simple && show('export') && (
         <CollapsibleCard title="Fortschritt teilen" defaultExpanded={false}>
           <p className="text-xs text-muted">
-            Exportiert die letzten 7 Tage aus Tracking, Ernährungs-Log und Trainings-Log zum Versenden. Beim Importieren
-            werden diese Tage für {athlete.name} aktualisiert.
+            Exportiert die Profildaten und die letzten 7 Tage aus Tracking, Ernährungs-Log und Trainings-Log zum Versenden. Beim Importieren
+            werden Profil und Tage für {athlete.name} aktualisiert (Name und Farbe bleiben).
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={handleExportProgress} className="flex-1">
