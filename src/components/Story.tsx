@@ -298,7 +298,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
       kicker: 'Neue Rekorde',
       big: { value: stats.prs.length },
       unit: stats.prs.length === 1 ? 'Bestleistung' : 'Bestleistungen',
-      lines: stats.prs.slice(0, 3).map((p) => `${p.exercise}: ${fmt(p.weightKg, 1)} kg × ${p.reps}${p.previousKg ? ` (vorher ${fmt(p.previousKg, 1)})` : ''}`),
+      lines: stats.prs.slice(0, 3).map((p) => `${p.exercise}: 1RM ${fmt(p.oneRm, 1)} kg (vorher ${fmt(p.previousOneRm, 1)}) – ${fmt(p.weightKg, 1)} kg × ${p.reps}`),
     })
   }
   if (on('topFood') && stats.topFoods.length > 0) {
@@ -307,7 +307,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
       emoji: '🥇',
       kicker: 'Top-Lebensmittel',
       bigText: stats.topFoods[0].name,
-      lines: stats.topFoods.map((f, i) => `${i + 1}. ${f.name} – ${f.count}× (${fmt(f.grams / 1000, 1)} kg)`),
+      lines: stats.topFoods.map((f, i) => `${i + 1}. ${f.name} – ${f.grams >= 1000 ? `${fmt(f.grams / 1000, 1)} kg` : `${fmt(f.grams)} g`} (${f.count}×)`),
     })
   }
   if (on('serien') && stats.bestStreak > 0) {
@@ -339,7 +339,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
         kicker: 'Zielprognose',
         big: { value: Math.max(1, Math.round(f.days / 7)) },
         unit: `Wochen bis ${fmt(athlete.targetWeightKg, 1)} kg`,
-        lines: [`Bei ${signed(f.perWeek, 2)} kg/Woche etwa am ${shortDate(f.date)}.`],
+        lines: [`Trend der letzten 3 Wochen: ${signed(f.perWeek, 2)} kg/Woche – etwa am ${shortDate(f.date)}.`],
       })
     } else if (f.kind === 'away') {
       slides.push({ id: 'prognose', emoji: '🎯', kicker: 'Zielprognose', bigText: 'Kurs korrigieren', lines: [`Trend ${signed(f.perWeek, 2)} kg/Woche – so wird ${fmt(athlete.targetWeightKg, 1)} kg nicht erreicht.`] })

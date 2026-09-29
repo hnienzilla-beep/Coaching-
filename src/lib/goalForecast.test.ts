@@ -26,4 +26,14 @@ describe('forecastGoal', () => {
   it('erkennt ein erreichtes Ziel', () => {
     expect(forecastGoal(series(80.1, 0), 80, today).kind).toBe('reached')
   })
+
+  it('berücksichtigt nur das gewählte Zeitfenster', () => {
+    // Bis vor 3 Wochen stark abgenommen, seitdem Stillstand: mit 3-Wochen-Fenster keine Prognose.
+    const pts = Array.from({ length: 42 }, (_, i) => {
+      const date = addDays(today, i - 41)
+      return { date, weightKg: i < 21 ? 90 - i * 0.3 : 84 }
+    })
+    expect(forecastGoal(pts, 80, today).kind).toBe('eta')
+    expect(forecastGoal(pts, 80, today, 21).kind).toBe('away')
+  })
 })
