@@ -11,7 +11,7 @@ export type Tempo = 'sanft' | 'normal' | 'ehrgeizig'
 export type MacroStyle = 'ausgewogen' | 'protein' | 'lowcarb'
 export type Experience = 'einsteiger' | 'fortgeschritten' | 'erfahren'
 export type Location = 'studio' | 'zuhause' | 'beides'
-export type Split = 'ganzkoerper' | 'okuk' | 'ppl'
+export type Split = 'ganzkoerper' | 'okuk' | 'pushpullfb' | 'torsolimbs' | 'ppl' | 'pplokuk' | 'arnold' | 'bro'
 export type Diet = 'alles' | 'vegetarisch' | 'vegan' | 'pescetarisch'
 export type Allergen = 'laktose' | 'gluten' | 'nuesse' | 'ei' | 'fisch' | 'soja'
 export type Restriction = 'knie' | 'schulter' | 'ruecken' | 'handgelenk' | 'ellbogen'
@@ -44,6 +44,8 @@ export interface StartAnswers {
   diet: Diet
   allergens: Allergen[]
   supplements: string[]
+  /** Selbst gewählt - sonst gelten die Empfehlungen (recommendSupplements). */
+  supplementsTouched?: boolean
 }
 
 export const DEFAULT_ANSWERS: StartAnswers = {
@@ -100,7 +102,7 @@ export function goalLabelFor(goal: StartGoal, tempo: Tempo): string {
 }
 
 export function macroFactors(style: MacroStyle): { proteinPerKg: number; fatPerKg: number } {
-  if (style === 'protein') return { proteinPerKg: 2.4, fatPerKg: 0.9 }
+  if (style === 'protein') return { proteinPerKg: 2.3, fatPerKg: 0.8 }
   if (style === 'lowcarb') return { proteinPerKg: 2.2, fatPerKg: 1.4 }
   return { proteinPerKg: 2.0, fatPerKg: 1.0 }
 }
@@ -302,6 +304,16 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   'Unterkörper A': ['squat', 'hinge', 'lunge', 'hamstring', 'calves', 'core', 'glute'],
   'Oberkörper B': ['incline', 'vpull', 'hpull', 'lateral', 'rear', 'triceps', 'biceps', 'vpush'],
   'Unterkörper B': ['hinge', 'glute', 'lunge', 'squat', 'calves', 'core', 'hamstring'],
+  'Push Fullbody': ['squat', 'hpush', 'vpush', 'lunge', 'lateral', 'triceps', 'core', 'calves'],
+  'Pull Fullbody': ['hinge', 'vpull', 'hpull', 'hamstring', 'rear', 'biceps', 'glute', 'core'],
+  Torso: ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'rear', 'incline', 'core'],
+  Limbs: ['squat', 'hinge', 'biceps', 'triceps', 'lunge', 'hamstring', 'calves', 'biceps'],
+  'Brust & Rücken': ['hpush', 'vpull', 'incline', 'hpull', 'incline', 'core', 'rear'],
+  'Schultern & Arme': ['vpush', 'biceps', 'triceps', 'lateral', 'biceps', 'triceps', 'rear'],
+  Brust: ['hpush', 'incline', 'incline', 'hpush', 'core'],
+  Rücken: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'core'],
+  Schultern: ['vpush', 'lateral', 'rear', 'vpush', 'core'],
+  Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps'],
   Push: ['hpush', 'vpush', 'incline', 'lateral', 'triceps', 'core', 'triceps'],
   Pull: ['vpull', 'hpull', 'rear', 'biceps', 'hinge', 'core', 'biceps'],
   Beine: ['squat', 'hinge', 'lunge', 'hamstring', 'glute', 'calves', 'core'],
@@ -320,13 +332,49 @@ const FOCUS_SLOTS: Record<Focus, Slot[]> = {
 export const SPLIT_LABELS: Record<Split, string> = {
   ganzkoerper: 'Ganzkörper',
   okuk: 'Oberkörper / Unterkörper',
+  pushpullfb: 'Push Fullbody / Pull Fullbody',
+  torsolimbs: 'Torso / Limbs',
   ppl: 'Push / Pull / Beine',
+  pplokuk: 'Push / Pull / Beine + Ober-/Unterkörper',
+  arnold: 'Arnold-Split (Brust & Rücken / Schultern & Arme / Beine)',
+  bro: 'Bro-Split (Brust / Rücken / Beine / Schultern / Arme)',
 }
 
-/** Vorschlag je nach Trainingstagen und Erfahrung. */
+/** Plan-Tage je Split - wiederholen sich reihum, wenn mehr Trainingstage geplant sind. */
+function splitDays(split: Split, dayCount: number): string[] {
+  switch (split) {
+    case 'ganzkoerper':
+      return ['Ganzkörper A', 'Ganzkörper B', 'Ganzkörper C'].slice(0, Math.min(3, Math.max(2, dayCount)))
+    case 'okuk':
+      return dayCount >= 4 ? ['Oberkörper A', 'Unterkörper A', 'Oberkörper B', 'Unterkörper B'] : ['Oberkörper A', 'Unterkörper A']
+    case 'pushpullfb':
+      return ['Push Fullbody', 'Pull Fullbody']
+    case 'torsolimbs':
+      return ['Torso', 'Limbs']
+    case 'ppl':
+      return ['Push', 'Pull', 'Beine']
+    case 'pplokuk':
+      return ['Push', 'Pull', 'Beine', 'Oberkörper A', 'Unterkörper A']
+    case 'arnold':
+      return ['Brust & Rücken', 'Schultern & Arme', 'Beine']
+    case 'bro':
+      return ['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme']
+  }
+}
+
+/** Passende Splits je Zahl der Trainingstage - der erste ist der Standard-Vorschlag. */
+export function splitsFor(days: number): Split[] {
+  if (days <= 2) return ['ganzkoerper', 'pushpullfb', 'torsolimbs', 'okuk']
+  if (days === 3) return ['ganzkoerper', 'pushpullfb', 'ppl', 'arnold']
+  if (days === 4) return ['okuk', 'pushpullfb', 'torsolimbs', 'ganzkoerper']
+  if (days === 5) return ['pushpullfb', 'ppl', 'pplokuk', 'bro', 'okuk']
+  return ['ppl', 'arnold', 'pushpullfb', 'pplokuk']
+}
+
+/** Vorschlag je nach Trainingstagen und Erfahrung - Einsteiger bekommen die einfacheren Splits. */
 export function suggestedSplit(days: number, experience: Experience): Split {
-  if (days <= 3 || experience === 'einsteiger') return days >= 4 ? 'okuk' : 'ganzkoerper'
-  return days >= 5 ? 'ppl' : 'okuk'
+  if (experience === 'einsteiger') return days >= 4 ? 'okuk' : 'ganzkoerper'
+  return splitsFor(days)[0]
 }
 
 export interface PlanDay {
@@ -339,14 +387,7 @@ const EXERCISES_PER_DURATION: Record<StartAnswers['durationMin'], number> = { 30
 export function buildTrainingPlan(a: StartAnswers): PlanDay[] {
   const split = a.split ?? suggestedSplit(a.trainingDays.length, a.experience)
   const dayCount = Math.max(1, a.trainingDays.length)
-  const names =
-    split === 'ganzkoerper'
-      ? ['Ganzkörper A', 'Ganzkörper B', 'Ganzkörper C'].slice(0, Math.min(3, Math.max(2, dayCount)))
-      : split === 'okuk'
-        ? dayCount >= 4
-          ? ['Oberkörper A', 'Unterkörper A', 'Oberkörper B', 'Unterkörper B']
-          : ['Oberkörper A', 'Unterkörper A']
-        : ['Push', 'Pull', 'Beine']
+  const names = splitDays(split, dayCount)
   const count = EXERCISES_PER_DURATION[a.durationMin]
   const focusSlots = new Set(a.focus.flatMap((f) => FOCUS_SLOTS[f]))
 
@@ -408,6 +449,7 @@ const FOODS: Record<string, FoodTag> = {
   'Sojamilch (ungesüßt)': { diet: 'vegan', allergens: ['soja'], grams: 300 },
   'Tofu (natur)': { diet: 'vegan', allergens: ['soja'], grams: 200 },
   Tempeh: { diet: 'vegan', allergens: ['soja'], grams: 150 },
+  Seitan: { diet: 'vegan', allergens: ['gluten'], grams: 60 }, // Werte in der DB sind sehr proteinreich (75 g/100 g)
   'Edamame (gekocht)': { diet: 'vegan', allergens: ['soja'], grams: 150 },
   'Linsen (rot, gekocht)': { diet: 'vegan', grams: 200 },
   'Kichererbsen (gekocht)': { diet: 'vegan', grams: 200 },
@@ -444,9 +486,10 @@ const FOODS: Record<string, FoodTag> = {
 
 type MealTemplate = { meal: string; roles: [Role, string[]][] }
 
-const PROTEIN_MAIN = ['Hähnchenbrust (gegart)', 'Lachs (gegart)', 'Tofu (natur)', 'Linsen (rot, gekocht)', 'Ei (ganz)', 'Kichererbsen (gekocht)']
-const PROTEIN_EVENING = ['Seelachs (gegart)', 'Putenkeule (gegart)', 'Rinderhack mager (roh)', 'Tempeh', 'Hüttenkäse (körnig)', 'Kichererbsen (gekocht)', 'Ei (ganz)', 'Tofu (natur)']
-const BREAKFAST_PROTEIN = ['Skyr', 'Magerquark', 'Griechischer Joghurt 2%', 'Sojamilch (ungesüßt)', 'Ei (ganz)', 'Tofu (natur)', 'Kichererbsen (gekocht)']
+// Magere Quellen zuerst - sonst bringt das Protein mehr Fett mit, als das Ziel zulässt.
+const PROTEIN_MAIN = ['Hähnchenbrust (gegart)', 'Seelachs (gegart)', 'Seitan', 'Linsen (rot, gekocht)', 'Tofu (natur)', 'Ei (ganz)', 'Kichererbsen (gekocht)']
+const PROTEIN_EVENING = ['Lachs (gegart)', 'Putenkeule (gegart)', 'Rinderhack mager (roh)', 'Hüttenkäse (körnig)', 'Seitan', 'Linsen (rot, gekocht)', 'Tofu (natur)', 'Kichererbsen (gekocht)', 'Ei (ganz)', 'Tempeh']
+const BREAKFAST_PROTEIN = ['Skyr', 'Magerquark', 'Griechischer Joghurt 2%', 'Sojamilch (ungesüßt)', 'Ei (ganz)', 'Tofu (natur)', 'Kichererbsen (gekocht)', 'Linsen (rot, gekocht)']
 
 const TEMPLATES: Record<'Trainingstag' | 'Ruhetag', MealTemplate[]> = {
   Trainingstag: [
@@ -538,7 +581,29 @@ export function buildMealPlans(a: Pick<StartAnswers, 'diet' | 'allergens'>, targ
 
 export const START_SUPPLEMENTS = ['Kreatin Monohydrat', 'Whey Protein', 'Omega-3 Fischöl', 'Vitamin D3', 'Magnesium', 'Multivitamin', 'Zink', 'Koffein']
 
-/** Bei veganer Ernährung die pflanzlichen Varianten. */
-export function supplementNamesFor(a: Pick<StartAnswers, 'supplements' | 'diet'>): string[] {
-  return a.supplements.map((s) => (a.diet === 'vegan' && s === 'Omega-3 Fischöl' ? 'Omega-3 Algenöl (vegan)' : s))
+/** Empfehlungen aus den Antworten - mit kurzem Grund. Namen wie in der Supplement-Datenbank. */
+export function recommendSupplements(a: Pick<StartAnswers, 'trainingDays' | 'diet' | 'allergens' | 'gender' | 'weightKg' | 'macroStyle'>): { name: string; reason: string }[] {
+  const out: { name: string; reason: string }[] = []
+  const plantBased = a.diet === 'vegan' || a.diet === 'vegetarisch'
+  if (a.trainingDays.length >= 2) out.push({ name: 'Kreatin Monohydrat', reason: 'Mehr Kraft und Leistung bei regelmäßigem Training' })
+  if (a.diet !== 'vegan' && !a.allergens.includes('laktose')) {
+    const protein = Math.round(a.weightKg * macroFactors(a.macroStyle).proteinPerKg)
+    out.push({ name: 'Whey Protein', reason: `Macht ${protein} g Protein am Tag leichter erreichbar` })
+  }
+  out.push({ name: 'Vitamin D3', reason: 'In unseren Breiten oft zu wenig – vor allem Oktober bis März' })
+  if (plantBased || a.allergens.includes('fisch')) out.push({ name: 'Omega-3 Algenöl (vegan)', reason: 'Omega-3 ohne Fisch' })
+  else if (a.diet === 'alles') out.push({ name: 'Omega-3 Fischöl', reason: 'Wenn du seltener als 2× pro Woche fetten Fisch isst' })
+  if (a.trainingDays.length >= 4) out.push({ name: 'Magnesium', reason: 'Bei viel Training für Muskeln und Schlaf' })
+  if (a.diet === 'vegan') out.push({ name: 'Vitamin B-Komplex', reason: 'Vitamin B12 fehlt in veganer Ernährung' })
+  if (plantBased && a.gender === 'Weiblich') out.push({ name: 'Eisen', reason: 'Eisen aus Pflanzen wird schlechter aufgenommen – vorher Blutwerte prüfen' })
+  return out
+}
+
+/**
+ * Supplements für den Plan: solange nichts selbst angeklickt wurde, die Empfehlungen; danach
+ * die eigene Auswahl. Bei veganer Ernährung die pflanzlichen Varianten.
+ */
+export function supplementNamesFor(a: StartAnswers): string[] {
+  const chosen = a.supplementsTouched ? a.supplements : recommendSupplements(a).map((r) => r.name)
+  return [...new Set(chosen.map((s) => (a.diet === 'vegan' && s === 'Omega-3 Fischöl' ? 'Omega-3 Algenöl (vegan)' : s)))]
 }
