@@ -339,7 +339,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
         kicker: 'Zielprognose',
         big: { value: Math.max(1, Math.round(f.days / 7)) },
         unit: `Wochen bis ${fmt(athlete.targetWeightKg, 1)} kg`,
-        lines: [`Trend der letzten 3 Wochen: ${signed(f.perWeek, 2)} kg/Woche – etwa am ${shortDate(f.date)}.`],
+        lines: [`Trend der letzten 2 Wochen: ${signed(f.perWeek, 2)} kg/Woche – etwa am ${shortDate(f.date)}.`],
       })
     } else if (f.kind === 'away') {
       slides.push({ id: 'prognose', emoji: '🎯', kicker: 'Zielprognose', bigText: 'Kurs korrigieren', lines: [`Trend ${signed(f.perWeek, 2)} kg/Woche – so wird ${fmt(athlete.targetWeightKg, 1)} kg nicht erreicht.`] })
