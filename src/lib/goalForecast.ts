@@ -11,11 +11,11 @@ function dayIndex(iso: string): number {
 }
 
 /**
- * Zielprognose aus dem Gewichtsverlauf der letzten `windowDays` Tage (Standard 4 Wochen): lineare Regression über alle
+ * Zielprognose aus dem Gewichtsverlauf der letzten `windowDays` Tage (Standard 3 Wochen): lineare Regression über alle
  * Wiegungen (robuster als erster gegen letzten Wert). Braucht mindestens 5 Wiegungen über
  * mindestens 7 Tage. Liegt das Ziel weiter als ein Jahr weg, gilt es als "zu weit".
  */
-export function forecastGoal(points: { date: string; weightKg?: number }[], targetKg: number, today: string, windowDays = 28): Forecast {
+export function forecastGoal(points: { date: string; weightKg?: number }[], targetKg: number, today: string, windowDays = 21): Forecast {
   const since = addDays(today, -(windowDays - 1))
   const pts = points
     .filter((p) => p.weightKg !== undefined && p.date >= since && p.date <= today)
