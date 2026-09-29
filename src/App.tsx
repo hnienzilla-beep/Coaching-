@@ -28,6 +28,7 @@ import FoodDatabasePage from './pages/FoodDatabasePage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
 import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
 import SettingsPage from './pages/SettingsPage'
+import StartJourney from './pages/StartJourney'
 
 function App() {
   // Auto-Sync und Pausen-Timer laufen für die gesamte App-Laufzeit (alle Aufrufe sind
@@ -85,6 +86,7 @@ function App() {
       <Routes>
         <Route path="/" element={<StartRedirect />} />
         <Route path="/athleten" element={<AthleteListPage />} />
+        <Route path="/dein-start" element={<StartJourney />} />
         <Route path="/lebensmittel" element={<FoodDatabasePage />} />
         <Route path="/supplemente" element={<SupplementDatabasePage />} />
         <Route path="/uebungen" element={<ExerciseDatabasePage />} />

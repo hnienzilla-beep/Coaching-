@@ -29,8 +29,9 @@ describe('primaryMuscle', () => {
   it('eigene Einstellung gewinnt', () => {
     expect(primaryMuscle({ name: 'Dips', muscleGroup: 'Brust', primaryMuscle: 'Trizeps' })).toBe('Trizeps')
   })
-  it('jede Standard-Übung außer Ganzkörper hat einen Muskel', () => {
-    for (const e of EXERCISE_SEED) if (e.muscleGroup !== 'Ganzkörper') expect(m(e.name), e.name).toBeDefined()
+  it('jede Standard-Übung außer Ganzkörper und Cardio hat einen Muskel', () => {
+    // Cardio (Sonstiges) trainiert keinen einzelnen Muskel.
+    for (const e of EXERCISE_SEED) if (e.muscleGroup !== 'Ganzkörper' && e.muscleGroup !== 'Sonstiges') expect(m(e.name), e.name).toBeDefined()
   })
 })
 

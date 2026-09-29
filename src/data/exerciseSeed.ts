@@ -47,4 +47,14 @@ export const EXERCISE_SEED: ExerciseSeed[] = [
   { name: 'Russian Twist', muscleGroup: 'Bauch' },
   { name: 'Burpees', muscleGroup: 'Ganzkörper' },
   { name: 'Kettlebell Swings', muscleGroup: 'Ganzkörper' },
+  // Für Pläne aus „Dein Start“: Varianten fürs Training zuhause und Cardio.
+  { name: 'Goblet Squat', muscleGroup: 'Beine' },
+  { name: 'Rumänisches Kreuzheben', muscleGroup: 'Beine' },
+  { name: 'Glute Bridge', muscleGroup: 'Beine' },
+  { name: 'Kurzhantel-Bankdrücken', muscleGroup: 'Brust' },
+  { name: 'Pike Push-ups', muscleGroup: 'Schultern' },
+  { name: 'Laufen', muscleGroup: 'Sonstiges' },
+  { name: 'Radfahren (Ergometer)', muscleGroup: 'Sonstiges' },
+  { name: 'Crosstrainer', muscleGroup: 'Sonstiges' },
+  { name: 'Seilspringen', muscleGroup: 'Sonstiges' },
 ]

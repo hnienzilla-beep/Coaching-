@@ -578,12 +578,17 @@ function TodayTraining({ athlete, onGo }: { athlete: Athlete; onGo: (path: strin
   if (!started && !next) return null
 
   const finished = !!todayLog?.completedAt
-  const title = started ? (todayPlan?.phaseName ?? 'Training heute') : next!.phaseName
+  // Geplante Trainingstage (aus „Dein Start“): an anderen Tagen ist Ruhetag - starten geht trotzdem.
+  const weekday = (new Date().getDay() + 6) % 7
+  const restDay = !started && !!athlete.trainingDays?.length && !athlete.trainingDays.includes(weekday)
+  const title = started ? (todayPlan?.phaseName ?? 'Training heute') : restDay ? 'Heute Ruhetag' : next!.phaseName
   const sub = finished
     ? 'Heute abgeschlossen'
     : started
       ? `${progress!.done}/${progress!.total} Sätze erledigt`
-      : `Heute dran · ${exerciseCount} ${exerciseCount === 1 ? 'Übung' : 'Übungen'}`
+      : restDay
+        ? `Nächstes Training: ${next!.phaseName}`
+        : `Heute dran · ${exerciseCount} ${exerciseCount === 1 ? 'Übung' : 'Übungen'}`
 
   return (
     <Card className="flex items-center gap-3">
@@ -605,7 +610,7 @@ function TodayTraining({ athlete, onGo }: { athlete: Athlete; onGo: (path: strin
           onClick={() => onGo(started ? 'training?view=log' : `training?view=log&plan=${next!.id}`)}
           className="shrink-0 rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-accent-fg transition active:scale-95"
         >
-          {started ? 'Weiter' : 'Starten'}
+          {started ? 'Weiter' : restDay ? 'Trotzdem' : 'Starten'}
         </button>
       )}
     </Card>

@@ -7,7 +7,8 @@ import { startReminders } from '../lib/reminders'
 import { SECTIONS } from '../lib/settingsMeta'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { sortAthletes } from '../db/queries'
+import { sortAthletes, todayIso } from '../db/queries'
+import { ageFromBirthDate } from '../lib/startPlan'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
 import FloatingRestTimer from '../components/FloatingRestTimer'
 import QuickAddButton from '../components/QuickAddButton'
@@ -85,6 +86,13 @@ export default function AthleteLayout() {
     mainRef.current?.scrollTo({ top: 0 })
     setCompact(false)
   }, [pathname])
+
+  // Mit Geburtsdatum bleibt das Alter von selbst aktuell (fließt in den Kalorienbedarf).
+  useEffect(() => {
+    if (!athlete?.birthDate) return
+    const age = ageFromBirthDate(athlete.birthDate, todayIso())
+    if (age > 0 && age !== athlete.age) void db.athletes.update(athlete.id, { age })
+  }, [athlete?.id, athlete?.birthDate, athlete?.age])
 
   // Merken, wo man war: Beim nächsten App-Start landet man wieder bei diesem Athleten.
   const loadedAthleteId = athlete?.id
@@ -191,7 +199,7 @@ export default function AthleteLayout() {
                     <>
                       <div className="my-1 border-t border-border" />
                       <Link
-                        to="/athleten?neu=1"
+                        to="/dein-start"
                         onClick={() => setAthletePickerOpen(false)}
                         className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
                       >
