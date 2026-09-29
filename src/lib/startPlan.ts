@@ -1,5 +1,7 @@
 import { ACTIVITY_LEVELS, calculate, type CalculatorResult } from './calculator'
 import type { Gender } from '../models/types'
+import { SUPPLEMENT_SEED } from '../data/supplementSeed'
+import { isCreatine, waterGoalFor } from './water'
 
 /*
  * „Dein Start“: aus den Antworten des Einstiegs Ziele, Trainings- und Ernährungsplan ableiten.
@@ -168,7 +170,7 @@ export interface StartTargets {
   targetWeightKg?: number
   targetDate?: string
   weeklyRateKg: number
-  waterMl: number
+  waterMl: number // 1 l je 20 kg, +1 l bei Kreatin
 }
 
 export function computeTargets(a: StartAnswers, today: string): StartTargets {
@@ -188,7 +190,7 @@ export function computeTargets(a: StartAnswers, today: string): StartTargets {
     targetWeightKg: target,
     targetDate: target !== undefined ? targetDateFor(a.goal, a.tempo, a.weightKg, target, today) : undefined,
     weeklyRateKg: weeklyRateKg(a.goal, a.tempo, a.weightKg),
-    waterMl: Math.min(4500, Math.max(2000, Math.round((a.weightKg * 35) / 250) * 250)),
+    waterMl: waterGoalFor({ weightKg: a.weightKg }, undefined, supplementNamesFor(a).some(isCreatine)),
   }
 }
 
@@ -580,6 +582,45 @@ export function buildMealPlans(a: Pick<StartAnswers, 'diet' | 'allergens'>, targ
  * ---------------------------------------------------------------------------------------- */
 
 export const START_SUPPLEMENTS = ['Kreatin Monohydrat', 'Whey Protein', 'Omega-3 Fischöl', 'Vitamin D3', 'Magnesium', 'Multivitamin', 'Zink', 'Koffein']
+
+/** Kurze Erklärung je Supplement - steht in „Dein Start“ neben der Auswahl. */
+const SUPPLEMENT_ABOUT: Record<string, string> = {
+  'Kreatin Monohydrat': 'Mehr Kraft und ein, zwei Wiederholungen mehr – das am besten untersuchte Supplement. Jeden Tag nehmen, auch an Pausentagen.',
+  'Whey Protein': 'Schnelles, praktisches Protein als Shake – ersetzt keine Mahlzeit, macht das Proteinziel aber leichter.',
+  'Omega-3 Fischöl': 'EPA/DHA für Herz, Gelenke und Entzündungswerte.',
+  'Omega-3 Algenöl (vegan)': 'EPA/DHA aus Algen – dieselbe Wirkung wie Fischöl, ohne Fisch.',
+  'Vitamin D3': 'Für Knochen, Immunsystem und Muskelfunktion. Im Winter bekommen die meisten zu wenig Sonne.',
+  Magnesium: 'Kann Krämpfen vorbeugen und beim Einschlafen helfen.',
+  Multivitamin: 'Absicherung, wenn die Ernährung einseitig ist – kein Ersatz für Obst und Gemüse.',
+  Zink: 'Für Immunsystem und Hormone. Sinnvoll bei wenig Fleisch oder viel Schwitzen.',
+  Koffein: 'Mehr Wachheit und Leistung im Training. Nicht zu spät am Tag – sonst leidet der Schlaf.',
+  'Vitamin B-Komplex': 'Vor allem B12 – in rein pflanzlicher Ernährung praktisch nicht enthalten.',
+  Eisen: 'Gegen Müdigkeit bei Eisenmangel. Nur nach Blutbild, zu viel Eisen schadet.',
+}
+
+export interface SupplementInfo {
+  name: string
+  about?: string
+  reason?: string // persönlich, wenn empfohlen
+  dose?: string
+  timing?: string
+  notes?: string
+  extra?: string // z.B. Wasser-Zuschlag bei Kreatin
+}
+
+/** Alles, was „Dein Start“ zu einem Supplement anzeigt. */
+export function supplementInfo(name: string, a: Parameters<typeof recommendSupplements>[0]): SupplementInfo {
+  const seed = SUPPLEMENT_SEED.find((x) => x.name === name)
+  return {
+    name,
+    about: SUPPLEMENT_ABOUT[name],
+    reason: recommendSupplements(a).find((r) => r.name === name)?.reason,
+    dose: seed?.defaultDose,
+    timing: seed?.defaultTiming,
+    notes: seed?.notes,
+    extra: isCreatine(name) ? 'Kreatin bindet Wasser: dein Trinkziel steigt um 1 l am Tag.' : undefined,
+  }
+}
 
 /** Empfehlungen aus den Antworten - mit kurzem Grund. Namen wie in der Supplement-Datenbank. */
 export function recommendSupplements(a: Pick<StartAnswers, 'trainingDays' | 'diet' | 'allergens' | 'gender' | 'weightKg' | 'macroStyle'>): { name: string; reason: string }[] {

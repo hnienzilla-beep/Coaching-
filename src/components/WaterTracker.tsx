@@ -6,6 +6,7 @@ import { celebrateOnce, haptic } from '../lib/feedback'
 import { useGrowIn } from '../lib/countUp'
 import type { Athlete } from '../models/types'
 import { waterGoalFor } from '../lib/water'
+import { useTakesCreatine } from '../lib/useCreatine'
 import { getPrefs, usePrefs } from '../lib/prefs'
 import { fromDisplay, toDisplay } from '../lib/units'
 import { Card, CountUp, DecimalInput } from './ui'
@@ -37,7 +38,8 @@ export default function WaterTracker({
   waterMl: number
   weightKg?: number
 }) {
-  const goal = waterGoalFor(athlete, weightKg)
+  const creatine = useTakesCreatine(athlete.id)
+  const goal = waterGoalFor(athlete, weightKg, creatine)
   const prefs = usePrefs()
   const oz = prefs.volumeUnit === 'oz'
   const unit = oz ? 'oz' : 'l'

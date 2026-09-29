@@ -35,6 +35,7 @@ import { shareOrDownloadFile } from '../lib/share'
 import { useDisabledStorySlides, type StorySlideId } from '../lib/storySettings'
 import { buildPeriodStats, periodHasContent, type PeriodStats, type StoryInput } from '../lib/storyStats'
 import { waterGoalFor } from '../lib/water'
+import { useTakesCreatine } from '../lib/useCreatine'
 import type { Athlete, DailyEntry } from '../models/types'
 import BodyFigure, { type HeatMap } from './BodyFigure'
 import { Card, CountUp } from './ui'
@@ -684,9 +685,10 @@ function StoryCard({
   autoOpen: boolean
 }) {
   const [disabled] = useDisabledStorySlides()
+  const creatine = useTakesCreatine(athlete.id)
   const target = useMemo(
-    () => ({ kcal: targetKcal, protein: targetProtein, tolerance: calTolerance(), waterMl: waterGoalFor(athlete) }),
-    [targetKcal, targetProtein, athlete],
+    () => ({ kcal: targetKcal, protein: targetProtein, tolerance: calTolerance(), waterMl: waterGoalFor(athlete, undefined, creatine) }),
+    [targetKcal, targetProtein, athlete, creatine],
   )
   const stats = useStoryInput(athlete, kind, start, end, entries, target)
   const seenKey = `coach.storySeen.${athlete.id}.${kind}.${start}`
