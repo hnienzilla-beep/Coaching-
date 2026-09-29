@@ -10,6 +10,10 @@ import {
   computeTargets,
   suggestTargetWeight,
   suggestedSplit,
+  splitsFor,
+  macroFactors,
+  recommendSupplements,
+  supplementNamesFor,
   targetWarning,
   type StartAnswers,
 } from './startPlan'
@@ -80,10 +84,39 @@ describe('Ernährungsplan', () => {
       expect(Math.abs(day.totals.fat - 75)).toBeLessThan(15)
     }
   })
+  it('vegan trifft Fett und Kalorien ungefähr', () => {
+    for (const day of buildMealPlans(a({ diet: 'vegan' }), { proteinG: 184, carbsG: 353, fatG: 64 }, FOOD_SEED)) {
+      expect(day.totals.fat, day.name).toBeLessThan(80)
+      expect(Math.abs(day.totals.protein - 184), day.name).toBeLessThan(30)
+    }
+  })
   it('vegan und ohne Gluten/Soja', () => {
     const days = buildMealPlans(a({ diet: 'vegan', allergens: ['gluten', 'soja'] }), targets, FOOD_SEED)
     const foods = days.flatMap((d) => d.items.map((i) => i.food))
     for (const bad of ['Skyr', 'Haferflocken', 'Tofu (natur)', 'Hähnchenbrust (gegart)', 'Whey Protein (Pulver)', 'Ei (ganz)']) expect(foods).not.toContain(bad)
     expect(foods.length).toBeGreaterThan(8)
+  })
+})
+
+describe('Splits, Makros, Supplements', () => {
+  it('mehr Splits je nach Tagen', () => {
+    expect(splitsFor(4)).toEqual(expect.arrayContaining(['pushpullfb', 'torsolimbs']))
+    expect(splitsFor(5)).toEqual(expect.arrayContaining(['pushpullfb', 'ppl', 'pplokuk', 'bro']))
+    expect(suggestedSplit(5, 'fortgeschritten')).toBe('pushpullfb')
+    expect(buildTrainingPlan(a({ trainingDays: [0, 1, 3, 4], split: 'torsolimbs' })).map((d) => d.name)).toEqual(['Torso', 'Limbs'])
+    expect(buildTrainingPlan(a({ trainingDays: [0, 1, 2, 3, 4], split: 'pushpullfb' })).map((d) => d.name)).toEqual(['Push Fullbody', 'Pull Fullbody'])
+    const bro = buildTrainingPlan(a({ trainingDays: [0, 1, 2, 3, 4], split: 'bro', durationMin: 60 }))
+    expect(bro.map((d) => d.name)).toEqual(['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme'])
+    for (const d of bro) for (const e of d.exercises) expect(exerciseNames.has(e.name), e.name).toBe(true)
+  })
+  it('High-Protein: 2,3 g Protein und 0,8 g Fett je kg', () => {
+    expect(macroFactors('protein')).toEqual({ proteinPerKg: 2.3, fatPerKg: 0.8 })
+  })
+  it('Supplements aus den Antworten', () => {
+    const vegan = recommendSupplements(a({ diet: 'vegan', gender: 'Weiblich', trainingDays: [0, 1, 2, 3] })).map((r) => r.name)
+    expect(vegan).toEqual(expect.arrayContaining(['Kreatin Monohydrat', 'Vitamin D3', 'Omega-3 Algenöl (vegan)', 'Magnesium', 'Vitamin B-Komplex', 'Eisen']))
+    expect(vegan).not.toContain('Whey Protein')
+    expect(supplementNamesFor(a())).toContain('Whey Protein')
+    expect(supplementNamesFor(a({ supplementsTouched: true, supplements: ['Zink'] }))).toEqual(['Zink'])
   })
 })

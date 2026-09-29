@@ -10,6 +10,9 @@ import { createFromStart, type StartAppChoices } from '../lib/startApply'
 import {
   DEFAULT_ANSWERS,
   SPLIT_LABELS,
+  recommendSupplements,
+  splitsFor,
+  supplementNamesFor,
   START_SUPPLEMENTS,
   buildMealPlans,
   buildTrainingPlan,
@@ -142,6 +145,7 @@ export default function StartJourney() {
   const suggestion = suggestTargetWeight(a)
   const warning = weightGoal ? targetWarning(a, a.targetWeightKg ?? suggestion) : undefined
   const plan = useMemo(() => buildTrainingPlan(a), [a])
+  const recommended = recommendSupplements(a)
   const meals = useMemo(() => (foods ? buildMealPlans(a, targets.result, foods) : []), [a, targets, foods])
 
   // Pflicht ist nur, was sich nicht sinnvoll raten lässt - der Rest hat Standardwerte.
@@ -211,6 +215,18 @@ export default function StartJourney() {
             )
           })}
         </div>
+        <label className="flex items-center gap-2 text-sm text-muted">
+          Oder genau:
+          <DecimalInput
+            value={a.bodyFatPct}
+            onChange={(n) => set({ bodyFatPct: n !== undefined && n > 2 && n < 70 ? n : undefined, targetWeightKg: undefined })}
+            placeholder="z.B. 18,5"
+            aria-label="Körperfett in Prozent"
+            inputMode="decimal"
+            className="w-24!"
+          />
+          %
+        </label>
       </Question>
     </Block>,
     <Block key="3">
@@ -295,7 +311,7 @@ export default function StartJourney() {
         <Options
           options={[
             { value: 'ausgewogen', label: 'Ausgewogen', hint: '2,0 g Protein je kg, moderates Fett' },
-            { value: 'protein', label: 'High-Protein', hint: '2,4 g Protein je kg – sättigt gut' },
+            { value: 'protein', label: 'High-Protein', hint: '2,3 g Protein und 0,8 g Fett je kg – sättigt gut' },
             { value: 'lowcarb', label: 'Low-Carb', hint: 'Mehr Fett, weniger Kohlenhydrate' },
           ]}
           value={a.macroStyle}
@@ -360,12 +376,12 @@ export default function StartJourney() {
     <Block key="8">
       <Question label="Plan-Aufbau" info="Vorschlag passend zu deinen Tagen und deiner Erfahrung – du kannst ihn ändern.">
         <Options
-          options={(Object.keys(SPLIT_LABELS) as (keyof typeof SPLIT_LABELS)[]).map((s) => ({
+          options={splitsFor(a.trainingDays.length).map((s) => ({
             value: s,
             label: SPLIT_LABELS[s],
             hint: s === suggestedSplit(a.trainingDays.length, a.experience) ? 'Empfohlen für dich' : undefined,
           }))}
-          value={a.split ?? suggestedSplit(a.trainingDays.length, a.experience)}
+          value={a.split && splitsFor(a.trainingDays.length).includes(a.split) ? a.split : suggestedSplit(a.trainingDays.length, a.experience)}
           onChange={(split) => set({ split })}
         />
       </Question>
@@ -392,8 +408,21 @@ export default function StartJourney() {
       <Question label="Unverträglichkeiten (optional)" info="Diese Lebensmittel lasse ich im Ernährungsplan weg.">
         <MultiChips options={ALLERGENS.map((x) => ({ value: x.id, label: x.label }))} value={a.allergens} onChange={(allergens) => set({ allergens })} />
       </Question>
-      <Question label="Nimmst du Supplements? (optional)" info="Daraus entsteht dein Supplementplan mit üblicher Dosis und Zeitpunkt.">
-        <MultiChips options={START_SUPPLEMENTS.map((s) => ({ value: s, label: s }))} value={a.supplements} onChange={(supplements) => set({ supplements })} />
+      <Question label="Supplements" info="Vorausgewählt ist, was zu deinen Angaben passt (Training, Ernährungsform, Ziel). Daraus entsteht dein Supplementplan mit üblicher Dosis und Zeitpunkt.">
+        <MultiChips
+          options={[...new Set([...recommended.map((r) => r.name), ...START_SUPPLEMENTS])].map((s) => ({ value: s, label: s }))}
+          value={supplementNamesFor(a)}
+          onChange={(supplements) => set({ supplements, supplementsTouched: true })}
+        />
+        {!a.supplementsTouched && recommended.length > 0 && (
+          <ul className="flex flex-col gap-1 rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+            {recommended.map((r) => (
+              <li key={r.name}>
+                <span className="font-medium text-fg">{r.name}:</span> {r.reason}
+              </li>
+            ))}
+          </ul>
+        )}
       </Question>
     </Block>,
     <Block key="10">
@@ -544,6 +573,8 @@ export default function StartJourney() {
     </div>
   )
 }
+
+const DIET_LABELS: Record<StartAnswers['diet'], string> = { alles: 'Mischkost', vegetarisch: 'vegetarisch', vegan: 'vegan', pescetarisch: 'pescetarisch' }
 
 const TAB_NAMES: Record<TabKey, string> = { dashboard: 'Dashboard', tracking: 'Tracking', ernaehrung: 'Ernährung', training: 'Training' }
 
@@ -731,19 +762,36 @@ function Summary({
         </div>
       </SummaryCard>
       <SummaryCard title="Ernährungsplan" onEdit={() => onEdit(9)}>
+        <p className="text-xs text-muted">
+          Abgestimmt auf {fmt(r.targetCalories)} kcal und deine Makros · {DIET_LABELS[a.diet]}
+          {a.allergens.length > 0 && ` · ohne ${a.allergens.map((x) => ALLERGENS.find((y) => y.id === x)?.label).join(', ')}`}
+        </p>
         {meals.map((m) => (
-          <div key={m.name} className="flex items-baseline justify-between gap-2 text-sm">
-            <span className="text-fg">{m.name}</span>
-            <span className="text-xs tabular-nums text-muted">
-              {fmt(m.totals.kcal)} kcal · P {m.totals.protein} · C {m.totals.carbs} · F {m.totals.fat}
-            </span>
-          </div>
+          <details key={m.name} className="rounded-lg bg-surface-2 px-2.5 py-1.5">
+            <summary className="flex cursor-pointer items-baseline justify-between gap-2 text-sm">
+              <span className="text-fg">{m.name}</span>
+              <span className="text-xs tabular-nums text-muted">
+                {fmt(m.totals.kcal)} kcal · P {m.totals.protein} · C {m.totals.carbs} · F {m.totals.fat}
+              </span>
+            </summary>
+            <div className="mt-1.5 flex flex-col gap-1 pb-1">
+              {[...new Set(m.items.map((i) => i.meal))].map((meal) => (
+                <p key={meal} className="text-xs text-muted">
+                  <span className="font-medium text-fg">{meal}:</span>{' '}
+                  {m.items
+                    .filter((i) => i.meal === meal)
+                    .map((i) => `${i.food} ${i.grams} g`)
+                    .join(', ')}
+                </p>
+              ))}
+            </div>
+          </details>
         ))}
-        <p className="text-xs text-muted">Je {meals[0]?.items.length ?? 0} Lebensmittel, abgestimmt auf deine Makros. Später im Ernährungsplan änderbar.</p>
       </SummaryCard>
-      {a.supplements.length > 0 && (
-        <SummaryCard title="Supplements" onEdit={() => onEdit(9)}>
-          <p className="text-sm text-fg">{a.supplements.join(', ')}</p>
+      {supplementNamesFor(a).length > 0 && (
+        <SummaryCard title="Supplementplan" onEdit={() => onEdit(9)}>
+          <p className="text-sm text-fg">{supplementNamesFor(a).join(', ')}</p>
+          <p className="text-xs text-muted">Mit üblicher Dosis und Einnahmezeit – im Supplementplan änderbar.</p>
         </SummaryCard>
       )}
     </div>
