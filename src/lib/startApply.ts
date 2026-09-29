@@ -28,6 +28,42 @@ export async function createFromStart(a: StartAnswers, app: StartAppChoices): Pr
   const t = computeTargets(a, today)
 
   const athlete = await createAthlete({
+    ...athleteFields(a, t),
+    startDate: today,
+    accentColor: app.accentColor,
+  })
+
+  // Gewicht (und KFA) von heute als erster Eintrag - damit Verlauf und Prognose sofort starten.
+  await upsertDailyEntry({ id: crypto.randomUUID(), athleteId: athlete.id, date: today, weightKg: a.weightKg, ...(a.bodyFatPct ? { bodyFatPct: a.bodyFatPct } : {}) })
+
+  await applyPlansAndPrefs(athlete.id, a, t.result, app)
+  return athlete
+}
+
+/**
+ * „Dein Start“ erneut durchlaufen: aktualisiert den bestehenden Athleten statt einen neuen
+ * anzulegen. Startdatum und Verlauf bleiben, die Pläne werden durch die neuen ersetzt.
+ */
+export async function updateFromStart(athleteId: string, a: StartAnswers, app: StartAppChoices): Promise<void> {
+  const today = todayIso()
+  const t = computeTargets(a, today)
+  await db.athletes.update(athleteId, { ...athleteFields(a, t), accentColor: app.accentColor })
+
+  // Gewicht/KFA nur eintragen, wenn sie sich gegenüber dem letzten Stand geändert haben.
+  const entries = await db.dailyEntries.where('athleteId').equals(athleteId).sortBy('date')
+  const lastWeight = entries.filter((e) => e.weightKg).at(-1)?.weightKg
+  const lastFat = entries.filter((e) => e.bodyFatPct).at(-1)?.bodyFatPct
+  const patch = {
+    ...(a.weightKg !== lastWeight ? { weightKg: a.weightKg } : {}),
+    ...(a.bodyFatPct && a.bodyFatPct !== lastFat ? { bodyFatPct: a.bodyFatPct } : {}),
+  }
+  if (Object.keys(patch).length > 0) await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, date: today, ...patch })
+
+  await applyPlansAndPrefs(athleteId, a, t.result, app)
+}
+
+function athleteFields(a: StartAnswers, t: ReturnType<typeof computeTargets>) {
+  return {
     name: a.firstName.trim() || 'Ich',
     gender: a.gender,
     age: t.age,
@@ -38,20 +74,17 @@ export async function createFromStart(a: StartAnswers, app: StartAppChoices): Pr
     goal: t.goalLabel,
     proteinPerKg: t.proteinPerKg,
     fatPerKg: t.fatPerKg,
-    startDate: today,
     targetWeightKg: t.targetWeightKg,
     targetDate: t.targetDate,
-    trainingDays: [...a.trainingDays].sort(),
+    trainingDays: [...a.trainingDays].sort((x, y) => x - y),
     startAnswers: a,
-    accentColor: app.accentColor,
-  })
+  }
+}
 
-  // Gewicht (und KFA) von heute als erster Eintrag - damit Verlauf und Prognose sofort starten.
-  await upsertDailyEntry({ id: crypto.randomUUID(), athleteId: athlete.id, date: today, weightKg: a.weightKg, ...(a.bodyFatPct ? { bodyFatPct: a.bodyFatPct } : {}) })
-
-  await replaceTrainingPlans(athlete.id, a)
-  await replaceNutritionPlans(athlete.id, a, t.result)
-  await replaceSupplementPlans(athlete.id, a)
+async function applyPlansAndPrefs(athleteId: string, a: StartAnswers, macros: { proteinG: number; carbsG: number; fatG: number }, app: StartAppChoices): Promise<void> {
+  await replaceTrainingPlans(athleteId, a)
+  await replaceNutritionPlans(athleteId, a, macros)
+  await replaceSupplementPlans(athleteId, a)
 
   const reminders = {
     weigh: { on: app.reminders.weigh, time: '07:30' },
@@ -67,7 +100,6 @@ export async function createFromStart(a: StartAnswers, app: StartAppChoices): Pr
     reminders,
   })
   applyTheme(app.theme)
-  return athlete
 }
 
 async function replaceTrainingPlans(athleteId: string, a: StartAnswers): Promise<void> {

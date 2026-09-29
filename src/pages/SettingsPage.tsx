@@ -21,6 +21,7 @@ import {
   Pill,
   Ruler,
   Search,
+  Sparkles,
   Trash2,
   Upload,
   Users,
@@ -120,6 +121,21 @@ function SettingsHome() {
         )}
       </label>
 
+      {!q && (
+        <Group footer="Alle Fragen noch einmal - vorbelegt mit deinen bisherigen Antworten. Ziele und Pläne werden danach neu erstellt, dein Verlauf bleibt.">
+          <Link to={`/dein-start?athlete=${athlete.id}`} className="flex items-center gap-3 px-3 py-2.5 transition active:bg-surface-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent/15 text-accent">
+              <Sparkles size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm text-fg">„Dein Start“ erneut durchgehen</span>
+              <span className="block truncate text-xs text-muted">Ziele, Training, Ernährung, Supplements</span>
+            </span>
+            <ChevronRight size={16} className="text-muted" />
+          </Link>
+        </Group>
+      )}
+
       <Group>
         {matches.map((s) => {
           const Icon = ICONS[s.key]
@@ -168,7 +184,7 @@ function SectionPage({ section }: { section: SectionKey }) {
     dashboard: <DashboardSection />,
     tracking: <TrackingSection />,
     ernaehrung: <ErnaehrungSection />,
-    training: <TrainingSection />,
+    training: <TrainingSection athlete={athlete} />,
     einheiten: <EinheitenSection />,
     story: <StorySection />,
     erinnerungen: <ErinnerungenSection />,
@@ -431,15 +447,50 @@ function ErnaehrungSection() {
   )
 }
 
-function TrainingSection() {
+const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+
+function TrainingSection({ athlete }: { athlete: Athlete }) {
   const prefs = usePrefs()
   const rest = useSyncExternalStore(subscribeRestTimer, getRestTimer)
+  const days = athlete.trainingDays ?? []
+  const restDays = WEEKDAYS.filter((_, i) => !days.includes(i))
+  function toggleDay(i: number) {
+    const next = days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort((x, y) => x - y)
+    void db.athletes.update(athlete.id, { trainingDays: next })
+  }
   return (
     <>
+      <Group
+        title="Trainingstage"
+        footer={
+          days.length === 0
+            ? 'Keine Tage gewählt - das Dashboard zeigt dann keinen Ruhetag an.'
+            : `${days.length}× Training pro Woche · Pausentage: ${restDays.length ? restDays.join(', ') : 'keine'}. An Pausentagen zeigt das Dashboard „Heute Ruhetag“.`
+        }
+      >
+        <div className="grid grid-cols-7 gap-1 p-2">
+          {WEEKDAYS.map((d, i) => {
+            const on = days.includes(i)
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={on}
+                aria-label={`${d}: ${on ? 'Training' : 'Pause'}`}
+                onClick={() => toggleDay(i)}
+                className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-sm font-semibold transition active:scale-95 ${on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`}
+              >
+                {d}
+                <span className="text-[9px] font-medium opacity-80">{on ? 'Training' : 'Pause'}</span>
+              </button>
+            )
+          })}
+        </div>
+      </Group>
       <Group title="Pausen-Timer">
         <Choice
           label="Standard-Pause"
-          options={REST_DURATIONS.map((s) => ({ value: s, label: s >= 60 ? `${s / 60}${s % 60 ? ',5' : ''} min` : `${s} s` }))}
+          options={REST_DURATIONS.map((s) => ({ value: s, label: s >= 60 ? `${Math.floor(s / 60)}${s % 60 ? ',5' : ''} min` : `${s} s` }))}
           value={rest.duration}
           onChange={setRestDuration}
         />
