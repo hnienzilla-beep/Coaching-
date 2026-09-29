@@ -103,6 +103,28 @@ export function calculateBodyFatFromFfmi(ffmi: number, weightKg: number, heightC
   return (1 - leanMassKg / weightKg) * 100
 }
 
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+/**
+ * Reparatur für einen alten Fehler: Das Dashboard schrieb beim Öffnen den KFA aus dem FFMI mit
+ * dem Profilgewicht (Startgewicht) in den Tageseintrag. Erkennt genau diesen Wert und liefert den
+ * richtigen - aus dem Tagesgewicht, oder `null` (Wert entfernen), wenn der Tag kein Gewicht hat.
+ * `undefined` heißt: Eintrag ist nicht betroffen.
+ */
+export function repairedFfmiBodyFat(
+  entry: { weightKg?: number; bodyFatPct?: number },
+  ffmi: number,
+  profileWeightKg: number,
+  heightCm: number,
+): number | null | undefined {
+  const stale = calculateBodyFatFromFfmi(ffmi, profileWeightKg, heightCm)
+  if (entry.bodyFatPct === undefined || stale === undefined || entry.bodyFatPct !== round1(stale)) return undefined
+  if (entry.weightKg === undefined) return null
+  const correct = calculateBodyFatFromFfmi(ffmi, entry.weightKg, heightCm)
+  if (correct === undefined) return null
+  return round1(correct) === entry.bodyFatPct ? undefined : round1(correct)
+}
+
 export interface WeightPoint {
   date: string
   weightKg?: number
