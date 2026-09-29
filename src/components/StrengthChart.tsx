@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import {  } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { db } from '../db/db'
@@ -6,6 +7,7 @@ import type { WorkoutSet } from '../models/types'
 import { estimateOneRepMax } from '../lib/calculator'
 import { Select } from './ui'
 import { chartLineAnimation } from '../lib/countUp'
+import { chartCursor } from '../lib/chartCursor'
 
 type ChartPoint = { date: string; weight: number; setsLabel: string; oneRm?: number }
 
@@ -13,7 +15,7 @@ function StrengthTooltip({ active, payload, label }: { active?: boolean; payload
   if (!active || !payload?.length) return null
   const point = payload[0].payload
   return (
-    <div className="rounded-md border border-border bg-surface px-2 py-1 text-xs">
+    <div className="anim-pop pointer-events-none rounded-xl border border-border bg-surface/95 px-2.5 py-1.5 text-xs shadow-xl shadow-black/40 backdrop-blur">
       <div className="font-semibold text-fg">{label}</div>
       <div className="text-fg">{point.weight} kg</div>
       {point.setsLabel && <div className="text-muted">{point.setsLabel}</div>}
@@ -90,7 +92,7 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
   // Überschrift und Rahmen liefert die aufrufende CollapsibleCard - sonst stünde
   // "Kraft-Verlauf" zweimal untereinander.
   if (availableExercises.length === 0) {
-    return <p className="text-sm text-muted">💪 Noch keine Gewichte im Trainingslog erfasst.</p>
+    return <p className="text-sm text-muted">Noch keine Gewichte im Trainingslog erfasst.</p>
   }
 
   return (
@@ -102,13 +104,13 @@ export default function StrengthChart({ athleteId }: { athleteId: string }) {
           </option>
         ))}
       </Select>
-      <div key={currentExerciseId} className="h-44">
+      <div key={currentExerciseId} data-no-swipe className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--color-muted)' }} minTickGap={24} />
             <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} width={44} />
-            <Tooltip content={<StrengthTooltip />} />
+            <Tooltip cursor={chartCursor} content={<StrengthTooltip />} />
             <Line {...lineAnimation} type="monotone" dataKey="weight" stroke="var(--color-accent)" strokeWidth={2} name="Gewicht (kg)" connectNulls />
           </LineChart>
         </ResponsiveContainer>

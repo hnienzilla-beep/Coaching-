@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { addDays, todayIso } from '../db/queries'
 import DayStrip, { type DayMarker } from './DayStrip'
 import { startOfWeek } from '../lib/calendar'
@@ -10,7 +11,7 @@ export type LogDayStatus = 'none' | 'open' | 'done' | 'logged'
 const STATUS_LABEL: Record<LogDayStatus, string> = {
   none: 'Kein Eintrag',
   open: 'Offen',
-  done: '✓ Abgeschlossen',
+  done: 'Abgeschlossen',
   logged: 'Erfasst', // Ernährungslog: kein Abschließen, ein Tag mit Einträgen ist einfach erfasst
 }
 
@@ -78,7 +79,7 @@ export default function LogDayHeader({
           aria-label="Vorherige Woche"
           className="shrink-0 rounded-lg px-2 py-1 text-2xl leading-none text-muted hover:text-fg"
         >
-          ‹
+          <ChevronLeft size={20} />
         </button>
         <button
           type="button"
@@ -90,7 +91,7 @@ export default function LogDayHeader({
           <span className="truncate text-xs text-muted">
             {/* Bei "Heute"/"Gestern" steht das ausgeschriebene Datum darunter, sonst stünde es doppelt. */}
             {relative ? `${formatDay(selectedDate)} · ` : ''}
-            {STATUS_LABEL[status]} ▾
+            {STATUS_LABEL[status]} <ChevronDown size={12} className="inline -translate-y-px" />
           </span>
         </button>
         <button
@@ -100,7 +101,7 @@ export default function LogDayHeader({
           aria-label="Nächste Woche"
           className="shrink-0 rounded-lg px-2 py-1 text-2xl leading-none text-muted hover:text-fg disabled:opacity-30"
         >
-          ›
+          <ChevronRight size={20} />
         </button>
         {onDelete && (
           <button
@@ -111,7 +112,7 @@ export default function LogDayHeader({
             }}
             className="shrink-0 rounded-lg px-1.5 py-1 text-sm text-muted hover:text-danger"
           >
-            🗑
+            <Trash2 size={16} />
           </button>
         )}
       </div>

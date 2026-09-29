@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { ArrowLeftRight, Dumbbell } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
@@ -306,8 +307,8 @@ function ExerciseThumb({ exercise }: { exercise?: Exercise }) {
   return exercise?.imageDataUrl ? (
     <img src={exercise.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
   ) : (
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg text-lg" aria-hidden="true">
-      🏋️
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg text-muted" aria-hidden="true">
+      <Dumbbell size={18} />
     </span>
   )
 }
@@ -390,7 +391,7 @@ function PlanRowSheet({
         <Input value={row.notes ?? ''} onChange={(e) => update({ notes: e.target.value })} placeholder="z.B. Griff, Technik" />
       </Field>
       <Button variant="ghost" className="self-start" onClick={() => onSwap(row)}>
-        ✎ Übung tauschen
+        <ArrowLeftRight size={14} className="mr-1 inline" /> Übung tauschen
       </Button>
     </Sheet>
   )

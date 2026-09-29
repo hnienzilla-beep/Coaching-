@@ -1,21 +1,25 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { ChevronRight, CircleCheck, Droplet, Dumbbell, Flame, Pencil, Plus, Scale, Target, TrendingDown, TrendingUp, Beef } from 'lucide-react'
+import { useHiddenDashboardCards } from '../lib/dashboardCards'
+import { nextStep, nextTrainingPlan } from '../lib/nextStep'
+import { waterGoalFor } from '../lib/water'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { Button, Card, CountUp, DecimalInput, Field, Input, ListRow, Select } from '../components/ui'
+import { Button, Card, CountUp, DecimalInput, Field, Input, ListRow, PageSkeleton, Select } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
 import Sheet from '../components/Sheet'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
-import { addDays, repairStaleFfmiBodyFat, todayIso, upsertDailyEntry } from '../db/queries'
+import { addDays, repairStaleFfmiBodyFat, todayIso } from '../db/queries'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
 import StoryCards from '../components/Story'
+import WeightSheet from '../components/WeightSheet'
 import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
 import { useGrowIn } from '../lib/countUp'
 import { forecastGoal, type Forecast } from '../lib/goalForecast'
-import { haptic } from '../lib/feedback'
 
 type Ctx = { athlete: Athlete }
 
@@ -35,6 +39,10 @@ export default function DashboardPage() {
   const [profileOpen, setProfileOpen] = useState(false)
   const entries = useLiveQuery(() => db.dailyEntries.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
   const workoutLogs = useLiveQuery(() => db.workoutLogs.where('athleteId').equals(athlete.id).toArray(), [athlete.id])
+  const navigate = useNavigate()
+  const [hidden] = useHiddenDashboardCards()
+  const show = (id: Parameters<typeof hidden.includes>[0]) => !hidden.includes(id)
+  const go = (path: string) => navigate(`/athlete/${athlete.id}/${path}`, { state: { swipe: 'next' } })
 
   const weekStart = addDays(todayIso(), -6)
   const weekEntries = (entries ?? []).filter((e) => e.date >= weekStart && e.calories !== undefined)
@@ -93,6 +101,24 @@ export default function DashboardPage() {
     .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyFatPct
   const bodyFat = todayEntry?.bodyFatPct ?? lastBodyFat ?? bodyFatFromFfmi
 
+  const step = nextStep({
+    weighedToday: weightToday !== undefined,
+    proteinLeft: result.proteinG - tracked.protein,
+    kcalLeft: remaining,
+    waterLeftMl: waterGoalFor(athlete, bodyWeight) - (todayEntry?.waterMl ?? 0),
+    hour: new Date().getHours(),
+  })
+  const stepAction: Record<typeof step.kind, () => void> = {
+    weight: () => setWeightOpen(true),
+    protein: () => go('ernaehrung?view=log'),
+    kcal: () => go('ernaehrung?view=log'),
+    water: () => go('ernaehrung?view=log'),
+    done: () => undefined,
+  }
+  const StepIcon = { weight: Scale, protein: Beef, kcal: Flame, water: Droplet, done: CircleCheck }[step.kind]
+
+  if (entries === undefined) return <PageSkeleton />
+
   return (
     <div className="flex flex-col gap-4">
       <ReminderBanner athleteId={athlete.id} entries={entries ?? []} />
@@ -104,8 +130,8 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-muted">Heute</h2>
           <span className="text-xs text-muted">{athlete.goal}</span>
         </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-3">
+        <button type="button" onClick={() => go('ernaehrung?view=log')} className="flex flex-col gap-2 text-left transition active:scale-[0.98]" aria-label="Zum Ernährungslog">
+          <div className="flex w-full items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-1.5">
               <CountUp value={tracked.kcal} className="text-4xl font-bold tabular-nums text-accent" />
               <span className="text-sm text-muted">kcal</span>
@@ -125,12 +151,12 @@ export default function DashboardPage() {
               ? `Noch ${Math.round(remaining).toLocaleString('de-DE')} kcal übrig`
               : `${Math.round(-remaining).toLocaleString('de-DE')} kcal über der Vorgabe`}
           </p>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
+        </button>
+        <button type="button" onClick={() => go('ernaehrung?view=log')} className="grid grid-cols-3 gap-2 text-left transition active:scale-[0.98]" aria-label="Makros im Ernährungslog">
           <MacroTile label="Protein" value={tracked.protein} target={result.proteinG} grown={grown} delay={80} />
           <MacroTile label="Carbs" value={tracked.carbs} target={result.carbsG} grown={grown} delay={160} />
           <MacroTile label="Fett" value={tracked.fat} target={result.fatG} grown={grown} delay={240} />
-        </div>
+        </button>
         <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
           {/* Antippen trägt das heutige Gewicht ein - ohne Umweg über das Tracking. */}
           <button
@@ -144,46 +170,76 @@ export default function DashboardPage() {
               value={bodyWeight !== undefined ? <><CountUp value={bodyWeight} decimals={1} /> kg</> : '–'}
               hint={weightToday === undefined ? (bodyWeight !== undefined ? 'zuletzt' : 'eintragen') : undefined}
             />
-            <span aria-hidden="true" className="absolute top-1.5 right-2 text-xs text-accent">
-              {weightToday === undefined ? '+' : '✎'}
+            <span aria-hidden="true" className="absolute top-2 right-2 text-accent">
+              {weightToday === undefined ? <Plus size={13} /> : <Pencil size={12} />}
             </span>
           </button>
-          <Tile
-            label="BMI"
-            value={<CountUp value={bmi} decimals={1} />}
-            tone={bmi === undefined ? 'default' : bmiOk ? 'ok' : 'danger'}
-          />
-          <Tile
-            label="KFA"
-            value={bodyFat !== undefined ? <><CountUp value={bodyFat} decimals={1} /> %</> : '–'}
-            hint={todayEntry?.bodyFatPct === undefined && lastBodyFat !== undefined ? 'zuletzt' : undefined}
-          />
+          <button type="button" onClick={() => go('tracking')} className="text-left transition active:scale-95" aria-label="BMI im Tracking">
+            <Tile
+              label="BMI"
+              value={<CountUp value={bmi} decimals={1} />}
+              tone={bmi === undefined ? 'default' : bmiOk ? 'ok' : 'danger'}
+            />
+          </button>
+          <button type="button" onClick={() => go('tracking')} className="text-left transition active:scale-95" aria-label="KFA im Tracking">
+            <Tile
+              label="KFA"
+              value={bodyFat !== undefined ? <><CountUp value={bodyFat} decimals={1} /> %</> : '–'}
+              hint={todayEntry?.bodyFatPct === undefined && lastBodyFat !== undefined ? 'zuletzt' : undefined}
+            />
+          </button>
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Tile label="Ø kcal · 7 Tage" value={<CountUp value={avgCalories} />} large />
-        <Tile label="Trainings · 7 Tage" value={<CountUp value={workoutsThisWeek} />} large />
-      </div>
+      {show('naechsterSchritt') && (
+        <button
+          type="button"
+          onClick={stepAction[step.kind]}
+          disabled={step.kind === 'done'}
+          className="reveal flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 text-left transition active:scale-[0.98]"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
+            <StepIcon size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-medium uppercase tracking-wide text-muted">Nächster Schritt</span>
+            <span className="block text-sm text-fg">{step.text}</span>
+          </span>
+          {step.kind !== 'done' && <ChevronRight size={18} className="shrink-0 text-muted" />}
+        </button>
+      )}
 
-      <StoryCards athlete={athlete} entries={entries ?? []} targetKcal={result.targetCalories} targetProtein={result.proteinG} />
+      {show('trainingHeute') && <TodayTraining athlete={athlete} onGo={go} />}
 
-      {athlete.targetWeightKg !== undefined && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
+      {show('woche') && (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => go('ernaehrung?view=log')} className="text-left transition active:scale-95">
+            <Tile label="Ø kcal · 7 Tage" value={<CountUp value={avgCalories} />} large />
+          </button>
+          <button type="button" onClick={() => go('training?view=log')} className="text-left transition active:scale-95">
+            <Tile label="Trainings · 7 Tage" value={<CountUp value={workoutsThisWeek} />} large />
+          </button>
+        </div>
+      )}
 
-      <CalendarOverview entries={entries ?? []} workoutLogs={workoutLogs ?? []} />
+      {show('story') && <StoryCards athlete={athlete} entries={entries ?? []} targetKcal={result.targetCalories} targetProtein={result.proteinG} />}
+
+      {show('ziel') && athlete.targetWeightKg !== undefined && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
+
+      {show('kalender') && <CalendarOverview entries={entries ?? []} workoutLogs={workoutLogs ?? []} />}
 
       <section className="flex flex-col gap-1.5">
         <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-muted">Profil</h2>
         <ListRow
           title={`${athlete.gender} · ${athlete.age} J · ${athlete.heightCm} cm · ${athlete.weightKg} kg`}
           subtitle={`${athlete.goal} · ${athlete.activityLevel}`}
-          value="›"
+          value={<ChevronRight size={16} />}
           onClick={() => setProfileOpen(true)}
           ariaLabel="Profil bearbeiten"
         />
       </section>
 
-      {!simple && (
+      {!simple && show('rechenweg') && (
         <CollapsibleCard title="Rechenweg" defaultExpanded={false}>
           <div className="grid grid-cols-2 gap-2">
             <Tile label="Grundumsatz (BMR)" value={`${result.bmr} kcal`} />
@@ -196,7 +252,7 @@ export default function DashboardPage() {
         </CollapsibleCard>
       )}
 
-      {!simple && <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />}
+      {!simple && show('export') && <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />}
 
       <WeightSheet
         open={weightOpen}
@@ -244,73 +300,6 @@ function Tile({
       </span>
       <span className={`${large ? 'text-xl' : 'text-base'} font-semibold tabular-nums ${toneClass}`}>{value}</span>
     </div>
-  )
-}
-
-/** Heutiges Gewicht eintragen - landet im selben Tageseintrag wie im Tracking. */
-function WeightSheet({
-  open,
-  athleteId,
-  date,
-  initial,
-  ffmi,
-  heightCm,
-  onClose,
-}: {
-  open: boolean
-  athleteId: string
-  date: string
-  initial?: number
-  ffmi?: number
-  heightCm: number
-  onClose: () => void
-}) {
-  const [weight, setWeight] = useState<number | undefined>(initial)
-  // Beim Öffnen mit dem letzten Gewicht vorbelegen. `initial` ändert sich erst nach dem
-  // Speichern, also nicht mitten im Tippen.
-  useEffect(() => {
-    if (open) setWeight(initial)
-  }, [open, initial])
-
-  const valid = weight !== undefined && weight > 20 && weight < 400
-  async function save() {
-    if (!valid) return
-    // Mit FFMI ergibt sich der KFA des Tages aus dem neuen Gewicht - wie im Tracking.
-    const kfa = ffmi !== undefined ? calculateBodyFatFromFfmi(ffmi, weight, heightCm) : undefined
-    await upsertDailyEntry({
-      id: crypto.randomUUID(),
-      athleteId,
-      date,
-      weightKg: weight,
-      ...(kfa !== undefined && Number.isFinite(kfa) ? { bodyFatPct: Math.round(kfa * 10) / 10 } : {}),
-    })
-    haptic('success')
-    onClose()
-  }
-
-  return (
-    <Sheet
-      open={open}
-      title="Gewicht heute"
-      onClose={onClose}
-      footer={
-        <Button variant="primary" disabled={!valid} onClick={() => void save()}>
-          Speichern
-        </Button>
-      }
-    >
-      <div className="flex items-baseline gap-2">
-        <DecimalInput
-          value={weight}
-          onChange={setWeight}
-          autoFocus
-          aria-label="Gewicht in kg"
-          className="text-3xl! font-bold"
-        />
-        <span className="text-lg text-muted">kg</span>
-      </div>
-      <p className="text-xs text-muted">Wird wie im Tracking für heute gespeichert und fließt in Verlauf, BMI und Ø 7 Tage ein.</p>
-    </Sheet>
   )
 }
 
@@ -504,7 +493,8 @@ function WeightGoalProgress({ athlete, entries }: { athlete: Athlete; entries: D
         <div className="h-full rounded-full bg-accent transition-[width] duration-[900ms] ease-out" style={{ width: `${grown ? pct : 0}%` }} />
       </div>
       <p className="text-xs text-muted">
-        {currentWeight} kg → {athlete.targetWeightKg} kg · noch {remaining.toFixed(1)} kg
+        {currentWeight.toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg → {athlete.targetWeightKg.toLocaleString('de-DE')} kg · noch{' '}
+        {remaining.toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg
         {athlete.targetDate ? ` · bis ${new Date(`${athlete.targetDate}T00:00:00`).toLocaleDateString('de-DE')}` : ''}
       </p>
       <ForecastLine forecast={forecast} targetKg={athlete.targetWeightKg} targetDate={athlete.targetDate} />
@@ -519,22 +509,94 @@ function formatDate(iso: string): string {
 /** Ein Satz zur Zielprognose aus dem Trend der letzten 2 Wochen (siehe `forecastGoal`). */
 function ForecastLine({ forecast, targetKg, targetDate }: { forecast: Forecast; targetKg: number; targetDate?: string }) {
   if (forecast.kind === 'insufficient') {
-    return <p className="text-xs text-muted">📈 Prognose ab 5 Wiegungen innerhalb von 2 Wochen.</p>
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-muted">
+        <TrendingUp size={14} /> Prognose ab 5 Wiegungen innerhalb von 2 Wochen.
+      </p>
+    )
   }
-  if (forecast.kind === 'reached') return <p className="text-xs text-fg">🎯 Ziel laut Trend erreicht – stark!</p>
+  if (forecast.kind === 'reached')
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-fg">
+        <Target size={14} className="text-accent" /> Ziel laut Trend erreicht – stark!
+      </p>
+    )
   const tempo = `${forecast.perWeek > 0 ? '+' : '−'}${Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche`
   if (forecast.kind === 'away') {
     return (
-      <p className="text-xs text-muted">
-        📉 Aktueller Trend {tempo} – so wird {targetKg} kg gerade nicht erreicht.
+      <p className="flex items-center gap-1.5 text-xs text-muted">
+        <TrendingDown size={14} className="shrink-0" /> Aktueller Trend {tempo} – so wird {targetKg} kg gerade nicht erreicht.
       </p>
     )
   }
   const onTime = targetDate ? forecast.date <= targetDate : undefined
   return (
     <p className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs text-fg">
-      📈 Bei deinem Tempo ({tempo}) erreichst du {targetKg} kg etwa am <span className="font-semibold">{formatDate(forecast.date)}</span>
-      {onTime === undefined ? '.' : onTime ? ' – vor deinem Zieldatum ✓' : ' – nach deinem Zieldatum.'}
+      <TrendingUp size={14} className="mr-1 inline -translate-y-px text-accent" />
+      Bei deinem Tempo ({tempo}) erreichst du {targetKg} kg etwa am <span className="font-semibold">{formatDate(forecast.date)}</span>
+      {onTime === undefined ? '.' : onTime ? ' – vor deinem Zieldatum.' : ' – nach deinem Zieldatum.'}
     </p>
+  )
+}
+
+/** Heutiges Training: laufende Einheit mit Fortschritt, sonst der nächste Plan-Tag zum Starten. */
+function TodayTraining({ athlete, onGo }: { athlete: Athlete; onGo: (path: string) => void }) {
+  const today = todayIso()
+  const data = useLiveQuery(async () => {
+    const [plans, logs, planExercises] = await Promise.all([
+      db.trainingPlans.where('athleteId').equals(athlete.id).toArray(),
+      db.workoutLogs.where('athleteId').equals(athlete.id).toArray(),
+      db.trainingPlanExercises.toArray(),
+    ])
+    const withExercises = new Set(planExercises.map((pe) => pe.planId))
+    const todayLog = logs.find((l) => l.date === today)
+    let progress: { done: number; total: number } | undefined
+    if (todayLog) {
+      const rows = await db.workoutLogExercises.where('workoutLogId').equals(todayLog.id).toArray()
+      const sets = await db.workoutSets.where('workoutLogExerciseId').anyOf(rows.map((r) => r.id)).toArray()
+      progress = { done: sets.filter((x) => x.done).length, total: sets.length }
+    }
+    const next = nextTrainingPlan(plans, withExercises, logs, today)
+    const exerciseCount = next ? planExercises.filter((pe) => pe.planId === next.id).length : 0
+    const todayPlan = todayLog?.trainingPlanId ? plans.find((p) => p.id === todayLog.trainingPlanId) : undefined
+    return { todayLog, progress, next, exerciseCount, todayPlan }
+  }, [athlete.id, today])
+  if (!data) return null
+  const { todayLog, progress, next, exerciseCount, todayPlan } = data
+  const started = !!todayLog && (progress?.total ?? 0) > 0
+  if (!started && !next) return null
+
+  const finished = !!todayLog?.completedAt
+  const title = started ? (todayPlan?.phaseName ?? 'Training heute') : next!.phaseName
+  const sub = finished
+    ? 'Heute abgeschlossen'
+    : started
+      ? `${progress!.done}/${progress!.total} Sätze erledigt`
+      : `Heute dran · ${exerciseCount} ${exerciseCount === 1 ? 'Übung' : 'Übungen'}`
+
+  return (
+    <Card className="flex items-center gap-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
+        {finished ? <CircleCheck size={20} /> : <Dumbbell size={20} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-fg">{title}</p>
+        <p className="text-xs tabular-nums text-muted">{sub}</p>
+        {started && !finished && (
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${(progress!.done / progress!.total) * 100}%` }} />
+          </div>
+        )}
+      </div>
+      {!finished && (
+        <button
+          type="button"
+          onClick={() => onGo(started ? 'training?view=log' : `training?view=log&plan=${next!.id}`)}
+          className="shrink-0 rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-accent-fg transition active:scale-95"
+        >
+          {started ? 'Weiter' : 'Starten'}
+        </button>
+      )}
+    </Card>
   )
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Pencil } from 'lucide-react'
 import { db } from '../db/db'
 import { upsertDailyEntry, todayIso } from '../db/queries'
 import { celebrateOnce, haptic } from '../lib/feedback'
@@ -94,13 +95,13 @@ export default function WaterTracker({
             </label>
           ) : (
             <button type="button" onClick={() => setEditingGoal(true)} className="text-xs text-muted underline-offset-2 hover:underline">
-              Ziel {liters(goal)} l ✎
+              Ziel {liters(goal)} l <Pencil size={11} className="inline -translate-y-px" />
             </button>
           )}
         </div>
         <div className="flex items-baseline gap-1">
           <CountUp value={waterMl / 1000} decimals={2} className="text-2xl font-bold tabular-nums text-fg" />
-          <span className="text-sm text-muted">l {reached ? '· 💧 geschafft' : `· noch ${liters(goal - waterMl)} l`}</span>
+          <span className="text-sm text-muted">l {reached ? '· geschafft' : `· noch ${liters(goal - waterMl)} l`}</span>
         </div>
         <div className="flex gap-1.5">
           <button

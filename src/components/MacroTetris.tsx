@@ -1,4 +1,5 @@
 import { suggestFill, type TetrisCandidate, type TetrisPart } from '../lib/macroTetris'
+import { Puzzle } from 'lucide-react'
 import { Button, Card } from './ui'
 
 function amountLabel(grams: number): string {
@@ -25,7 +26,7 @@ export default function MacroTetris({
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-muted">🧩 Was noch passt</h2>
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted"><Puzzle size={15} /> Was noch passt</h2>
         <span className="text-xs tabular-nums text-muted">
           Rest {Math.round(remaining.kcal)} kcal · P {Math.max(0, Math.round(remaining.protein))}
         </span>

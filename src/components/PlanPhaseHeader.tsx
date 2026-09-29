@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { Trash2 } from 'lucide-react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -117,7 +118,7 @@ export default function PlanPhaseHeader({
                 if (window.confirm(deleteConfirmText ?? 'Diese Phase wirklich löschen?')) onDelete()
               }}
             >
-              🗑
+              <Trash2 size={16} />
             </Button>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Card } from './ui'
 
 export default function CollapsibleCard({
@@ -54,7 +55,7 @@ export default function CollapsibleCard({
         <h2 className="shrink-0 text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
         {!expanded && summary && <span className="truncate text-xs text-muted">{summary}</span>}
       </span>
-      <span className={`text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}>▾</span>
+      <ChevronDown size={16} className={`shrink-0 text-muted transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
     </button>
   )
 

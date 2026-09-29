@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { Check } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
@@ -367,7 +368,7 @@ function SupplementItemSheet({
             key={s.id}
             title={s.name}
             subtitle={s.defaultTiming}
-            value={s.id === supplementId ? '✓' : s.defaultDose}
+            value={s.id === supplementId ? <Check size={16} className="text-accent" /> : s.defaultDose}
             onClick={() => {
               setSupplementId(s.id)
               // Die Standard-Dosis nur übernehmen, solange keine eigene eingetragen ist.

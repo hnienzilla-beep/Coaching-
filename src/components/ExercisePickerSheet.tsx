@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Check, Star } from 'lucide-react'
 import type { Exercise } from '../models/types'
 import Sheet from './Sheet'
 import { Input, ListRow } from './ui'
@@ -60,12 +61,12 @@ export default function ExercisePickerSheet({
             }
             title={
               <>
-                {e.favorite && '⭐ '}
+                {e.favorite && <Star size={13} className="mr-1 inline -translate-y-px fill-current text-accent" />}
                 {e.name}
               </>
             }
             subtitle={e.muscleGroup}
-            value={e.id === selectedId ? '✓' : undefined}
+            value={e.id === selectedId ? <Check size={16} className="text-accent" /> : undefined}
             onClick={() => {
               onPick(e.id)
               onClose()

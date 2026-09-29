@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { formatDecimalInput, isDecimalInput, parseDecimalInput } from '../lib/decimalInput'
 import { useCountUp } from '../lib/countUp'
 import SwipeToDelete from './SwipeToDelete'
+import { Minus, Plus } from 'lucide-react'
+import { haptic } from '../lib/feedback'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -343,5 +345,71 @@ export function CountUp({ value, decimals = 0, className }: { value: number | un
     <span className={className}>
       {shown.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
     </span>
+  )
+}
+
+/** Lade-Platzhalter mit Schimmer - für Bereiche, deren Daten noch geladen werden. */
+export function Skeleton({ className = 'h-24' }: { className?: string }) {
+  return <div aria-hidden="true" className={`skeleton rounded-2xl ${className}`} />
+}
+
+/** Mehrere Platzhalter-Karten untereinander, ungefähr in der Form einer Seite. */
+export function PageSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-busy="true" aria-label="Lädt">
+      <Skeleton className="h-44" />
+      <div className="grid grid-cols-2 gap-2">
+        <Skeleton className="h-20" />
+        <Skeleton className="h-20" />
+      </div>
+      <Skeleton className="h-32" />
+      <Skeleton className="h-24" />
+    </div>
+  )
+}
+
+/**
+ * Zahlenfeld mit −/+ Knöpfen links und rechts. Die Knöpfe springen um `step`, runden auf
+ * dessen Raster und bleiben bei `min` stehen.
+ */
+export function Stepper({
+  value,
+  onChange,
+  step,
+  min = 0,
+  label,
+  className = '',
+  inputClassName = 'text-base',
+  decimals = 2,
+}: {
+  value: number | undefined
+  onChange: (n: number | undefined) => void
+  step: number
+  min?: number
+  label: string
+  className?: string
+  inputClassName?: string
+  decimals?: number
+}) {
+  function bump(dir: 1 | -1) {
+    const current = value ?? 0
+    // Auf das Raster schnappen: 67 g + 10 → 70 statt 77.
+    const snapped = dir === 1 ? Math.floor(current / step + 1e-9) * step + step : Math.ceil(current / step - 1e-9) * step - step
+    const next = Math.max(min, Math.round(snapped * 10 ** decimals) / 10 ** decimals)
+    haptic('tap')
+    onChange(next)
+  }
+  const btn =
+    'grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-fg transition active:scale-90 disabled:opacity-40'
+  return (
+    <div className={`flex items-center gap-1.5 ${className}`}>
+      <button type="button" className={btn} onClick={() => bump(-1)} disabled={(value ?? 0) <= min} aria-label={`${label} verringern`}>
+        <Minus size={16} />
+      </button>
+      <DecimalInput value={value} onChange={onChange} aria-label={label} className={`min-w-0 flex-1 text-center ${inputClassName}`} />
+      <button type="button" className={btn} onClick={() => bump(1)} aria-label={`${label} erhöhen`}>
+        <Plus size={16} />
+      </button>
+    </div>
   )
 }
