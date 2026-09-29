@@ -376,11 +376,39 @@ export async function getLastExercisePerformance(
   return undefined
 }
 
+// Profilfelder, die der Fortschritt-Export mitnimmt: alles außer Id, Name, Akzentfarbe und
+// Reihenfolge - die gehören zum jeweiligen Gerät bzw. zur Athletenliste dort.
+const PROFILE_KEYS = [
+  'gender',
+  'age',
+  'heightCm',
+  'weightKg',
+  'activityLevel',
+  'goal',
+  'proteinPerKg',
+  'fatPerKg',
+  'calorieAdjustmentKcal',
+  'startDate',
+  'targetWeightKg',
+  'targetDate',
+  'ffmi',
+  'waterGoalMl',
+  'muscleTargets',
+] as const satisfies readonly (keyof Athlete)[]
+type ProfileKey = (typeof PROFILE_KEYS)[number]
+type ProgressProfile = Partial<Pick<Athlete, ProfileKey>>
+
+function profileOf(athlete: Athlete): ProgressProfile {
+  return Object.fromEntries(PROFILE_KEYS.filter((k) => athlete[k] !== undefined).map((k) => [k, athlete[k]])) as ProgressProfile
+}
+
 interface ProgressExport {
   kind: 'progressExport'
   version: 1
   athleteName: string
   exportedAt: string
+  /** Profildaten (Stammdaten, Ziele) - fehlt in älteren Dateien. */
+  profile?: ProgressProfile
   dailyEntries: Omit<DailyEntry, 'id' | 'athleteId'>[]
   workoutDays: {
     date: string
@@ -389,7 +417,7 @@ interface ProgressExport {
       exerciseName: string
       exerciseFallback?: { muscleGroup: MuscleGroup; imageDataUrl?: string }
       notes?: string
-      sets: { setNumber: number; reps?: number; weightKg?: number; rpe?: number; done?: boolean }[]
+      sets: { setNumber: number; reps?: number; weightKg?: number; rpe?: number; done?: boolean; warmup?: boolean }[]
     }[]
   }[]
   nutritionDays: {
@@ -431,7 +459,7 @@ export async function exportProgress(athleteId: string): Promise<string> {
         exerciseName: exercise?.name ?? 'Unbekannte Übung',
         exerciseFallback: exercise ? { muscleGroup: exercise.muscleGroup, imageDataUrl: exercise.imageDataUrl } : undefined,
         notes: le.notes,
-        sets: sets.map(({ setNumber, reps, weightKg, rpe, done }) => ({ setNumber, reps, weightKg, rpe, done })),
+        sets: sets.map(({ setNumber, reps, weightKg, rpe, done, warmup }) => ({ setNumber, reps, weightKg, rpe, done, warmup })),
       })
     }
     workoutDays.push({ date: log.date, notes: log.notes, exercises })
@@ -461,6 +489,7 @@ export async function exportProgress(athleteId: string): Promise<string> {
     version: 1,
     athleteName: athlete?.name ?? '',
     exportedAt: new Date().toISOString(),
+    profile: athlete ? profileOf(athlete) : undefined,
     dailyEntries,
     workoutDays,
     nutritionDays,
@@ -476,6 +505,14 @@ export async function exportProgress(athleteId: string): Promise<string> {
 export async function importProgress(json: string, athleteId: string): Promise<void> {
   const template = JSON.parse(json) as ProgressExport
   if (template.kind !== 'progressExport') throw new Error('Ungültige Datei (kein Fortschritt-Export)')
+
+  // Profildaten übernehmen - Name, Akzentfarbe und Reihenfolge bleiben die des Empfängers.
+  if (template.profile) {
+    const patch = Object.fromEntries(
+      Object.entries(template.profile).filter(([key, value]) => PROFILE_KEYS.includes(key as ProfileKey) && value !== undefined && value !== null),
+    ) as ProgressProfile
+    if (Object.keys(patch).length > 0) await db.athletes.update(athleteId, patch)
+  }
 
   await db.transaction(
     'rw',
