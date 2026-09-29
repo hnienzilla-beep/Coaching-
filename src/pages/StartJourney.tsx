@@ -13,6 +13,7 @@ import {
   recommendSupplements,
   splitsFor,
   supplementNamesFor,
+  supplementInfo,
   START_SUPPLEMENTS,
   buildMealPlans,
   buildTrainingPlan,
@@ -26,6 +27,7 @@ import {
   type StartAnswers,
 } from '../lib/startPlan'
 import { getStoredTheme } from '../lib/theme'
+import { isCreatine } from '../lib/water'
 import type { Athlete } from '../models/types'
 import ColorWheel from '../components/ColorWheel'
 import { DecimalInput, Input } from '../components/ui'
@@ -481,15 +483,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           value={supplementNamesFor(a)}
           onChange={(supplements) => set({ supplements, supplementsTouched: true })}
         />
-        {!a.supplementsTouched && recommended.length > 0 && (
-          <ul className="flex flex-col gap-1 rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
-            {recommended.map((r) => (
-              <li key={r.name}>
-                <span className="font-medium text-fg">{r.name}:</span> {r.reason}
-              </li>
-            ))}
-          </ul>
-        )}
+        <SupplementList a={a} chosen={supplementNamesFor(a)} recommended={recommended.map((r) => r.name)} onAdd={(name) => set({ supplements: [...supplementNamesFor(a), name], supplementsTouched: true })} />
       </Question>
     </Block>,
     <Block key="10">
@@ -669,6 +663,53 @@ function Welcome() {
   )
 }
 
+/**
+ * Infos zu den Supplements - bleiben stehen, egal was an- oder abgewählt wird: Gewähltes mit
+ * Wirkung, Grund, Dosis und Zeitpunkt; Empfohlenes, das abgewählt wurde, gedimmt zum Zurückholen.
+ */
+function SupplementList({ a, chosen, recommended, onAdd }: { a: StartAnswers; chosen: string[]; recommended: string[]; onAdd: (name: string) => void }) {
+  const skipped = recommended.filter((n) => !chosen.includes(n))
+  if (chosen.length === 0 && skipped.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-2">
+      {chosen.map((name) => {
+        const info = supplementInfo(name, a)
+        return (
+          <li key={name} className="flex flex-col gap-0.5 rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+            <span className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-fg">{name}</span>
+              {info.reason && <span className="rounded-full bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent">Empfohlen</span>}
+            </span>
+            {info.reason && <span className="text-fg">{info.reason}</span>}
+            {info.about && <span>{info.about}</span>}
+            {(info.dose || info.timing) && (
+              <span>
+                {[info.dose, info.timing].filter(Boolean).join(' · ')}
+                {info.notes ? ` · ${info.notes}` : ''}
+              </span>
+            )}
+            {info.extra && <span className="text-accent">{info.extra}</span>}
+          </li>
+        )
+      })}
+      {skipped.map((name) => {
+        const info = supplementInfo(name, a)
+        return (
+          <li key={name} className="flex items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-xs text-muted">
+            <span className="min-w-0 flex-1">
+              <span className="font-medium text-fg">{name}</span> · empfohlen, nicht ausgewählt
+              {info.reason && <span className="block">{info.reason}</span>}
+            </span>
+            <button type="button" onClick={() => onAdd(name)} className="shrink-0 rounded-lg bg-surface-2 px-2 py-1 font-medium text-accent">
+              Hinzufügen
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 function Block({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-5">{children}</div>
 }
@@ -801,7 +842,9 @@ function Summary({
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted">Wasser: {(targets.waterMl / 1000).toLocaleString('de-DE')} l pro Tag</p>
+        <p className="text-xs text-muted">
+          Wasser: {(targets.waterMl / 1000).toLocaleString('de-DE')} l pro Tag · 1 l je 20 kg{supplementNamesFor(a).some(isCreatine) ? ' + 1 l wegen Kreatin' : ''}
+        </p>
       </SummaryCard>
       <SummaryCard title="Ziel" onEdit={() => onEdit(4)}>
         {weightGoal && targets.targetWeightKg !== undefined ? (
