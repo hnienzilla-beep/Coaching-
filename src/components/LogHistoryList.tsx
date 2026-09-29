@@ -1,4 +1,5 @@
 import { Card } from './ui'
+import { Check } from 'lucide-react'
 
 export interface LogHistoryEntry {
   date: string
@@ -38,7 +39,7 @@ export default function LogHistoryList({
           >
             <span className="shrink-0 text-muted">{formatShortDay(entry.date)}</span>
             <span className="truncate text-right text-fg">
-              {entry.done ? '✓ ' : ''}
+              {entry.done ? <Check size={13} className="mr-1 inline -translate-y-px text-accent" /> : ''}
               {entry.summary}
             </span>
           </button>

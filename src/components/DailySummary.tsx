@@ -1,4 +1,5 @@
 import { CAL_TOLERANCE, MACRO_TOLERANCE, diffTone, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
+import { PartyPopper } from 'lucide-react'
 import { useGrowIn } from '../lib/countUp'
 import { Card, CountUp } from './ui'
 
@@ -75,7 +76,7 @@ export default function DailySummary({
           <span className={`text-3xl font-bold tabular-nums ${over ? 'text-danger' : 'text-fg'}`}>
             <CountUp value={Math.abs(remaining)} />
           </span>
-          <span className="text-xs text-muted">{reached ? '🎉 Ziel erreicht' : over ? 'kcal drüber' : 'kcal übrig'}</span>
+          <span className="text-xs text-muted">{reached ? <><PartyPopper size={12} className="mr-1 inline -translate-y-px" />Ziel erreicht</> : over ? 'kcal drüber' : 'kcal übrig'}</span>
           <span className="mt-1 text-[11px] tabular-nums text-muted">
             <CountUp value={sums.kcal} /> / {formatInt(target.targetCalories)}
           </span>

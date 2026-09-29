@@ -165,6 +165,7 @@ export interface Exercise {
   favorite?: boolean
   imageDataUrl?: string // herunterskaliertes Übungsbild als Base64-Data-URL
   primaryMuscle?: Muscle // Hauptmuskel für die Heatmap; ohne wird er aus dem Namen erkannt
+  weightStepKg?: number // Sprung der ± Knöpfe beim Gewicht; ohne wird er gelernt bzw. geraten
 }
 
 export interface TrainingPlan {

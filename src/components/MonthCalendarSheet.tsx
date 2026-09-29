@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { addDays, todayIso } from '../db/queries'
 import type { DayMarker } from './DayStrip'
 import Sheet from './Sheet'
@@ -77,7 +78,7 @@ export default function MonthCalendarSheet({
           aria-label="Vorheriger Monat"
           className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg"
         >
-          ‹
+          <ChevronLeft size={20} />
         </button>
         <span className="text-sm font-semibold text-fg">{monthLabel(month)}</span>
         <button
@@ -87,7 +88,7 @@ export default function MonthCalendarSheet({
           aria-label="Nächster Monat"
           className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg disabled:opacity-30"
         >
-          ›
+          <ChevronRight size={20} />
         </button>
       </div>
 

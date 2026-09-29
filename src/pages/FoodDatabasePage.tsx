@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Star } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
@@ -85,7 +86,7 @@ export default function FoodDatabasePage() {
                 aria-label={f.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
                 className="shrink-0 px-1 text-lg"
               >
-                {f.favorite ? '⭐' : '☆'}
+                <Star size={18} className={f.favorite ? 'fill-current text-accent' : 'text-muted'} />
               </button>
             }
           />

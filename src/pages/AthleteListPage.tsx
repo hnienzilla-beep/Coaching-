@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronRight, CircleCheck, Palette, Trash2 } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
@@ -142,7 +143,7 @@ export default function AthleteListPage() {
             aria-label="Akzentfarbe"
             className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-2 py-2 text-sm leading-none text-fg"
           >
-            🎨
+            <Palette size={16} />
             <span
               className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
               style={{ background: overviewAccent ?? 'var(--color-accent)' }}
@@ -171,7 +172,7 @@ export default function AthleteListPage() {
       </header>
 
       {athletes?.length === 0 ? (
-        <Card className="text-center text-sm text-muted">👤 Noch keine Athleten angelegt. Leg den ersten an.</Card>
+        <Card className="text-center text-sm text-muted">Noch keine Athleten angelegt. Leg den ersten an.</Card>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sortedAthletes.map((a) => a.id)} strategy={verticalListSortingStrategy}>
@@ -187,10 +188,10 @@ export default function AthleteListPage() {
       <section className="flex flex-col gap-1.5">
         <h2 className="px-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted">Daten</h2>
         {athletes && athletes.length > 0 && (
-          <ListRow title="Athleten exportieren" subtitle="Einzelne Athleten zum Weitergeben" value="›" onClick={() => setExportSelectorOpen(true)} />
+          <ListRow title="Athleten exportieren" subtitle="Einzelne Athleten zum Weitergeben" value={<ChevronRight size={16} />} onClick={() => setExportSelectorOpen(true)} />
         )}
-        <ListRow title="Backup exportieren" subtitle="Alle Daten als Datei sichern" value="›" onClick={() => void handleExport()} />
-        <ListRow title="Backup importieren" subtitle="Aus einer Backup-Datei wiederherstellen" value="›" onClick={() => importInputRef.current?.click()} />
+        <ListRow title="Backup exportieren" subtitle="Alle Daten als Datei sichern" value={<ChevronRight size={16} />} onClick={() => void handleExport()} />
+        <ListRow title="Backup importieren" subtitle="Aus einer Backup-Datei wiederherstellen" value={<ChevronRight size={16} />} onClick={() => importInputRef.current?.click()} />
         <input
           ref={importInputRef}
           type="file"
@@ -271,8 +272,8 @@ function AthleteTileList({
             </div>
           </div>
           {selected.has(a.id) && (
-            <span className="text-lg" style={{ color: a.accentColor }}>
-              ✓
+            <span style={{ color: a.accentColor }}>
+              <CircleCheck size={20} />
             </span>
           )}
         </button>
@@ -431,7 +432,7 @@ function SortableAthleteCard({ athlete: a, weightKg }: { athlete: Athlete; weigh
               if (confirm(`Athlet "${a.name}" wirklich löschen? Alle Daten gehen verloren.`)) await remove()
             }}
           >
-            🗑
+            <Trash2 size={16} />
           </button>
         </div>
       </SwipeToDelete>

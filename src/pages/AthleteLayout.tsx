@@ -1,36 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } from 'react-router-dom'
+import { Check, ChevronDown, Dumbbell, LayoutDashboard, LineChart, Settings, UserPlus, Users, Utensils } from 'lucide-react'
 import { SWIPE_VIEWS, subViewQuery, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/queries'
+import { sortAthletes } from '../db/queries'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
-import ColorWheel from '../components/ColorWheel'
 import FloatingRestTimer from '../components/FloatingRestTimer'
-import StorySettingsSheet from '../components/StorySettingsSheet'
-import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
+import QuickAddButton from '../components/QuickAddButton'
+import { PageSkeleton, Skeleton } from '../components/ui'
+import { useDetailLevel } from '../lib/detailLevel'
 import { setLastAthleteId } from '../lib/lastAthlete'
-import { useTheme } from '../lib/theme'
-import ObsidianSyncModal from '../features/obsidianSync/ObsidianSyncModal'
+import { accentForeground } from '../lib/theme'
 import type { Athlete } from '../models/types'
 
 // Ernährung (Plan/Log/Supplements) und Training (Plan/Log) sind je ein Tab mit einem
 // internen Umschalter auf der jeweiligen Seite selbst - dadurch bleiben nur 4
 // Haupt-Tabs, die bequem in eine einzeilige Bottom-Navigation passen.
 const TABS = [
-  { to: '', label: 'Dashboard', end: true },
-  { to: 'tracking', label: 'Tracking', end: false },
-  { to: 'ernaehrung', label: 'Ernährung', end: false },
-  { to: 'training', label: 'Training', end: false },
+  { to: '', label: 'Dashboard', end: true, icon: LayoutDashboard },
+  { to: 'tracking', label: 'Tracking', end: false, icon: LineChart },
+  { to: 'ernaehrung', label: 'Ernährung', end: false, icon: Utensils },
+  { to: 'training', label: 'Training', end: false, icon: Dumbbell },
 ]
 
-const APP_BUILD_LABEL = new Date(__APP_BUILD__).toLocaleString('de-DE', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
+/** Abstand der schwebenden Navigation zum unteren Rand - über dem Home-Indikator. */
+const NAV_BOTTOM = 'max(0.75rem, calc(env(safe-area-inset-bottom) - 0.5rem))'
 
 export default function AthleteLayout() {
   const { athleteId } = useParams()
@@ -38,7 +33,6 @@ export default function AthleteLayout() {
   const navigate = useNavigate()
 
   const detailLevel = useDetailLevel()
-  const [theme, setTheme] = useTheme()
 
   // `?? null` unterscheidet "lädt noch" (undefined) von "gibt es nicht" (null) - ohne das
   // blitzte der Fehlerzweig bei jedem Laden kurz auf.
@@ -69,17 +63,9 @@ export default function AthleteLayout() {
   // Beim Wischen gleitet die ganze Seite aus der Wischrichtung herein.
   const outerAnimation = swipeAnimationClass((state as { swipe?: unknown } | null)?.swipe)
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
-  const backgroundPhotoCount = useLiveQuery(() => db.backgroundPhoto.count(), [])
-
-  const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [athletePickerOpen, setAthletePickerOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [obsidianSyncOpen, setObsidianSyncOpen] = useState(false)
-  const [storySettingsOpen, setStorySettingsOpen] = useState(false)
-  const colorPickerRef = useRef<HTMLDivElement>(null)
+  const [compact, setCompact] = useState(false)
   const athletePickerRef = useRef<HTMLDivElement>(null)
-  const settingsRef = useRef<HTMLDivElement>(null)
-  const backgroundPhotoInputRef = useRef<HTMLInputElement>(null)
 
   const sortedAthletes = sortAthletes(athletes ?? [])
   const canManageAthletes = detailLevel !== 'einfach'
@@ -88,6 +74,7 @@ export default function AthleteLayout() {
   // zurücksetzen übernimmt der Router deshalb nicht mehr.
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
+    setCompact(false)
   }, [pathname])
 
   // Merken, wo man war: Beim nächsten App-Start landet man wieder bei diesem Athleten.
@@ -104,283 +91,207 @@ export default function AthleteLayout() {
     return () => applyAccentColor(getStoredOverviewAccent())
   }, [athlete?.accentColor])
 
-  // Ein Handler für alle drei Klapplisten der Kopfzeile: Ein Klick daneben schließt die,
-  // in der er nicht gelandet ist.
+  // Ein Klick neben die Athletenliste schließt sie.
   useEffect(() => {
-    if (!colorPickerOpen && !athletePickerOpen && !settingsOpen) return
+    if (!athletePickerOpen) return
     function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node
-      if (!colorPickerRef.current?.contains(target)) setColorPickerOpen(false)
-      if (!athletePickerRef.current?.contains(target)) setAthletePickerOpen(false)
-      if (!settingsRef.current?.contains(target)) setSettingsOpen(false)
+      if (!athletePickerRef.current?.contains(e.target as Node)) setAthletePickerOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [colorPickerOpen, athletePickerOpen, settingsOpen])
+  }, [athletePickerOpen])
 
-  if (athlete === undefined) return null
+  if (athlete === undefined)
+    return (
+      <div className="mx-auto flex h-full max-w-md flex-col gap-4 p-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-9 w-9 rounded-full!" />
+          <Skeleton className="h-5 w-32" />
+        </div>
+        <Skeleton className="h-8 w-40" />
+        <PageSkeleton />
+      </div>
+    )
   if (athlete === null) return <Navigate to="/" replace />
 
+  const segment = pathname.split('/')[3] ?? ''
+  const onSettings = segment === 'einstellungen'
+  const pageTitle = onSettings ? 'Einstellungen' : (TABS.find((t) => t.to === segment)?.label ?? '')
+
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col overflow-hidden">
-      <header className="shrink-0 flex items-center gap-3 border-b border-border p-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <div ref={colorPickerRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setColorPickerOpen((v) => !v)}
-            aria-label="Akzentfarbe ändern"
-            className="h-3 w-3 rounded-full border border-border"
-            style={{ background: athlete.accentColor }}
-          />
-          {colorPickerOpen && (
-            <div className="anim-pop absolute left-0 top-[calc(100%+0.5rem)] z-30 rounded-2xl border border-border bg-surface p-4 shadow-2xl shadow-black/50">
-              {/* Vorschau live beim Ziehen, gespeichert wird beim Loslassen. */}
-              <ColorWheel
-                value={athlete.accentColor}
-                onChange={applyAccentColor}
-                onCommit={(picked) => void db.athletes.update(athlete.id, { accentColor: picked })}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Bei einem einzigen Athleten gibt es nichts auszuwählen - dann steht hier nur der
-            Name, ohne Chevron und ohne Klappliste. Angelegt und verwaltet wird in dem Fall
-            über das Zahnrad. */}
-        {sortedAthletes.length > 1 ? (
-          <div ref={athletePickerRef} className="relative min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => setAthletePickerOpen((v) => !v)}
-              aria-expanded={athletePickerOpen}
-              className="flex w-full items-center gap-1.5 text-left"
-            >
-              <h1 className="truncate text-lg font-bold text-fg">{athlete.name}</h1>
-              <span className={`shrink-0 text-muted transition-transform duration-200 ${athletePickerOpen ? 'rotate-180' : ''}`}>
-                ▾
-              </span>
-            </button>
-            {athletePickerOpen && (
-              <div className="absolute left-0 top-[calc(100%+0.5rem)] z-10 flex w-56 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
-                {sortedAthletes.map((a) => (
-                  <button
-                    key={a.id}
-                    onClick={() => {
-                      setAthletePickerOpen(false)
-                      // Bewusst aufs Dashboard und nicht auf den gerade offenen Reiter:
-                      // Nach einem Athletenwechsel ist der Überblick der sinnvolle Einstieg.
-                      if (a.id !== athlete.id) navigate(`/athlete/${a.id}`)
-                    }}
-                    aria-current={a.id === athlete.id}
-                    className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${
-                      a.id === athlete.id ? 'text-fg' : 'text-muted'
-                    }`}
-                  >
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-border" style={{ background: a.accentColor }} />
-                    <span className="flex-1 truncate">{a.name}</span>
-                    {a.id === athlete.id && <span className="shrink-0 text-accent">✓</span>}
-                  </button>
-                ))}
-                {canManageAthletes && (
-                  <>
-                    <div className="my-1 border-t border-border" />
-                    <Link
-                      to="/athleten?neu=1"
-                      onClick={() => setAthletePickerOpen(false)}
-                      className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                    >
-                      + Neuer Athlet
-                    </Link>
-                    <Link
-                      to="/athleten"
-                      onClick={() => setAthletePickerOpen(false)}
-                      className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                    >
-                      👥 Athleten verwalten
-                    </Link>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-fg">{athlete.name}</h1>
-        )}
-
-        <div ref={settingsRef} className="relative shrink-0">
-          <button
-            onClick={() => setSettingsOpen((v) => !v)}
+    <div className="relative mx-auto flex h-full max-w-md flex-col overflow-hidden">
+      <header
+        className={`shrink-0 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 transition-colors duration-300 ${
+          compact ? 'border-border bg-bg/85 backdrop-blur-xl' : 'border-transparent'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/athlete/${athlete.id}/einstellungen`}
             aria-label="Einstellungen"
-            className="rounded-lg border border-border bg-surface-2 p-2 text-sm leading-none text-fg"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-fg transition active:scale-90"
           >
-            ⚙️
-          </button>
-          {settingsOpen && (
-            <div className="anim-pop absolute right-0 top-[calc(100%+0.5rem)] z-10 flex w-52 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+            {initials(athlete.name)}
+          </Link>
+
+          {/* Bei einem einzigen Athleten gibt es nichts auszuwählen - dann steht hier nur der
+              Name, ohne Chevron und ohne Klappliste. */}
+          {sortedAthletes.length > 1 ? (
+            <div ref={athletePickerRef} className="relative min-w-0 flex-1">
               <button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+                type="button"
+                onClick={() => setAthletePickerOpen((v) => !v)}
+                aria-expanded={athletePickerOpen}
+                className="flex w-full items-center gap-1 text-left"
               >
-                {theme === 'dark' ? '☀️ Hell-Modus' : '🌙 Dunkel-Modus'}
+                <span className="truncate text-base font-semibold text-fg">{athlete.name}</span>
+                {compact && pageTitle && <span className="anim-pop shrink-0 truncate text-base text-muted">· {pageTitle}</span>}
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 text-muted transition-transform duration-200 ${athletePickerOpen ? 'rotate-180' : ''}`}
+                />
               </button>
-              <div className="flex flex-col gap-1 px-2 py-1.5">
-                <span className="text-sm text-fg">👁️ Ansicht</span>
-                <div className="flex gap-1 rounded-xl bg-surface-2 p-1">
-                  {DETAIL_LEVELS.map((l) => (
+              {athletePickerOpen && (
+                <div className="anim-pop absolute left-0 top-[calc(100%+0.5rem)] z-40 flex w-56 flex-col gap-1 rounded-xl border border-border bg-surface p-2 shadow-lg shadow-black/30">
+                  {sortedAthletes.map((a) => (
                     <button
-                      key={l.key}
-                      onClick={() => setDetailLevel(l.key)}
-                      aria-pressed={detailLevel === l.key}
-                      className={`flex-1 rounded-lg py-1.5 text-xs font-medium transition ${
-                        detailLevel === l.key ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg'
+                      key={a.id}
+                      onClick={() => {
+                        setAthletePickerOpen(false)
+                        // Bewusst aufs Dashboard und nicht auf den gerade offenen Reiter:
+                        // Nach einem Athletenwechsel ist der Überblick der sinnvolle Einstieg.
+                        if (a.id !== athlete.id) navigate(`/athlete/${a.id}`)
+                      }}
+                      aria-current={a.id === athlete.id}
+                      className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-2 ${
+                        a.id === athlete.id ? 'text-fg' : 'text-muted'
                       }`}
                     >
-                      {l.label}
+                      <span
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold"
+                        style={{ background: a.accentColor, color: accentForeground(a.accentColor) }}
+                      >
+                        {initials(a.name)}
+                      </span>
+                      <span className="flex-1 truncate">{a.name}</span>
+                      {a.id === athlete.id && <Check size={16} className="shrink-0 text-accent" />}
                     </button>
                   ))}
+                  {canManageAthletes && (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <Link
+                        to="/athleten?neu=1"
+                        onClick={() => setAthletePickerOpen(false)}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+                      >
+                        <UserPlus size={16} /> Neuer Athlet
+                      </Link>
+                      <Link
+                        to="/athleten"
+                        onClick={() => setAthletePickerOpen(false)}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
+                      >
+                        <Users size={16} /> Athleten verwalten
+                      </Link>
+                    </>
+                  )}
                 </div>
-                <span className="text-[11px] text-muted">{DETAIL_LEVELS.find((l) => l.key === detailLevel)?.hint}</span>
-              </div>
-              <button
-                onClick={() => backgroundPhotoInputRef.current?.click()}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                🖼️ Hintergrundbild wählen
-              </button>
-              {!!backgroundPhotoCount && (
-                <button
-                  onClick={async () => {
-                    await clearBackgroundPhoto()
-                    setSettingsOpen(false)
-                  }}
-                  className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-                >
-                  🗑️ Hintergrundbild entfernen
-                </button>
               )}
-              <input
-                ref={backgroundPhotoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (file) await setBackgroundPhoto(file)
-                  e.target.value = ''
-                  setSettingsOpen(false)
-                }}
-              />
-              {/* Athletenverwaltung, Datenbanken und Sync sind Werkzeuge für Fortgeschrittene.
-                  Die Ansichts-Auswahl darüber bleibt in jeder Stufe stehen - sonst gäbe es
-                  keinen Weg zurück. */}
-              {canManageAthletes && (
-                <>
-                  <div className="my-1 border-t border-border" />
-                  <Link
-                    to="/athleten"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    👥 Athleten verwalten
-                  </Link>
-                  <Link
-                    to="/lebensmittel"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Lebensmittel-DB
-                  </Link>
-                  <Link
-                    to="/supplemente"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Supplement-DB
-                  </Link>
-                  <Link
-                    to="/uebungen"
-                    onClick={() => setSettingsOpen(false)}
-                    className="rounded-lg px-2 py-1.5 text-sm text-accent hover:bg-surface-2"
-                  >
-                    Trainings-DB
-                  </Link>
-                  <div className="my-1 border-t border-border" />
-                  <button
-                    onClick={() => {
-                      setObsidianSyncOpen(true)
-                      setSettingsOpen(false)
-                    }}
-                    className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-                  >
-                    🔗 Obsidian-Sync
-                  </button>
-                </>
-              )}
-              <button
-                onClick={() => {
-                  setStorySettingsOpen(true)
-                  setSettingsOpen(false)
-                }}
-                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
-              >
-                📖 Wochen-Story
-              </button>
-              <div className="my-1 border-t border-border" />
-              <p className="px-2 pb-0.5 text-[11px] text-muted">Version vom {APP_BUILD_LABEL}</p>
             </div>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
+              {athlete.name}
+              {compact && pageTitle && <span className="font-normal text-muted"> · {pageTitle}</span>}
+            </span>
           )}
+
+          <Link
+            to={`/athlete/${athlete.id}/einstellungen`}
+            aria-label="Einstellungen"
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-2 transition active:scale-90 ${onSettings ? 'text-accent' : 'text-fg'}`}
+          >
+            <Settings size={18} />
+          </Link>
+        </div>
+        {/* Großer Titel, der beim Scrollen einklappt (iOS-Stil). */}
+        <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${compact ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
+          <div className="overflow-hidden">
+            <h1 key={pageTitle} className="anim-title pt-2 text-3xl font-bold tracking-tight text-fg">
+              {pageTitle}
+            </h1>
+          </div>
         </div>
       </header>
 
       {/* overflow-x-hidden: Beim Mitziehen ragt der Inhalt seitlich hinaus - ohne das könnte
-          Safari waagerecht scrollen oder federn. */}
-      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-6">
+          Safari waagerecht scrollen oder federn. Unten Platz für die schwebende Navigation. */}
+      <main
+        ref={mainRef}
+        onScroll={(e) => {
+          const top = e.currentTarget.scrollTop
+          // Mit Abstand zwischen Ein- und Ausklappen, sonst flackert es an der Schwelle.
+          setCompact((c) => (c ? top > 8 : top > 40))
+        }}
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-36"
+      >
         {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet - beim
-            Wischen gleitet die Ansicht aus der Wischrichtung herein. */}
-        {/* Eigene Hülle für das Mitziehen beim Wischen - auf dem animierten Element darunter
+            Wischen und Antippen gleitet die Ansicht aus der passenden Richtung herein.
+            Eigene Hülle für das Mitziehen beim Wischen - auf dem animierten Element darunter
             würde die Animation die Verschiebung überschreiben. */}
         <div ref={swipeContentRef}>
-        <div key={pathname} className={outerAnimation}>
-          <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
-        </div>
+          <div key={pathname} className={`anim-stagger ${outerAnimation}`}>
+            <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
+          </div>
         </div>
       </main>
 
-      {/* Unten bewusst kein Safe-Area-Polster: Die 12px Eigenpolster der Reiter (`py-3`)
-          reichen als Abstand zum Home-Indikator, dessen Oberkante rund 13px über der
-          Unterkante liegt. Der volle Systemabstand (34px) schob die Beschriftungen
-          spürbar vom Rand weg, ohne dass es etwas bringt. */}
-      <nav className="relative grid shrink-0 grid-cols-4 gap-1.5 border-t border-border bg-bg/85 p-2 pb-1 backdrop-blur-xl">
-        <FloatingRestTimer />
+      {!onSettings && <QuickAddButton athlete={athlete} bottomOffset={`calc(${NAV_BOTTOM} + 4.75rem)`} />}
+
+      {/* Schwebende Navigation: abgerundete Leiste über dem Inhalt, mit Icon und Beschriftung. */}
+      <nav
+        className="absolute inset-x-3 z-30 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-surface/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        style={{ bottom: NAV_BOTTOM }}
+      >
         {/* Die Markierung gleitet zum aktiven Reiter - beim Antippen wie beim Wischen. */}
         {activeTab !== -1 && (
           <span
             aria-hidden="true"
-            className="absolute top-2 bottom-1 left-2 rounded-lg bg-accent shadow-sm shadow-black/20 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="absolute top-1.5 bottom-1.5 left-1.5 rounded-xl bg-accent shadow-sm shadow-black/20 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
-              width: 'calc((100% - 1rem - 3 * 0.375rem) / 4)',
-              transform: `translateX(calc(${activeTab} * (100% + 0.375rem)))`,
+              width: 'calc((100% - 0.75rem - 3 * 0.25rem) / 4)',
+              transform: `translateX(calc(${activeTab} * (100% + 0.25rem)))`,
             }}
           />
         )}
-        {TABS.map((tab) => (
-          <NavLink
-            key={tab.label}
-            to={`/athlete/${athleteId}${tab.to ? `/${tab.to}${subViewQuery(tab.to)}` : ''}`}
-            end={tab.end}
-            className={({ isActive }) =>
-              `relative truncate rounded-lg px-1 py-3 text-center text-[11px] font-medium leading-tight transition-colors duration-300 active:scale-95 ${
-                isActive ? 'text-accent-fg' : 'text-muted hover:text-fg'
-              }`
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
+        {TABS.map((tab, i) => {
+          const Icon = tab.icon
+          return (
+            <NavLink
+              key={tab.label}
+              to={`/athlete/${athleteId}${tab.to ? `/${tab.to}${subViewQuery(tab.to)}` : ''}`}
+              state={activeTab !== -1 && i !== activeTab ? { swipe: i > activeTab ? 'next' : 'prev' } : undefined}
+              end={tab.end}
+              className={({ isActive }) =>
+                `relative flex flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-medium leading-tight transition-colors duration-300 active:scale-95 ${
+                  isActive ? 'text-accent-fg' : 'text-muted hover:text-fg'
+                }`
+              }
+            >
+              <Icon size={20} strokeWidth={2} />
+              <span className="truncate">{tab.label}</span>
+            </NavLink>
+          )
+        })}
       </nav>
 
-      {obsidianSyncOpen && <ObsidianSyncModal onClose={() => setObsidianSyncOpen(false)} />}
-      <StorySettingsSheet open={storySettingsOpen} onClose={() => setStorySettingsOpen(false)} />
+      <FloatingRestTimer />
     </div>
   )
+}
+
+/** Initialen für den Avatar: erste Buchstaben der ersten beiden Wörter. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase()
 }

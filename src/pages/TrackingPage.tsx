@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -20,7 +21,7 @@ import {
   smoothedValue,
   weeklyDelta,
 } from '../lib/calculator'
-import { Card, CountUp, DecimalInput, Field, Input, Button, SegmentedControl } from '../components/ui'
+import { Button, Card, CountUp, DecimalInput, Field, Input, PageSkeleton, SegmentedControl } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
 import LogDayHeader from '../components/LogDayHeader'
 import LogHistoryList from '../components/LogHistoryList'
@@ -29,6 +30,8 @@ import { shareOrDownloadFile } from '../lib/share'
 import { useSimpleMode } from '../lib/detailLevel'
 import { chartLineAnimation } from '../lib/countUp'
 import { forecastGoal } from '../lib/goalForecast'
+import ChartBubble from '../components/ChartBubble'
+import { chartCursor } from '../lib/chartCursor'
 
 type Ctx = { athlete: Athlete }
 
@@ -38,6 +41,29 @@ const MEASURES = [
   { key: 'chest', label: 'Brust', color: '#e4e4e7' },
   { key: 'leg', label: 'Bein', color: '#fb923c' },
 ] as const satisfies readonly { key: keyof DailyEntry; label: string; color: string }[]
+
+const RANGES = [
+  { key: '2w', label: '2W', days: 14 },
+  { key: '1m', label: '1M', days: 31 },
+  { key: '3m', label: '3M', days: 92 },
+  { key: 'all', label: 'Alle', days: undefined },
+] as const
+type ChartRange = (typeof RANGES)[number]['key']
+const RANGE_KEY = 'coach.tracking.range'
+function readRange(): ChartRange {
+  try {
+    const v = localStorage.getItem(RANGE_KEY)
+    return RANGES.some((r) => r.key === v) ? (v as ChartRange) : '1m'
+  } catch {
+    return '1m'
+  }
+}
+
+/** "09-24" → "24.09." */
+function formatChartDate(mmdd: string): string {
+  const [m, d] = mmdd.split('-')
+  return d ? `${d}.${m}.` : mmdd
+}
 
 function formatCm(n: number): string {
   return n.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -52,7 +78,8 @@ function formatSigned(n: number): string {
 export default function TrackingPage() {
   const { athlete } = useOutletContext<Ctx>()
   const simple = useSimpleMode()
-  const series = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate]) ?? []
+  const loadedSeries = useLiveQuery(() => getTrackingSeries(athlete.id, athlete.startDate), [athlete.id, athlete.startDate])
+  const series = loadedSeries ?? []
   const importProgressInputRef = useRef<HTMLInputElement>(null)
 
   const chartData = series.map((entry, i) => ({
@@ -96,13 +123,7 @@ export default function TrackingPage() {
     const first = measured[0]?.[m.key]
     return { ...m, latest, delta: latest !== undefined && first !== undefined ? Math.round((latest - first) * 10) / 10 : undefined }
   }).filter((m) => m.latest !== undefined)
-  // Symmetrisch um 0 und eng: schon 1 cm Veränderung ist deutlich zu sehen. Striche je cm,
-  // bei großen Spannen je 2 oder 5 cm.
-  const measureRange = Math.max(
-    1,
-    Math.ceil(Math.max(0, ...chartData.flatMap((d) => [d.waistDelta, d.armDelta, d.chestDelta, d.legDelta].map((v) => Math.abs(v ?? 0))))),
-  )
-
+  // Maße-Achse symmetrisch um 0 und eng (siehe measureRange weiter unten, nach dem Zeitraum).
   const today = todayIso()
   const calendarWeekComparison = calendarWeekWeightDelta(series, today)
   const [selectedDate, setSelectedDate] = useState(today)
@@ -129,6 +150,21 @@ export default function TrackingPage() {
   }
 
   const [chart, setChart] = useState<'weight' | 'bodyFat' | 'measures'>('weight')
+  const [range, setRange] = useState<ChartRange>(readRange)
+  function chooseRange(next: ChartRange) {
+    setRange(next)
+    try {
+      localStorage.setItem(RANGE_KEY, next)
+    } catch {
+      // Ohne Speicher gilt die Wahl nur bis zum Neuladen.
+    }
+  }
+  const rangeDays = RANGES.find((r) => r.key === range)?.days
+  const rangeStart = rangeDays ? addDays(todayIso_, -(rangeDays - 1)) : ''
+  // Zeitraum: nur Tage ab `rangeStart`; die Prognose (Zeilen hinter dem letzten Eintrag) bleibt.
+  const inRange = (i: number) => i >= series.length || series[i].date >= rangeStart
+  const shownRows = chartRows.filter((_, i) => inRange(i))
+  const shownData = chartData.filter((_, i) => inRange(i))
 
   // Punkte in Wochenleiste und Monatskalender: Tage mit Gewicht oder KFA.
   const markers = new Map<string, DayMarker>(
@@ -136,6 +172,10 @@ export default function TrackingPage() {
   )
   const hasData = selectedEntry !== undefined && (selectedEntry.weightKg !== undefined || selectedEntry.bodyFatPct !== undefined)
 
+  const measureRange = Math.max(
+    1,
+    Math.ceil(Math.max(0, ...shownData.flatMap((d) => [d.waistDelta, d.armDelta, d.chestDelta, d.legDelta].map((v) => Math.abs(v ?? 0))))),
+  )
   const measureStep = measureRange <= 4 ? 1 : measureRange <= 10 ? 2 : 5
   const measureTicks = Array.from(
     { length: Math.floor(measureRange / measureStep) * 2 + 1 },
@@ -143,9 +183,8 @@ export default function TrackingPage() {
   )
   const lineAnimation = chartLineAnimation()
   const axis = { tick: { fontSize: 10, fill: 'var(--color-muted)' } }
-  const tooltip = {
-    contentStyle: { background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 12, fontSize: 12 },
-  }
+
+  if (loadedSeries === undefined) return <PageSkeleton />
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,7 +225,7 @@ export default function TrackingPage() {
                   )}
             </p>
             <p className="text-xs text-muted">
-              Ø {calendarWeekComparison.thisWeekAvg.toFixed(1)} kg diese Woche · Ø {calendarWeekComparison.lastWeekAvg.toFixed(1)} kg letzte
+              Ø {calendarWeekComparison.thisWeekAvg.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg diese Woche · Ø {calendarWeekComparison.lastWeekAvg.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg letzte
               Woche
             </p>
           </>
@@ -211,9 +250,24 @@ export default function TrackingPage() {
             onChange={setChart}
           />
         )}
-        <div key={chart} className="anim-page h-52">
+        <div className="flex gap-1.5" role="group" aria-label="Zeitraum">
+          {RANGES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => chooseRange(r.key)}
+              aria-pressed={range === r.key}
+              className={`flex-1 rounded-full py-1 text-xs font-medium transition active:scale-95 ${
+                range === r.key ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div key={`${chart}-${range}`} data-no-swipe className="anim-page h-52">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chart === 'weight' || simple ? chartRows : chartData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
+            <LineChart data={chart === 'weight' || simple ? shownRows : shownData} margin={{ left: -12, right: 12, top: 8, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
               <XAxis dataKey="date" {...axis} minTickGap={24} />
               {chart === 'measures' && !simple ? (
@@ -228,15 +282,20 @@ export default function TrackingPage() {
                 <YAxis domain={['auto', 'auto']} {...axis} width={44} />
               )}
               <Tooltip
-                {...tooltip}
-                formatter={
-                  chart === 'measures' && !simple
-                    ? (value, name, item) => {
-                        const m = MEASURES.find((x) => x.label === name)
-                        const abs = m ? (item.payload as Record<string, number | undefined>)[m.key] : undefined
-                        return [`${formatSigned(Number(value))} cm${abs !== undefined ? ` (${formatCm(abs)} cm)` : ''}`, name]
-                      }
-                    : (value) => (typeof value === 'number' ? value.toFixed(1) : value)
+                cursor={chartCursor}
+                content={
+                  <ChartBubble
+                    labelFormat={(l) => formatChartDate(l)}
+                    format={
+                      chart === 'measures' && !simple
+                        ? (value, name, row) => {
+                            const m = MEASURES.find((x) => x.label === name)
+                            const abs = m ? (row[m.key] as number | undefined) : undefined
+                            return `${formatSigned(Number(value))} cm${abs !== undefined ? ` (${formatCm(abs)})` : ''}`
+                          }
+                        : (value) => (typeof value === 'number' ? value.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : String(value))
+                    }
+                  />
                 }
               />
               {(simple || chart === 'weight') && (
@@ -284,15 +343,7 @@ export default function TrackingPage() {
                   <Line {...lineAnimation} type="basis" dataKey="bodyFatAvg" stroke="#f472b6" strokeWidth={2.5} dot={false} name="KFA geglättet (%)" connectNulls />
                 </>
               )}
-              {(simple || chart === 'weight') && forecast?.kind === 'eta' && (
-          <p className="text-xs text-muted">
-            <span className="text-accent">- - -</span> Prognose: {athlete.targetWeightKg} kg etwa am{' '}
-            {new Date(`${forecast.date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })} (
-            {forecast.perWeek > 0 ? '+' : '−'}
-            {Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche)
-          </p>
-        )}
-        {!simple && chart === 'measures' && (
+              {!simple && chart === 'measures' && (
                 <>
                   <ReferenceLine y={0} stroke="var(--color-muted)" strokeOpacity={0.6} />
                   {measures.map((m) => (
@@ -313,6 +364,14 @@ export default function TrackingPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {(simple || chart === 'weight') && forecast?.kind === 'eta' && (
+          <p className="text-xs text-muted">
+            <span className="text-accent">- - -</span> Prognose: {athlete.targetWeightKg} kg etwa am{' '}
+            {new Date(`${forecast.date}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })} (
+            {forecast.perWeek > 0 ? '+' : '−'}
+            {Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche)
+          </p>
+        )}
         {!simple && chart === 'measures' && (
           measures.length > 0 ? (
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
@@ -338,7 +397,7 @@ export default function TrackingPage() {
           .filter((e) => e.weightKg !== undefined || e.bodyFatPct !== undefined)
           .map((e) => ({
             date: e.date,
-            summary: [e.weightKg !== undefined ? `${e.weightKg} kg` : undefined, e.bodyFatPct !== undefined ? `${e.bodyFatPct} %` : undefined]
+            summary: [e.weightKg !== undefined ? `${e.weightKg.toLocaleString('de-DE', { maximumFractionDigits: 1 })} kg` : undefined, e.bodyFatPct !== undefined ? `${e.bodyFatPct.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %` : undefined]
               .filter(Boolean)
               .join(' · '),
           }))}
@@ -464,7 +523,7 @@ function DayEditor({
       <Card className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-muted">Messwerte</h2>
-          <span className={`text-xs text-ok transition-opacity duration-500 ${showSaved ? 'opacity-100' : 'opacity-0'}`}>✓ Gespeichert</span>
+          <span className={`text-xs text-ok transition-opacity duration-500 ${showSaved ? 'opacity-100' : 'opacity-0'}`}><Check size={13} className="mr-0.5 inline -translate-y-px" />Gespeichert</span>
         </div>
         {/* Gewicht ist der tägliche Eintrag schlechthin - groß und zuerst. */}
         <div className="grid grid-cols-2 gap-3">

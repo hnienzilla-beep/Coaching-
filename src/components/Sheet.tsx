@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 /**
@@ -42,8 +43,8 @@ export default function Sheet({
       <div className={`anim-sheet relative flex w-full ${tall ? 'h-[85dvh]' : 'max-h-[88dvh]'} max-w-md flex-col rounded-t-2xl border border-b-0 border-border bg-surface shadow-2xl`}>
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <h2 className="truncate text-base font-semibold text-fg">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="-mr-1 px-2 py-1 text-lg text-muted hover:text-fg">
-            ✕
+          <button type="button" onClick={onClose} aria-label="Schließen" className="-mr-1 grid h-8 w-8 place-items-center rounded-full bg-surface-2 text-muted transition hover:text-fg active:scale-90">
+            <X size={16} />
           </button>
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 py-3">{children}</div>
