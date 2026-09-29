@@ -371,8 +371,23 @@ textarea {
 }
 
 /* Muskel-Heatmap: voll trainierte Gruppen glühen leicht. */
+@keyframes muscle-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--color-accent) 60%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--color-accent) 95%, transparent));
+  }
+}
 .muscle-glow {
-  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-accent) 70%, transparent));
+  animation: muscle-glow 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .muscle-glow {
+    animation: none;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 80%, transparent));
+  }
 }
 
 /* Wochen-Story: Fortschrittsbalken der aktuellen Folie und Ring um eine neue Story. */
@@ -392,4 +407,80 @@ textarea {
     linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
     conic-gradient(from 0deg, var(--color-accent), #f472b6, #facc15, var(--color-accent)) border-box;
   border: 2.5px solid transparent;
+}
+
+/* Story: langsam fließender Verlauf aus Akzentfarbe, Violett und Blau hinter dunklem Schleier. */
+@keyframes story-flow {
+  0% {
+    background-position: 0% 30%;
+  }
+  50% {
+    background-position: 100% 70%;
+  }
+  100% {
+    background-position: 0% 30%;
+  }
+}
+.story-bg {
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)),
+    linear-gradient(120deg, var(--color-accent), #7c3aed, #0ea5e9, #db2777, var(--color-accent));
+  background-size:
+    100% 100%,
+    400% 400%;
+  animation: story-flow 16s ease-in-out infinite;
+}
+@keyframes story-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.story-slide {
+  animation: story-slide-in 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes story-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.story-bar {
+  animation: story-bar-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes story-ring-in {
+  from {
+    stroke-dasharray: 0 999;
+  }
+}
+.story-ring-seg {
+  animation: story-ring-in 1s ease-out both;
+}
+@keyframes story-draw-in {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+.story-draw {
+  animation: story-draw-in 1.2s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-bg,
+  .story-slide,
+  .story-bar,
+  .story-ring-seg,
+  .story-draw {
+    animation: none;
+  }
 }

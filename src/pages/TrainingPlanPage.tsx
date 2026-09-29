@@ -4,6 +4,9 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableItem } from '../components/Sortable'
+import { HeatmapFigure } from '../components/MuscleHeatmap'
+import { primaryMuscle, type MuscleSetRecord } from '../lib/muscles'
+import { todayIso } from '../db/queries'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
 import { savePhaseOrder } from '../db/queries'
 import { shareOrDownloadFile } from '../lib/share'
@@ -137,6 +140,20 @@ export default function TrainingPlanPage() {
   }
 
   const totalSets = filledRows.reduce((sum, r) => sum + r.sets, 0)
+  // Geplante Sätze als "Sätze" für die Heatmap - je Satz ein Eintrag mit Hauptmuskel.
+  const planRecords: MuscleSetRecord[] = filledRows.flatMap((row) => {
+    const ex = exerciseMap.get(row.exerciseId)
+    const muscle = ex ? primaryMuscle(ex) : undefined
+    if (!ex || !muscle) return []
+    const reps = Number.parseInt(row.reps, 10)
+    return Array.from({ length: Math.max(0, row.sets) }, () => ({
+      muscle,
+      date: todayIso(),
+      reps: Number.isFinite(reps) ? reps : undefined,
+      weightKg: row.targetWeightKg,
+      exercise: ex.name,
+    }))
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -229,6 +246,12 @@ export default function TrainingPlanPage() {
             </Button>
           )}
         </div>
+      )}
+
+      {activePlan && filledRows.length > 0 && (
+        <CollapsibleCard title="Muskeln dieses Tages" storageKey="heatmap-plan" summary={`${planRecords.length} Sätze`}>
+          <HeatmapFigure athlete={athlete} records={planRecords} mode="plan" />
+        </CollapsibleCard>
       )}
 
       <ExercisePickerSheet

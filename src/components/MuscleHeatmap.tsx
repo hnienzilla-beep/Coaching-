@@ -1,119 +1,191 @@
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect, useRef, useState } from 'react'
 import { db } from '../db/db'
-import { addDays, todayIso } from '../db/queries'
-import { HEAT_GROUPS, heatLevel, setsPerGroup, volumeVerdict, WEEKLY_SET_TARGET, type HeatGroup } from '../lib/muscleVolume'
-import type { MuscleGroup } from '../models/types'
+import { todayIso } from '../db/queries'
+import { useGrowIn } from '../lib/countUp'
+import { haptic } from '../lib/feedback'
+import { MUSCLES, muscleHeat, targetFor, type Muscle, type MuscleSetRecord } from '../lib/muscles'
+import type { Athlete } from '../models/types'
+import BodyFigure, { type HeatMap, type Side } from './BodyFigure'
+import Sheet from './Sheet'
+import { DecimalInput, Field } from './ui'
 
-/** Füllfarbe je nach Wochenvolumen: von der Kartenfarbe bis zur vollen Akzentfarbe. */
-function fill(level: number): string {
-  if (level <= 0) return 'var(--color-surface-2)'
-  const pct = Math.round(18 + level * 82)
-  return `color-mix(in srgb, var(--color-accent) ${pct}%, var(--color-surface-2))`
-}
-
-type Shape = { d?: string; ellipse?: [number, number, number, number]; group: HeatGroup }
-
-// Stilisierte Figur (Vorder- und Rückseite), je 100 × 200. Formen grob, aber klar zuordenbar.
-const FRONT: Shape[] = [
-  { group: 'Schultern', ellipse: [29, 47, 8.5, 7] },
-  { group: 'Schultern', ellipse: [71, 47, 8.5, 7] },
-  { group: 'Brust', d: 'M37 42 Q49 40 49.2 44 L49.2 60 Q42 65 35.5 58 Q34 48 37 42 Z' },
-  { group: 'Brust', d: 'M63 42 Q51 40 50.8 44 L50.8 60 Q58 65 64.5 58 Q66 48 63 42 Z' },
-  { group: 'Bauch', d: 'M40 64 Q50 61 60 64 L59 97 Q50 101 41 97 Z' },
-  { group: 'Arme', ellipse: [23.5, 65, 5, 11] },
-  { group: 'Arme', ellipse: [76.5, 65, 5, 11] },
-  { group: 'Arme', ellipse: [20.5, 89, 4, 11] },
-  { group: 'Arme', ellipse: [79.5, 89, 4, 11] },
-  { group: 'Beine', ellipse: [42, 128, 8, 23] },
-  { group: 'Beine', ellipse: [58, 128, 8, 23] },
-  { group: 'Beine', ellipse: [41.5, 170, 5.5, 15] },
-  { group: 'Beine', ellipse: [58.5, 170, 5.5, 15] },
-]
-const BACK: Shape[] = [
-  { group: 'Schultern', ellipse: [29, 47, 8.5, 7] },
-  { group: 'Schultern', ellipse: [71, 47, 8.5, 7] },
-  { group: 'Rücken', d: 'M38 40 Q50 34 62 40 L64 58 Q58 84 50 92 Q42 84 36 58 Z' },
-  { group: 'Bauch', d: 'M42 86 Q50 94 58 86 L58 98 Q50 101 42 98 Z' },
-  { group: 'Arme', ellipse: [23.5, 65, 5, 11] },
-  { group: 'Arme', ellipse: [76.5, 65, 5, 11] },
-  { group: 'Arme', ellipse: [20.5, 89, 4, 11] },
-  { group: 'Arme', ellipse: [79.5, 89, 4, 11] },
-  { group: 'Beine', ellipse: [43, 108, 8, 8] },
-  { group: 'Beine', ellipse: [57, 108, 8, 8] },
-  { group: 'Beine', ellipse: [42, 135, 7.5, 19] },
-  { group: 'Beine', ellipse: [58, 135, 7.5, 19] },
-  { group: 'Beine', ellipse: [41.5, 171, 5.5, 14] },
-  { group: 'Beine', ellipse: [58.5, 171, 5.5, 14] },
-]
-
-function Figure({ shapes, sets, label }: { shapes: Shape[]; sets: Record<HeatGroup, number>; label: string }) {
-  return (
-    <figure className="flex flex-col items-center gap-1">
-      <svg viewBox="0 0 100 200" className="h-56 w-auto" role="img" aria-label={`Muskel-Heatmap ${label}`}>
-        {/* Silhouette */}
-        <g fill="var(--color-bg)" stroke="var(--color-border)" strokeWidth="1">
-          <circle cx="50" cy="17" r="10" />
-          <path d="M44 26 L56 26 L57 34 L43 34 Z" />
-          <path d="M33 38 Q50 32 67 38 L81 52 L86 100 L76 101 L72 74 L66 104 L67 188 L52 190 L50 140 L48 190 L33 188 L34 104 L28 74 L24 101 L14 100 L19 52 Z" />
-        </g>
-        {shapes.map((s, i) => {
-          const level = heatLevel(sets[s.group])
-          const common = {
-            fill: fill(level),
-            stroke: 'var(--color-border)',
-            strokeWidth: 0.6,
-            className: `transition-[fill] duration-700 ${level >= 0.85 ? 'muscle-glow' : ''}`,
-          }
-          return s.ellipse ? (
-            <ellipse key={i} cx={s.ellipse[0]} cy={s.ellipse[1]} rx={s.ellipse[2]} ry={s.ellipse[3]} {...common} />
-          ) : (
-            <path key={i} d={s.d} {...common} />
-          )
-        })}
-      </svg>
-      <figcaption className="text-[11px] text-muted">{label}</figcaption>
-    </figure>
-  )
+function heatFrom(records: MuscleSetRecord[], athlete: Athlete): HeatMap {
+  const counts = new Map<Muscle, number>()
+  for (const r of records) counts.set(r.muscle, (counts.get(r.muscle) ?? 0) + 1)
+  return Object.fromEntries(MUSCLES.map((m) => [m, muscleHeat(counts.get(m) ?? 0, targetFor(m, athlete.muscleTargets))])) as HeatMap
 }
 
 /**
- * Welche Muskeln hast du in den letzten 7 Tagen trainiert? Erledigte Sätze je Muskelgruppe,
- * auf einer Körper-Silhouette - je mehr, desto stärker leuchtet die Stelle. Ab etwa zwölf Sätzen
- * pro Woche gilt eine Gruppe als voll versorgt.
+ * Eine große Figur, die sich per Tippen auf "Vorne/Hinten" oder Wischen umdreht. Muskeln sind
+ * antippbar (Detailfenster). `records` sind entweder die echten Sätze der letzten 7 Tage
+ * (Trainingslog) oder die geplanten Sätze eines Trainingstags (Trainingsplan).
  */
-export default function MuscleHeatmap({ athleteId }: { athleteId: string }) {
-  const groups = useLiveQuery(async () => {
-    const since = addDays(todayIso(), -6)
-    const logs = await db.workoutLogs.where('athleteId').equals(athleteId).filter((l) => l.date >= since).toArray()
-    if (logs.length === 0) return [] as MuscleGroup[]
-    const logExercises = await db.workoutLogExercises.where('workoutLogId').anyOf(logs.map((l) => l.id)).toArray()
-    const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e.muscleGroup]))
-    const groupByLogExercise = new Map(logExercises.map((le) => [le.id, exercises.get(le.exerciseId)]))
-    const done = await db.workoutSets.where('workoutLogExerciseId').anyOf(logExercises.map((le) => le.id)).filter((s) => !!s.done).toArray()
-    return done.map((s) => groupByLogExercise.get(s.workoutLogExerciseId)).filter((g): g is MuscleGroup => !!g)
-  }, [athleteId])
+export function HeatmapFigure({
+  athlete,
+  records,
+  mode,
+}: {
+  athlete: Athlete
+  records: MuscleSetRecord[]
+  mode: 'log' | 'plan'
+}) {
+  const [side, setSide] = useState<Side>('front')
+  const [selected, setSelected] = useState<Muscle | null>(null)
+  const grown = useGrowIn()
+  const sex = athlete.gender === 'Weiblich' ? 'female' : 'male'
+  const heat = heatFrom(records, athlete)
+  const figureRef = useRef<HTMLDivElement>(null)
 
-  const sets = setsPerGroup(groups ?? [])
+  // Waagerecht über die Figur wischen dreht sie um (data-no-swipe: kein Reiterwechsel).
+  useEffect(() => {
+    const el = figureRef.current
+    if (!el) return
+    let startX: number | null = null
+    const onStart = (e: TouchEvent) => {
+      startX = e.touches[0]?.clientX ?? null
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (startX === null) return
+      const dx = e.changedTouches[0].clientX - startX
+      startX = null
+      if (Math.abs(dx) > 40) {
+        haptic('tap')
+        setSide((s) => (s === 'front' ? 'back' : 'front'))
+      }
+    }
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchend', onEnd)
+    }
+  }, [])
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex justify-center gap-4">
-        <Figure shapes={FRONT} sets={sets} label="Vorne" />
-        <Figure shapes={BACK} sets={sets} label="Hinten" />
-      </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-        {HEAT_GROUPS.map((g) => (
-          <div key={g} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-border" style={{ background: fill(heatLevel(sets[g])) }} />
-            <span className="text-fg">{g}</span>
-            <span className="tabular-nums text-muted">{sets[g].toLocaleString('de-DE', { maximumFractionDigits: 1 })}</span>
-            <span className="truncate text-[11px] text-muted">· {volumeVerdict(sets[g])}</span>
-          </div>
+    <div className="flex flex-col items-center gap-2">
+      <div className="flex rounded-full bg-surface-2 p-0.5 text-xs">
+        {(['front', 'back'] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSide(s)}
+            aria-pressed={side === s}
+            className={`rounded-full px-3 py-1 transition-colors ${side === s ? 'bg-accent text-accent-fg' : 'text-muted'}`}
+          >
+            {s === 'front' ? 'Vorne' : 'Hinten'}
+          </button>
         ))}
       </div>
-      <p className="text-[11px] text-muted">
-        Erledigte Sätze der letzten 7 Tage. Richtwert für Muskelaufbau: etwa {WEEKLY_SET_TARGET}–20 Sätze pro Gruppe und Woche.
-      </p>
+      <div ref={figureRef} data-no-swipe className="touch-pan-y">
+        <div key={side} className="anim-pop">
+          <BodyFigure side={side} sex={sex} heat={heat} grown={grown} selected={selected} onSelect={setSelected} className="h-96 w-auto" />
+        </div>
+      </div>
+      <p className="text-[11px] text-muted">Muskel antippen für Details · wischen zum Umdrehen</p>
+      <MuscleDetailSheet athlete={athlete} muscle={selected} records={records} mode={mode} onClose={() => setSelected(null)} />
+    </div>
+  )
+}
+
+function daysAgoLabel(date: string): string {
+  const days = Math.round((Date.parse(`${todayIso()}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000)
+  if (days <= 0) return 'heute'
+  if (days === 1) return 'gestern'
+  return `vor ${days} Tagen`
+}
+
+function MuscleDetailSheet({
+  athlete,
+  muscle,
+  records,
+  mode,
+  onClose,
+}: {
+  athlete: Athlete
+  muscle: Muscle | null
+  records: MuscleSetRecord[]
+  mode: 'log' | 'plan'
+  onClose: () => void
+}) {
+  if (!muscle) return null
+  const mine = records.filter((r) => r.muscle === muscle)
+  const target = targetFor(muscle, athlete.muscleTargets)
+  const volume = Math.round(mine.reduce((a, r) => a + (r.reps ?? 0) * (r.weightKg ?? 0), 0))
+  const byExercise = new Map<string, number>()
+  for (const r of mine) byExercise.set(r.exercise, (byExercise.get(r.exercise) ?? 0) + 1)
+  const last = mine.reduce<string | undefined>((max, r) => (!max || r.date > max ? r.date : max), undefined)
+  const pct = Math.min(100, (mine.length / target) * 100)
+
+  return (
+    <Sheet open title={muscle} onClose={onClose}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-4xl font-bold tabular-nums text-fg">{mine.length}</span>
+        <span className="text-sm text-muted">
+          / {target} Sätze {mode === 'log' ? 'in 7 Tagen' : 'geplant'}
+        </span>
+        {mine.length > target && <span className="ml-auto text-sm">✨ über dem Richtwert</span>}
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-xl bg-surface-2 px-3 py-2">
+          <p className="text-[11px] text-muted">Volumen</p>
+          <p className="font-semibold tabular-nums text-fg">{volume.toLocaleString('de-DE')} kg</p>
+        </div>
+        {mode === 'log' && (
+          <div className="rounded-xl bg-surface-2 px-3 py-2">
+            <p className="text-[11px] text-muted">Zuletzt trainiert</p>
+            <p className="font-semibold text-fg">{last ? daysAgoLabel(last) : '–'}</p>
+          </div>
+        )}
+      </div>
+      {byExercise.size > 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Übungen</p>
+          {[...byExercise.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, n]) => (
+              <div key={name} className="flex justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+                <span className="text-fg">{name}</span>
+                <span className="tabular-nums text-muted">{n} Sätze</span>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted">{mode === 'log' ? 'In den letzten 7 Tagen nicht trainiert.' : 'In diesem Trainingstag nicht enthalten.'}</p>
+      )}
+      <Field label="Wochen-Richtwert (Sätze)">
+        <DecimalInput
+          value={target}
+          onChange={(n) => {
+            if (n === undefined || n <= 0) return
+            void db.athletes.update(athlete.id, { muscleTargets: { ...athlete.muscleTargets, [muscle]: Math.round(n) } })
+          }}
+        />
+      </Field>
+      <p className="text-[11px] text-muted">Ab dem Richtwert ist der Muskel voll gefärbt, darüber glüht er.</p>
+    </Sheet>
+  )
+}
+
+/** Heatmap im Trainingslog: echte Sätze der letzten 7 Tage plus "Heute dran". */
+export default function MuscleHeatmap({ athlete, records, focus }: { athlete: Athlete; records: MuscleSetRecord[]; focus: Muscle[] }) {
+  return (
+    <div className="flex flex-col gap-3">
+      {focus.length > 0 && <FocusHint focus={focus} />}
+      <HeatmapFigure athlete={athlete} records={records} mode="log" />
+    </div>
+  )
+}
+
+export function FocusHint({ focus }: { focus: Muscle[] }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-accent/10 px-3 py-2 text-sm">
+      <span aria-hidden="true">🎯</span>
+      <span className="text-fg">
+        Heute dran: <span className="font-semibold">{focus.join(' · ')}</span>
+      </span>
     </div>
   )
 }

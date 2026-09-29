@@ -11,7 +11,7 @@ import { addDays, repairStaleFfmiBodyFat, todayIso, upsertDailyEntry } from '../
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
-import WeekStoryCard from '../components/WeekStory'
+import StoryCards from '../components/Story'
 import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
 import { useGrowIn } from '../lib/countUp'
 import { forecastGoal, type Forecast } from '../lib/goalForecast'
@@ -166,7 +166,7 @@ export default function DashboardPage() {
         <Tile label="Trainings · 7 Tage" value={<CountUp value={workoutsThisWeek} />} large />
       </div>
 
-      <WeekStoryCard athlete={athlete} entries={entries ?? []} targetKcal={result.targetCalories} />
+      <StoryCards athlete={athlete} entries={entries ?? []} targetKcal={result.targetCalories} targetProtein={result.proteinG} />
 
       {athlete.targetWeightKg !== undefined && <WeightGoalProgress athlete={athlete} entries={entries ?? []} />}
 

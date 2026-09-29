@@ -7,6 +7,7 @@ import { clearBackgroundPhoto, setBackgroundPhoto, sortAthletes } from '../db/qu
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
 import ColorWheel from '../components/ColorWheel'
 import FloatingRestTimer from '../components/FloatingRestTimer'
+import StorySettingsSheet from '../components/StorySettingsSheet'
 import { DETAIL_LEVELS, setDetailLevel, useDetailLevel } from '../lib/detailLevel'
 import { setLastAthleteId } from '../lib/lastAthlete'
 import { useTheme } from '../lib/theme'
@@ -74,6 +75,7 @@ export default function AthleteLayout() {
   const [athletePickerOpen, setAthletePickerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [obsidianSyncOpen, setObsidianSyncOpen] = useState(false)
+  const [storySettingsOpen, setStorySettingsOpen] = useState(false)
   const colorPickerRef = useRef<HTMLDivElement>(null)
   const athletePickerRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -314,6 +316,15 @@ export default function AthleteLayout() {
                   </button>
                 </>
               )}
+              <button
+                onClick={() => {
+                  setStorySettingsOpen(true)
+                  setSettingsOpen(false)
+                }}
+                className="rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+              >
+                📖 Wochen-Story
+              </button>
               <div className="my-1 border-t border-border" />
               <p className="px-2 pb-0.5 text-[11px] text-muted">Version vom {APP_BUILD_LABEL}</p>
             </div>
@@ -369,6 +380,7 @@ export default function AthleteLayout() {
       </nav>
 
       {obsidianSyncOpen && <ObsidianSyncModal onClose={() => setObsidianSyncOpen(false)} />}
+      <StorySettingsSheet open={storySettingsOpen} onClose={() => setStorySettingsOpen(false)} />
     </div>
   )
 }
