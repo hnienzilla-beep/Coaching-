@@ -225,7 +225,7 @@ export function buildPeriodStats(input: StoryInput): PeriodStats {
       trainings: c.trainings - prev.trainings,
       volumeKg: c.volumeKg - prev.volumeKg,
     },
-    forecast: input.goal.targetWeightKg !== undefined ? forecastGoal(input.entries, input.goal.targetWeightKg, end, 21) : undefined,
+    forecast: input.goal.targetWeightKg !== undefined ? forecastGoal(input.entries, input.goal.targetWeightKg, end) : undefined,
     measures,
     topSet,
     bestDay: c.kcalDays

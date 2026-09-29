@@ -33,7 +33,7 @@ describe('forecastGoal', () => {
       const date = addDays(today, i - 41)
       return { date, weightKg: i < 21 ? 90 - i * 0.3 : 84 }
     })
-    expect(forecastGoal(pts, 80, today).kind).toBe('eta')
-    expect(forecastGoal(pts, 80, today, 21).kind).toBe('away')
+    expect(forecastGoal(pts, 80, today, 28).kind).toBe('eta')
+    expect(forecastGoal(pts, 80, today).kind).toBe('away')
   })
 })
