@@ -21,6 +21,9 @@ export interface Athlete {
   ffmi?: number // Fettfreie-Masse-Index (kg/m²), manuell erfasst - dient zur Rückrechnung des KFA
   waterGoalMl?: number // eigenes Trinkziel; ohne gilt 35 ml je kg Körpergewicht
   muscleTargets?: Partial<Record<Muscle, number>> // eigene Wochen-Richtwerte (Sätze) je Muskel
+  birthDate?: string // ISO date - wenn gesetzt, wird `age` daraus aktuell gehalten
+  trainingDays?: number[] // geplante Trainingstage, 0 = Montag … 6 = Sonntag
+  startAnswers?: unknown // Antworten aus „Dein Start“ (lib/startPlan StartAnswers)
 }
 
 export interface BackgroundPhoto {

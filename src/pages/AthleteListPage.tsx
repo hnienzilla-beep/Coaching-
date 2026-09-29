@@ -14,7 +14,6 @@ import { Button, Card, ListRow } from '../components/ui'
 import ColorWheel from '../components/ColorWheel'
 import Sheet from '../components/Sheet'
 import SwipeToDelete from '../components/SwipeToDelete'
-import NewAthleteForm from '../components/NewAthleteForm'
 import type { Athlete } from '../models/types'
 import { applyAccentColor, useOverviewAccent } from '../lib/accentColor'
 import { clearLastAthleteId, getLastAthleteId } from '../lib/lastAthlete'
@@ -57,9 +56,10 @@ export default function AthleteListPage() {
     })
   }
 
-  // `?neu=1` kommt vom Eintrag "+ Neuer Athlet" in der Kopfzeile des Athleten - damit
-  // landet man hier direkt im aufgeklappten Formular.
-  const [showForm, setShowForm] = useState(searchParams.get('neu') === '1')
+  // `?neu=1` (ältere Links): neue Athleten legt „Dein Start“ an.
+  useEffect(() => {
+    if (searchParams.get('neu') === '1') navigate('/dein-start', { replace: true })
+  }, [searchParams, navigate])
   const [overviewAccent, setOverviewAccent] = useOverviewAccent()
   const [accentPickerOpen, setAccentPickerOpen] = useState(false)
   const accentPickerRef = useRef<HTMLDivElement>(null)
@@ -130,7 +130,7 @@ export default function AthleteListPage() {
             <p className="text-xs text-muted">{athletes?.length ?? 0} angelegt</p>
           </div>
         </div>
-        <Button variant="primary" className="ml-auto shrink-0" onClick={() => setShowForm(true)}>
+        <Button variant="primary" className="ml-auto shrink-0" onClick={() => navigate('/dein-start')}>
           + Neu
         </Button>
         {/* Der Akzent für alle Seiten außerhalb eines Athleten - innerhalb eines Athleten
@@ -205,9 +205,6 @@ export default function AthleteListPage() {
       </section>
 
       {/* Nach dem Anlegen direkt in den neuen Athleten - `createAthlete` liefert ihn zurück. */}
-      <Sheet open={showForm} title="Neuer Athlet" onClose={() => setShowForm(false)}>
-        <NewAthleteForm plain onCreated={(a) => navigate(`/athlete/${a.id}`)} onCancel={() => setShowForm(false)} />
-      </Sheet>
 
       {pendingImport && (
         <ImportAthleteSelector
