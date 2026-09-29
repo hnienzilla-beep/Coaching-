@@ -1,5 +1,6 @@
 import { addDays } from '../db/queries'
 import type { DailyEntry } from '../models/types'
+import { estimateOneRepMax } from './calculator'
 import { forecastGoal, type Forecast } from './goalForecast'
 import type { Muscle, MuscleSetRecord } from './muscles'
 
@@ -29,7 +30,9 @@ export interface Pr {
   exercise: string
   weightKg: number
   reps: number
-  previousKg?: number
+  /** Geschätztes 1RM (Epley) des Rekordsatzes und der bisherigen Bestmarke. */
+  oneRm: number
+  previousOneRm: number
 }
 
 export interface PeriodStats {
@@ -123,19 +126,25 @@ export function buildPeriodStats(input: StoryInput): PeriodStats {
   const length = c.days.length
   const prev = core(input, addDays(start, -length), addDays(start, -1))
 
-  // Rekorde: schwerster Satz je Übung im Zeitraum, der alles davor übertrifft.
+  // Rekorde nach geschätztem 1RM: bester Satz je Übung im Zeitraum, der alles davor übertrifft.
+  // So zählen auch mehr Wiederholungen mit gleichem Gewicht als Rekord.
+  const oneRm = (s: { weightKg?: number; reps?: number }) => (s.weightKg && s.reps ? estimateOneRepMax(s.weightKg, s.reps) : 0)
   const before = new Map<string, number>()
-  for (const s of input.sets) if (s.done && s.date < start && s.weightKg) before.set(s.exercise, Math.max(before.get(s.exercise) ?? 0, s.weightKg))
+  for (const s of input.sets) if (s.done && s.date < start && oneRm(s) > 0) before.set(s.exercise, Math.max(before.get(s.exercise) ?? 0, oneRm(s)))
   const bestInPeriod = new Map<string, { weightKg: number; reps: number }>()
+  const best1rmInPeriod = new Map<string, { weightKg: number; reps: number; oneRm: number }>()
   for (const s of c.sets) {
     if (!s.weightKg || !s.reps) continue
     const cur = bestInPeriod.get(s.exercise)
     if (!cur || s.weightKg > cur.weightKg || (s.weightKg === cur.weightKg && s.reps > cur.reps)) bestInPeriod.set(s.exercise, { weightKg: s.weightKg, reps: s.reps })
+    const cur1 = best1rmInPeriod.get(s.exercise)
+    if (!cur1 || oneRm(s) > cur1.oneRm) best1rmInPeriod.set(s.exercise, { weightKg: s.weightKg, reps: s.reps, oneRm: oneRm(s) })
   }
-  const prs: Pr[] = [...bestInPeriod.entries()]
-    .filter(([ex, b]) => before.has(ex) && b.weightKg > before.get(ex)!)
-    .map(([exercise, b]) => ({ exercise, ...b, previousKg: before.get(exercise) }))
-    .sort((a, b) => b.weightKg - (b.previousKg ?? 0) - (a.weightKg - (a.previousKg ?? 0)))
+  const round1 = (n: number) => Math.round(n * 10) / 10
+  const prs: Pr[] = [...best1rmInPeriod.entries()]
+    .filter(([ex, b]) => before.has(ex) && round1(b.oneRm) > round1(before.get(ex)!))
+    .map(([exercise, b]) => ({ exercise, weightKg: b.weightKg, reps: b.reps, oneRm: round1(b.oneRm), previousOneRm: round1(before.get(exercise)!) }))
+    .sort((a, b) => b.oneRm / b.previousOneRm - a.oneRm / a.previousOneRm)
 
   let topSet: PeriodStats['topSet']
   for (const [exercise, b] of bestInPeriod) if (!topSet || b.weightKg > topSet.weightKg) topSet = { exercise, ...b }
@@ -164,7 +173,7 @@ export function buildPeriodStats(input: StoryInput): PeriodStats {
   }
   const topFoods = [...foodCount.entries()]
     .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.count - a.count || b.grams - a.grams)
+    .sort((a, b) => b.grams - a.grams || b.count - a.count)
     .slice(0, 3)
 
   const measures = MEASURE_LABELS.flatMap(([key, label]) => {
@@ -216,7 +225,7 @@ export function buildPeriodStats(input: StoryInput): PeriodStats {
       trainings: c.trainings - prev.trainings,
       volumeKg: c.volumeKg - prev.volumeKg,
     },
-    forecast: input.goal.targetWeightKg !== undefined ? forecastGoal(input.entries, input.goal.targetWeightKg, end) : undefined,
+    forecast: input.goal.targetWeightKg !== undefined ? forecastGoal(input.entries, input.goal.targetWeightKg, end, 21) : undefined,
     measures,
     topSet,
     bestDay: c.kcalDays
