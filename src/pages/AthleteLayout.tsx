@@ -224,14 +224,6 @@ export default function AthleteLayout() {
             <Settings size={18} />
           </Link>
         </div>
-        {/* Großer Titel, der beim Scrollen einklappt (iOS-Stil). */}
-        <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${compact ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
-          <div className="overflow-hidden">
-            <h1 key={pageTitle} className="anim-title pt-2 text-3xl font-bold tracking-tight text-fg">
-              {pageTitle}
-            </h1>
-          </div>
-        </div>
       </header>
 
       {/* overflow-x-hidden: Beim Mitziehen ragt der Inhalt seitlich hinaus - ohne das könnte
@@ -239,12 +231,17 @@ export default function AthleteLayout() {
       <main
         ref={mainRef}
         onScroll={(e) => {
-          const top = e.currentTarget.scrollTop
-          // Mit Abstand zwischen Ein- und Ausklappen, sonst flackert es an der Schwelle.
-          setCompact((c) => (c ? top > 8 : top > 40))
+          // Nur Anzeige (Rand + Titel in der Kopfzeile) - die Höhe der Kopfzeile bleibt gleich,
+          // sonst springt der Inhalt beim Scrollen.
+          const next = e.currentTarget.scrollTop > 36
+          setCompact((c) => (c === next ? c : next))
         }}
         className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-36"
       >
+        {/* Großer Titel (iOS-Stil): scrollt mit dem Inhalt weg, danach steht er klein oben. */}
+        <h1 key={pageTitle} className="anim-title -mt-2 mb-4 text-3xl font-bold tracking-tight text-fg">
+          {pageTitle}
+        </h1>
         {/* Neu gemountet je Reiter, damit der Seitenwechsel jedes Mal einblendet - beim
             Wischen und Antippen gleitet die Ansicht aus der passenden Richtung herein.
             Eigene Hülle für das Mitziehen beim Wischen - auf dem animierten Element darunter
