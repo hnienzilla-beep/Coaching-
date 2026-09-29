@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, ChevronLeft, ChevronRight, Info, Pencil, Sparkles } from 'lucide-react'
 import { db } from '../db/db'
 import { ACCENT_COLORS, todayIso } from '../db/queries'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
 import { getPrefs, type TabKey } from '../lib/prefs'
-import { createFromStart, type StartAppChoices } from '../lib/startApply'
+import { createFromStart, updateFromStart, type StartAppChoices } from '../lib/startApply'
 import {
   DEFAULT_ANSWERS,
   SPLIT_LABELS,
@@ -26,6 +26,7 @@ import {
   type StartAnswers,
 } from '../lib/startPlan'
 import { getStoredTheme } from '../lib/theme'
+import type { Athlete } from '../models/types'
 import ColorWheel from '../components/ColorWheel'
 import { DecimalInput, Input } from '../components/ui'
 
@@ -108,9 +109,63 @@ function loadDraft(): Draft {
   }
 }
 
+/**
+ * Erneuter Durchlauf für einen bestehenden Athleten: vorbelegt mit seinen letzten Antworten
+ * (ältere Athleten ohne gespeicherte Antworten: aus dem Profil), dazu aktuelle Werte und
+ * App-Einstellungen. Startet direkt bei der ersten Frage.
+ */
+function draftFromAthlete(athlete: Athlete, latest: { weightKg?: number; bodyFatPct?: number }): Draft {
+  const saved = (athlete.startAnswers ?? {}) as Partial<StartAnswers>
+  const prefs = getPrefs()
+  return {
+    answers: {
+      ...DEFAULT_ANSWERS,
+      ...saved,
+      firstName: athlete.name,
+      gender: athlete.gender,
+      ...(athlete.birthDate ? { birthDate: athlete.birthDate } : {}),
+      ...(athlete.heightCm ? { heightCm: athlete.heightCm } : {}),
+      weightKg: latest.weightKg ?? athlete.weightKg ?? saved.weightKg ?? DEFAULT_ANSWERS.weightKg,
+      bodyFatPct: latest.bodyFatPct ?? saved.bodyFatPct,
+      ...(athlete.trainingDays?.length ? { trainingDays: athlete.trainingDays } : {}),
+    },
+    app: {
+      ...DEFAULT_APP,
+      weightUnit: prefs.weightUnit,
+      lengthUnit: prefs.lengthUnit,
+      volumeUnit: prefs.volumeUnit,
+      theme: getStoredTheme(),
+      accentColor: athlete.accentColor,
+      startTab: prefs.startTab,
+      hiddenTabs: prefs.hiddenTabs,
+      reminders: { weigh: prefs.reminders.weigh.on, food: prefs.reminders.food.on, water: prefs.reminders.water.on },
+    },
+    step: 1,
+  }
+}
+
+/** Bei `?athlete=<id>` wird der bestehende Athlet neu durchlaufen, sonst ein neuer angelegt. */
 export default function StartJourney() {
+  const [params] = useSearchParams()
+  const athleteId = params.get('athlete')
+  const initial = useLiveQuery(async () => {
+    if (!athleteId) return null
+    const athlete = await db.athletes.get(athleteId)
+    if (!athlete) return null
+    const entries = await db.dailyEntries.where('athleteId').equals(athleteId).sortBy('date')
+    return draftFromAthlete(athlete, {
+      weightKg: entries.filter((e) => e.weightKg).at(-1)?.weightKg,
+      bodyFatPct: entries.filter((e) => e.bodyFatPct).at(-1)?.bodyFatPct,
+    })
+  }, [athleteId])
+  // Einmal laden, danach nicht mehr live nachziehen - sonst überschriebe jede Änderung die Eingaben.
+  if (athleteId && initial === undefined) return null
+  return <Journey key={athleteId ?? 'neu'} editId={initial ? athleteId! : undefined} initial={initial ?? undefined} />
+}
+
+function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
   const navigate = useNavigate()
-  const [draft, setDraft] = useState<Draft>(loadDraft)
+  const [draft, setDraft] = useState<Draft>(() => initial ?? loadDraft())
   const [direction, setDirection] = useState<'next' | 'prev'>('next')
   const [saving, setSaving] = useState(false)
   const { answers: a, app, step } = draft
@@ -119,12 +174,14 @@ export default function StartJourney() {
   const hasAthletes = useLiveQuery(async () => (await db.athletes.count()) > 0, [])
 
   useEffect(() => {
+    // Der erneute Durchlauf hat keinen Entwurf - er startet immer mit den aktuellen Daten.
+    if (editId) return
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
     } catch {
       // Ohne Speicher geht der Zwischenstand beim Schließen verloren.
     }
-  }, [draft])
+  }, [draft, editId])
 
   // Akzentfarbe live vorschauen; beim Verlassen zurück auf die Farbe der Übersicht.
   useEffect(() => {
@@ -154,7 +211,17 @@ export default function StartJourney() {
   async function finish(answers: StartAnswers = a) {
     setSaving(true)
     const target = answers.goal === 'abnehmen' || answers.goal === 'aufbauen' ? (answers.targetWeightKg ?? suggestTargetWeight(answers)) : undefined
-    const athlete = await createFromStart({ ...answers, firstName: answers.firstName.trim() || 'Ich', targetWeightKg: target }, app)
+    const final = { ...answers, firstName: answers.firstName.trim() || 'Ich', targetWeightKg: target }
+    if (editId) {
+      if (!window.confirm('Übernehmen? Trainings-, Ernährungs- und Supplementplan werden durch die neuen ersetzt. Dein Verlauf bleibt erhalten.')) {
+        setSaving(false)
+        return
+      }
+      await updateFromStart(editId, final, app)
+      navigate(`/athlete/${editId}`, { replace: true })
+      return
+    }
+    const athlete = await createFromStart(final, app)
     try {
       localStorage.removeItem(DRAFT_KEY)
     } catch {
@@ -502,7 +569,7 @@ export default function StartJourney() {
                 Abbrechen
               </button>
             )}
-            {step < STEPS.length - 1 && (
+            {!editId && step < STEPS.length - 1 && (
               <button type="button" onClick={() => void skip()} disabled={saving} className="text-sm text-muted">
                 Überspringen
               </button>
@@ -566,7 +633,7 @@ export default function StartJourney() {
             onClick={() => void finish()}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-sm font-semibold text-accent-fg transition active:scale-95 disabled:opacity-50"
           >
-            {saving ? 'Wird angelegt …' : 'Pläne übernehmen'}
+            {saving ? (editId ? 'Wird übernommen …' : 'Wird angelegt …') : 'Pläne übernehmen'}
           </button>
         )}
       </footer>

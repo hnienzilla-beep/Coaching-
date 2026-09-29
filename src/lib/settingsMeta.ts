@@ -110,9 +110,9 @@ export const SECTIONS: { key: SectionKey; label: string; hint: string; prefs: (k
   {
     key: 'training',
     label: 'Training',
-    hint: 'Pausen-Timer, RPE, Karten',
+    hint: 'Trainingstage, Pausen-Timer, RPE, Karten',
     prefs: ['showRpe', 'trainingHidden'],
-    search: ['pause', 'timer', 'rpe', 'heatmap', 'kraft', 'notizen', 'aufwärmen'],
+    search: ['trainingstage', 'pausentage', 'ruhetag', 'wochentage', 'pause', 'timer', 'rpe', 'heatmap', 'kraft', 'notizen', 'aufwärmen'],
   },
   {
     key: 'einheiten',
