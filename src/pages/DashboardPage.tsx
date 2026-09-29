@@ -7,7 +7,8 @@ import CollapsibleCard from '../components/CollapsibleCard'
 import Sheet from '../components/Sheet'
 import type { Athlete, DailyEntry, Gender } from '../models/types'
 import { ACTIVITY_LEVELS, GOALS, calculate, calculateBmi, calculateBodyFatFromFfmi } from '../lib/calculator'
-import { addDays, syncBodyFatToDailyEntry, todayIso } from '../db/queries'
+import { addDays, syncBodyFatToDailyEntry, todayIso, upsertDailyEntry } from '../db/queries'
+import { CAL_TOLERANCE, MACRO_TOLERANCE } from '../lib/macros'
 import ReminderBanner from '../components/ReminderBanner'
 import ExportReportButton from '../components/ExportReportButton'
 import CalendarOverview from '../components/CalendarOverview'
@@ -60,7 +61,10 @@ export default function DashboardPage() {
     fat: todayEntry?.fat ?? 0,
   }
   const remaining = result.targetCalories - tracked.kcal
+  // Grün, solange die Vorgabe (plus Toleranz) nicht überschritten ist - sonst Rot.
+  const kcalOver = tracked.kcal > result.targetCalories + CAL_TOLERANCE
   const grown = useGrowIn()
+  const [weightOpen, setWeightOpen] = useState(false)
 
   // Gewicht von heute - sonst das zuletzt gewogene, damit BMI und Kachel nicht leer bleiben.
   const weightToday = todayEntry?.weightKg
@@ -78,7 +82,11 @@ export default function DashboardPage() {
   }, [athlete.id, bodyFatFromFfmi])
 
   const bmiOk = bmi !== undefined && bmi >= 18.5 && bmi <= 24.9
-  const bodyFat = todayEntry?.bodyFatPct ?? bodyFatFromFfmi
+  // Aktueller KFA: heute gemessen, sonst die letzte Messung, sonst aus dem FFMI.
+  const lastBodyFat = (entries ?? [])
+    .filter((e) => e.bodyFatPct !== undefined && e.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date))[0]?.bodyFatPct
+  const bodyFat = todayEntry?.bodyFatPct ?? lastBodyFat ?? bodyFatFromFfmi
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,7 +102,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-1.5">
-              <CountUp value={tracked.kcal} className="text-4xl font-bold tabular-nums text-accent" />
+              <CountUp value={tracked.kcal} className={`text-4xl font-bold tabular-nums ${kcalOver ? 'text-danger' : 'text-ok'}`} />
               <span className="text-sm text-muted">kcal</span>
             </div>
             <span className="text-right text-sm tabular-nums text-muted">
@@ -103,7 +111,7 @@ export default function DashboardPage() {
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-surface-2">
             <div
-              className={`h-full rounded-full transition-[width] duration-[900ms] ease-out ${remaining < 0 ? 'bg-danger' : 'bg-accent'}`}
+              className={`h-full rounded-full transition-[width] duration-[900ms] ease-out ${kcalOver ? 'bg-danger' : 'bg-ok'}`}
               style={{ width: `${grown ? percent(tracked.kcal, result.targetCalories) : 0}%` }}
             />
           </div>
@@ -119,17 +127,32 @@ export default function DashboardPage() {
           <MacroTile label="Fett" value={tracked.fat} target={result.fatG} grown={grown} delay={240} />
         </div>
         <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
-          <Tile
-            label="Gewicht"
-            value={bodyWeight !== undefined ? <><CountUp value={bodyWeight} decimals={1} /> kg</> : '–'}
-            hint={weightToday === undefined && bodyWeight !== undefined ? 'zuletzt' : undefined}
-          />
+          {/* Antippen trägt das heutige Gewicht ein - ohne Umweg über das Tracking. */}
+          <button
+            type="button"
+            onClick={() => setWeightOpen(true)}
+            aria-label="Gewicht eintragen"
+            className="relative text-left transition active:scale-95"
+          >
+            <Tile
+              label="Gewicht"
+              value={bodyWeight !== undefined ? <><CountUp value={bodyWeight} decimals={1} /> kg</> : '–'}
+              hint={weightToday === undefined ? (bodyWeight !== undefined ? 'zuletzt' : 'eintragen') : undefined}
+            />
+            <span aria-hidden="true" className="absolute top-1.5 right-2 text-xs text-accent">
+              {weightToday === undefined ? '+' : '✎'}
+            </span>
+          </button>
           <Tile
             label="BMI"
             value={<CountUp value={bmi} decimals={1} />}
             tone={bmi === undefined ? 'default' : bmiOk ? 'ok' : 'danger'}
           />
-          <Tile label="KFA" value={bodyFat !== undefined ? <><CountUp value={bodyFat} decimals={1} /> %</> : '–'} />
+          <Tile
+            label="KFA"
+            value={bodyFat !== undefined ? <><CountUp value={bodyFat} decimals={1} /> %</> : '–'}
+            hint={todayEntry?.bodyFatPct === undefined && lastBodyFat !== undefined ? 'zuletzt' : undefined}
+          />
         </div>
       </Card>
 
@@ -167,6 +190,14 @@ export default function DashboardPage() {
       )}
 
       {!simple && <ExportReportButton athlete={athlete} entries={entries ?? []} result={result} />}
+
+      <WeightSheet
+        open={weightOpen}
+        athleteId={athlete.id}
+        date={today}
+        initial={weightToday ?? lastWeighed}
+        onClose={() => setWeightOpen(false)}
+      />
 
       <ProfileSheet
         open={profileOpen}
@@ -207,6 +238,60 @@ function Tile({
   )
 }
 
+/** Heutiges Gewicht eintragen - landet im selben Tageseintrag wie im Tracking. */
+function WeightSheet({
+  open,
+  athleteId,
+  date,
+  initial,
+  onClose,
+}: {
+  open: boolean
+  athleteId: string
+  date: string
+  initial?: number
+  onClose: () => void
+}) {
+  const [weight, setWeight] = useState<number | undefined>(initial)
+  // Beim Öffnen mit dem letzten Gewicht vorbelegen. `initial` ändert sich erst nach dem
+  // Speichern, also nicht mitten im Tippen.
+  useEffect(() => {
+    if (open) setWeight(initial)
+  }, [open, initial])
+
+  const valid = weight !== undefined && weight > 20 && weight < 400
+  async function save() {
+    if (!valid) return
+    await upsertDailyEntry({ id: crypto.randomUUID(), athleteId, date, weightKg: weight })
+    onClose()
+  }
+
+  return (
+    <Sheet
+      open={open}
+      title="Gewicht heute"
+      onClose={onClose}
+      footer={
+        <Button variant="primary" disabled={!valid} onClick={() => void save()}>
+          Speichern
+        </Button>
+      }
+    >
+      <div className="flex items-baseline gap-2">
+        <DecimalInput
+          value={weight}
+          onChange={setWeight}
+          autoFocus
+          aria-label="Gewicht in kg"
+          className="text-3xl! font-bold"
+        />
+        <span className="text-lg text-muted">kg</span>
+      </div>
+      <p className="text-xs text-muted">Wird wie im Tracking für heute gespeichert und fließt in Verlauf, BMI und Ø 7 Tage ein.</p>
+    </Sheet>
+  )
+}
+
 function percent(value: number, target: number): number {
   if (target <= 0) return 0
   return Math.max(0, Math.min(100, (value / target) * 100))
@@ -214,16 +299,18 @@ function percent(value: number, target: number): number {
 
 /** Makro-Kachel der Heute-Karte: getrackt gegen Vorgabe, mit anwachsendem Balken. */
 function MacroTile({ label, value, target, grown, delay }: { label: string; value: number; target: number; grown: boolean; delay: number }) {
+  // Wie bei den Kalorien: grün bis zur Vorgabe (plus Toleranz), darüber rot.
+  const over = value > target + MACRO_TOLERANCE
   return (
     <div className="flex flex-col gap-1.5 rounded-xl bg-surface-2 px-2.5 py-2">
       <span className="text-[11px] text-muted">{label}</span>
-      <span className="text-sm tabular-nums">
-        <CountUp value={value} className="font-semibold text-fg" />
+      <span className="whitespace-nowrap text-[13px] tabular-nums">
+        <CountUp value={value} className={`font-semibold ${over ? 'text-danger' : 'text-ok'}`} />
         <span className="text-muted"> / {Math.round(target)} g</span>
       </span>
       <div className="h-1.5 overflow-hidden rounded-full bg-bg">
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+          className={`h-full rounded-full transition-[width] duration-700 ease-out ${over ? 'bg-danger' : 'bg-ok'}`}
           style={{ width: `${grown ? percent(value, target) : 0}%`, transitionDelay: `${delay}ms` }}
         />
       </div>
