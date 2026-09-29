@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Sparkles, Target } from 'lucide-react'
 import { db } from '../db/db'
 import { todayIso } from '../db/queries'
 import { useGrowIn } from '../lib/countUp'
@@ -123,7 +124,7 @@ function MuscleDetailSheet({
         <span className="text-sm text-muted">
           / {target} Sätze {mode === 'log' ? 'in 7 Tagen' : 'geplant'}
         </span>
-        {mine.length > target && <span className="ml-auto text-sm">✨ über dem Richtwert</span>}
+        {mine.length > target && <span className="ml-auto flex items-center gap-1 text-sm"><Sparkles size={14} className="text-accent" /> über dem Richtwert</span>}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
@@ -182,7 +183,7 @@ export default function MuscleHeatmap({ athlete, records, focus }: { athlete: At
 export function FocusHint({ focus }: { focus: Muscle[] }) {
   return (
     <div className="flex items-center gap-2 rounded-xl bg-accent/10 px-3 py-2 text-sm">
-      <span aria-hidden="true">🎯</span>
+      <Target size={15} aria-hidden="true" className="shrink-0 text-accent" />
       <span className="text-fg">
         Heute dran: <span className="font-semibold">{focus.join(' · ')}</span>
       </span>

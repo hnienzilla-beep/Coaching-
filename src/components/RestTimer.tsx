@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { X } from 'lucide-react'
 import {
   REST_DURATIONS,
   cancelRestTimer,
@@ -46,7 +47,7 @@ export default function RestTimer() {
             {mm}:{ss}
           </span>
           <Button variant="ghost" onClick={cancelRestTimer} aria-label="Pause abbrechen">
-            ✕
+            <X size={16} />
           </Button>
         </>
       ) : finishedAt !== null ? (

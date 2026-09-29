@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { Dumbbell, Star } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { db } from '../db/db'
@@ -6,6 +7,7 @@ import { findByName } from '../lib/names'
 import { Button, Field, Input, ListRow, Select } from '../components/ui'
 import Sheet from '../components/Sheet'
 import { MUSCLES, primaryMuscle, type Muscle } from '../lib/muscles'
+import { stepFromName, WEIGHT_STEPS } from '../lib/weightStep'
 import { fileToResizedDataUrl } from '../lib/image'
 import type { Exercise, MuscleGroup } from '../models/types'
 import { MUSCLE_GROUPS } from '../models/types'
@@ -112,8 +114,8 @@ export default function ExerciseDatabasePage() {
               e.imageDataUrl ? (
                 <img src={e.imageDataUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
               ) : (
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg text-lg" aria-hidden="true">
-                  🏋️
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg text-muted" aria-hidden="true">
+                  <Dumbbell size={18} />
                 </span>
               )
             }
@@ -128,7 +130,7 @@ export default function ExerciseDatabasePage() {
                 aria-label={e.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
                 className="shrink-0 px-1 text-lg"
               >
-                {e.favorite ? '⭐' : '☆'}
+                <Star size={18} className={e.favorite ? 'fill-current text-accent' : 'text-muted'} />
               </button>
             }
           />
@@ -155,9 +157,9 @@ function ExerciseSheet({
   onClose: () => void
 }) {
   const existing = exercise && exercise !== 'new' ? exercise : undefined
-  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string; primaryMuscle?: Muscle }>(
+  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string; primaryMuscle?: Muscle; weightStepKg?: number }>(
     existing
-      ? { name: existing.name, muscleGroup: existing.muscleGroup, imageDataUrl: existing.imageDataUrl, primaryMuscle: existing.primaryMuscle }
+      ? { name: existing.name, muscleGroup: existing.muscleGroup, imageDataUrl: existing.imageDataUrl, primaryMuscle: existing.primaryMuscle, weightStepKg: existing.weightStepKg }
       : { name: initialName, muscleGroup: MUSCLE_GROUPS[0] },
   )
   const [error, setError] = useState<string | null>(null)
@@ -172,7 +174,7 @@ function ExerciseSheet({
       setError(`„${duplicate.name}" steht schon in der Datenbank.`)
       return
     }
-    const values = { name, muscleGroup: form.muscleGroup, imageDataUrl: form.imageDataUrl, primaryMuscle: form.primaryMuscle }
+    const values = { name, muscleGroup: form.muscleGroup, imageDataUrl: form.imageDataUrl, primaryMuscle: form.primaryMuscle, weightStepKg: form.weightStepKg }
     if (existing) await db.exercises.update(existing.id, values)
     else await db.exercises.add({ id: crypto.randomUUID(), ...values })
     onClose()
@@ -226,6 +228,19 @@ function ExerciseSheet({
           {MUSCLES.map((m) => (
             <option key={m} value={m}>
               {m}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Gewichtsschritt der ± Knöpfe">
+        <Select
+          value={form.weightStepKg ?? ''}
+          onChange={(e) => setForm({ ...form, weightStepKg: e.target.value ? Number(e.target.value) : undefined })}
+        >
+          <option value="">Automatisch (lernt aus deinem Verlauf, sonst {stepFromName(form.name).toLocaleString('de-DE')} kg)</option>
+          {WEIGHT_STEPS.map((st) => (
+            <option key={st} value={st}>
+              {st.toLocaleString('de-DE')} kg
             </option>
           ))}
         </Select>

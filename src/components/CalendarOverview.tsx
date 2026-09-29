@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { DailyEntry, WorkoutLog } from '../models/types'
 import { isoDate, todayIso } from '../db/queries'
 import { Card } from './ui'
@@ -48,11 +49,11 @@ export default function CalendarOverview({ entries, workoutLogs }: { entries: Da
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <button type="button" onClick={prevMonth} aria-label="Vorheriger Monat" className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg">
-          ‹
+          <ChevronLeft size={20} />
         </button>
         <h2 className="text-sm font-semibold text-fg">{monthLabel}</h2>
         <button type="button" onClick={nextMonth} aria-label="Nächster Monat" className="rounded-lg px-3 py-1 text-xl text-muted hover:text-fg">
-          ›
+          <ChevronRight size={20} />
         </button>
       </div>
 

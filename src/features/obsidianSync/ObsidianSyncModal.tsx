@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import {  } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/db'
 import { Button, Card, Field, Input, Select } from '../../components/ui'
@@ -81,7 +82,7 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
     setStatus({ type: 'busy', message: 'Synchronisiere…' })
     try {
       await syncNow()
-      setStatus({ type: 'success', message: 'Synchronisiert ✅' })
+      setStatus({ type: 'success', message: 'Synchronisiert' })
     } catch (err) {
       setStatus({ type: 'error', message: err instanceof Error ? err.message : 'Unbekannter Fehler beim Sync.' })
     }
@@ -117,7 +118,7 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
       setStatus({
         type: restored ? 'success' : 'error',
         message: restored
-          ? 'Backup wiederhergestellt ✅'
+          ? 'Backup wiederhergestellt'
           : 'Im Vault liegt noch kein Backup – zuerst synchronisieren.',
       })
     } catch (err) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { Check, Zap } from 'lucide-react'
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { addDays, copyNutritionItems, getOrCreateNutritionLog, syncNutritionTotalsToDailyEntry, todayIso } from '../db/queries'
@@ -8,7 +9,7 @@ import { CAL_TOLERANCE, MACRO_TOLERANCE, sumMacros, type Sums } from '../lib/mac
 import { celebrateOnce, haptic } from '../lib/feedback'
 import type { Athlete, FoodItem, MealType, NutritionLogItem, NutritionPlan } from '../models/types'
 import { MEAL_TYPES } from '../models/types'
-import { Button, Field, ListRow, MacroChips, SectionHeader, Select } from '../components/ui'
+import { Button, Field, ListRow, MacroChips, PageSkeleton, SectionHeader, Select } from '../components/ui'
 import AddFoodSheet from '../components/AddFoodSheet'
 import PortionEditSheet from '../components/PortionEditSheet'
 import CollapsibleCard from '../components/CollapsibleCard'
@@ -125,6 +126,22 @@ export default function NutritionLogPage() {
   }).filter((g) => g.rows.length > 0)
 
   const suggestedMealType = mealTypeForTime()
+
+  // Vom „+“-Knopf (`?add=1`): gleich die Lebensmittelsuche für heute öffnen.
+  const [params, setParams] = useSearchParams()
+  const quickAdd = params.get('add') === '1'
+  useEffect(() => {
+    if (!quickAdd) return
+    setSelectedDate(todayIso())
+    setAddMeal(mealTypeForTime())
+    setParams(
+      (p) => {
+        p.delete('add')
+        return p
+      },
+      { replace: true },
+    )
+  }, [quickAdd, setParams])
 
   // Einen Tag abschließen gibt es nicht mehr: Was eingetragen ist, gilt als erfasst.
   const markers = new Map<string, DayMarker>((logs ?? []).map((l) => [l.date, 'done']))
@@ -304,6 +321,8 @@ export default function NutritionLogPage() {
     await addFood(id, 100, mealType)
   }
 
+  if (logs === undefined) return <PageSkeleton />
+
   return (
     <div className="flex flex-col gap-4">
       <LogDayHeader
@@ -333,7 +352,7 @@ export default function NutritionLogPage() {
           </Button>
           <div className="grid grid-cols-2 gap-2">
             <Button variant="secondary" onClick={() => setQuickOpen(true)}>
-              ⚡ Schnell eintragen
+              <Zap size={15} className="mr-1 inline -translate-y-px" />Schnell eintragen
             </Button>
             <Button variant="secondary" disabled={previousItems.length === 0} onClick={() => void copyPreviousDay()}>
               ⟲ Wie am Vortag
@@ -342,7 +361,7 @@ export default function NutritionLogPage() {
         </div>
         {toast && (
           <p role="status" className="anim-pop -mt-2 rounded-xl bg-accent/15 px-3 py-2 text-center text-sm text-fg">
-            ✓ {toast}
+            <Check size={14} className="mr-1 inline -translate-y-px" />{toast}
           </p>
         )}
 
@@ -390,7 +409,7 @@ export default function NutritionLogPage() {
                     onSwipeDelete={() => db.nutritionLogItems.delete(row.item.id)}
                     title={
                       foodMap.get(row.item.foodItemId)?.quick
-                        ? `⚡ ${foodMap.get(row.item.foodItemId)?.name}`
+                        ? `${foodMap.get(row.item.foodItemId)?.name}`
                         : (foodMap.get(row.item.foodItemId)?.name ?? 'Unbekanntes Lebensmittel')
                     }
                     subtitle={
@@ -463,7 +482,7 @@ export default function NutritionLogPage() {
         }))}
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
-        emptyText="📅 Noch keine Ernährungstage aufgezeichnet."
+        emptyText="Noch keine Ernährungstage aufgezeichnet."
       />
 
       <AddFoodSheet
@@ -475,6 +494,7 @@ export default function NutritionLogPage() {
         mealType={addMeal ?? suggestedMealType}
         onAddFood={addFood}
         onAddRecipe={addRecipeToLog}
+        athleteId={athlete.id}
       />
 
       <QuickEntrySheet

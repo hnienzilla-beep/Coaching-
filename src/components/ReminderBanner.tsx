@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DailyEntry } from '../models/types'
 import { todayIso } from '../db/queries'
-import { Button } from './ui'
+import { PenLine } from 'lucide-react'
 
 // iOS/Safari erlaubt für installierte Web-Apps nur Web Push (eigener Server nötig).
 // Ohne Backend gibt es daher keine echte Erinnerung bei geschlossener App - wir zeigen
@@ -24,19 +24,19 @@ export default function ReminderBanner({ entries }: { athleteId: string; entries
 
   if (loggedToday) return null
 
+  // Dezent: eine schmale Zeile statt einer großen Karte.
   return (
-    <div className="anim-pop flex items-center gap-3 rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3">
-      <span className="text-xl" aria-hidden="true">
-        ✍️
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-fg">Heute noch nichts eingetragen</p>
-        <p className="text-xs text-muted">Gewicht unter „Tracking“, Essen unter „Ernährung“.</p>
-      </div>
+    <div className="anim-pop flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 py-1.5 pr-1.5 pl-3 text-xs">
+      <PenLine size={14} className="shrink-0 text-accent" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-fg">Heute noch nichts eingetragen</span>
       {permission === 'default' && (
-        <Button variant="ghost" className="shrink-0 text-xs" onClick={() => Notification.requestPermission().then(setPermission)}>
+        <button
+          type="button"
+          className="shrink-0 rounded-full px-2.5 py-1 font-medium text-accent transition active:scale-95"
+          onClick={() => Notification.requestPermission().then(setPermission)}
+        >
           Erinnern
-        </Button>
+        </button>
       )}
     </div>
   )

@@ -1,17 +1,44 @@
 import { useEffect, useState } from 'react'
 
-export type Theme = 'dark' | 'light'
+/** Gewählte Einstellung - `system` folgt dem Hell-/Dunkelmodus des Geräts. */
+export type Theme = 'dark' | 'light' | 'system'
 
 const STORAGE_KEY = 'theme'
+const EVENT = 'coach:theme'
 
 export function getStoredTheme(): Theme {
-  return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark'
+  try {
+    const v = localStorage.getItem(STORAGE_KEY)
+    return v === 'light' || v === 'system' ? v : 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+const systemQuery = () => (typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: light)') : null)
+
+function resolve(theme: Theme): 'dark' | 'light' {
+  if (theme !== 'system') return theme
+  return systemQuery()?.matches ? 'light' : 'dark'
 }
 
 export function applyTheme(theme: Theme): void {
-  document.documentElement.classList.toggle('light', theme === 'light')
-  localStorage.setItem(STORAGE_KEY, theme)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#fafafa' : '#000000')
+  const effective = resolve(theme)
+  document.documentElement.classList.toggle('light', effective === 'light')
+  try {
+    localStorage.setItem(STORAGE_KEY, theme)
+  } catch {
+    // Ohne Speicher gilt die Wahl nur bis zum Neuladen.
+  }
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'light' ? '#fafafa' : '#000000')
+}
+
+/** Beim Start aufrufen: setzt das Theme und folgt bei `system` Änderungen am Gerät. */
+export function startTheme(): void {
+  applyTheme(getStoredTheme())
+  systemQuery()?.addEventListener('change', () => {
+    if (getStoredTheme() === 'system') applyTheme('system')
+  })
 }
 
 /**
@@ -31,11 +58,16 @@ export function accentForeground(hex: string): string {
 }
 
 export function useTheme(): [Theme, (theme: Theme) => void] {
-  const [theme, setTheme] = useState<Theme>(() => getStoredTheme())
-
+  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme())
   useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
-
+    const update = () => setThemeState(getStoredTheme())
+    window.addEventListener(EVENT, update)
+    return () => window.removeEventListener(EVENT, update)
+  }, [])
+  const setTheme = (next: Theme) => {
+    applyTheme(next)
+    setThemeState(next)
+    window.dispatchEvent(new Event(EVENT))
+  }
   return [theme, setTheme]
 }

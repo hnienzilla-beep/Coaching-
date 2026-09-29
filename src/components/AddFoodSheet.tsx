@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { ChevronRight, Pencil, Star } from 'lucide-react'
 import { db } from '../db/db'
 import { caloriesFromMacros } from '../lib/calculator'
 import { macroLine, sumMacros, type Sums } from '../lib/macros'
@@ -28,7 +29,7 @@ import { MEAL_TYPES } from '../models/types'
 import BarcodeScanner from './BarcodeScanner'
 import QuickAddFood from './QuickAddFood'
 import Sheet from './Sheet'
-import { Button, DecimalInput, Field, Input, ListRow, SegmentedControl, Select, SourceBadge, UnconfirmedBadge } from './ui'
+import { Button, Field, Input, ListRow, SegmentedControl, Select, SourceBadge, Stepper, UnconfirmedBadge } from './ui'
 
 function macrosFor(food: Pick<FoodItem, 'protein' | 'carbs' | 'fat'>, grams: number): Sums {
   const f = grams / 100
@@ -64,6 +65,7 @@ export default function AddFoodSheet({
   showMealType = true,
   onAddFood,
   onAddRecipe,
+  athleteId,
 }: {
   open: boolean
   onClose: () => void
@@ -74,6 +76,8 @@ export default function AddFoodSheet({
   showMealType?: boolean
   onAddFood: (foodItemId: string, grams: number, mealType: MealType) => Promise<void> | void
   onAddRecipe?: (recipe: NutritionPlan, factor: number, mealType: MealType) => Promise<void> | void
+  /** Für „Zuletzt verwendet“ - ohne gelten die Logs aller Athleten. */
+  athleteId?: string
 }) {
   const [query, setQuery] = useState('')
   const [selection, setSelection] = useState<Selection | null>(null)
@@ -110,6 +114,19 @@ export default function AddFoodSheet({
       .sort((a, b) => Number(b.favorite ?? false) - Number(a.favorite ?? false) || a.name.localeCompare(b.name, 'de'))
       .slice(0, q ? 30 : 15)
   }, [foods, q])
+  // Zuletzt verwendet: die jüngsten geloggten Lebensmittel, neueste zuerst - steht bei leerer
+  // Suche ganz oben, weil man meistens dasselbe isst.
+  const recentIds = useLiveQuery(async () => {
+    if (!open) return []
+    const logs = await db.nutritionLogs.toArray()
+    const mine = (athleteId ? logs.filter((l) => l.athleteId === athleteId) : logs).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 21)
+    const order = new Map(mine.map((l, i) => [l.id, i]))
+    const items = await db.nutritionLogItems.where('nutritionLogId').anyOf([...order.keys()]).toArray()
+    items.sort((a, b) => order.get(a.nutritionLogId)! - order.get(b.nutritionLogId)! || (b.order ?? 0) - (a.order ?? 0))
+    return [...new Set(items.map((i) => i.foodItemId))].slice(0, 8)
+  }, [open, athleteId])
+  const recentFoods = q ? [] : (recentIds ?? []).map((id) => foods.find((f) => f.id === id)).filter((f): f is FoodItem => !!f && !f.quick)
+  const recentSet = new Set(recentFoods.map((f) => f.id))
   const recipeMatches = recipes.filter((r) => !q || r.phaseName.toLowerCase().includes(q))
   // Online-Treffer, die es schon in der eigenen Datenbank gibt, stehen dort bereits.
   const onlineMatches = online.results.filter((o) => !findExistingFood(foods, o))
@@ -260,8 +277,27 @@ export default function AddFoodSheet({
                 key={r.id}
                 title={r.phaseName}
                 subtitle={`Rezept · ergibt ${servingsLabel(servingsOf(r))}`}
-                value="›"
+                value={<ChevronRight size={16} />}
                 onClick={() => setSelection({ kind: 'recipe', recipe: r })}
+              />
+            ))}
+          </ResultSection>
+        )}
+
+        {recentFoods.length > 0 && (
+          <ResultSection title="Zuletzt verwendet">
+            {recentFoods.map((f) => (
+              <ListRow
+                key={f.id}
+                title={
+                  <>
+                    {f.favorite && <Star size={13} className="mr-1 inline -translate-y-px fill-current text-accent" />}
+                    {f.name}
+                  </>
+                }
+                subtitle={`P ${Math.round(f.protein)} · C ${Math.round(f.carbs)} · F ${Math.round(f.fat)} je 100 g`}
+                value={kcalPer100(f)}
+                onClick={() => setSelection({ kind: 'food', food: f })}
               />
             ))}
           </ResultSection>
@@ -269,12 +305,12 @@ export default function AddFoodSheet({
 
         <ResultSection title="Meine Lebensmittel">
           {localMatches.length === 0 && <p className="px-1 text-sm text-muted">Keine Treffer in deiner Datenbank.</p>}
-          {localMatches.map((f) => (
+          {localMatches.filter((f) => !recentSet.has(f.id)).map((f) => (
             <ListRow
               key={f.id}
               title={
                 <>
-                  {f.favorite && '⭐ '}
+                  {f.favorite && <Star size={13} className="mr-1 inline -translate-y-px fill-current text-accent" />}
                   {f.name}
                   {f.unconfirmed && <UnconfirmedBadge />}
                 </>
@@ -509,6 +545,7 @@ export function AmountInput({
   unit,
   label,
   format = (n: number) => String(n),
+  step = unit === 'g' ? 10 : 0.5,
 }: {
   value: number | undefined
   onChange: (n: number | undefined) => void
@@ -519,12 +556,14 @@ export function AmountInput({
   unit: string
   label: string
   format?: (n: number) => string
+  /** Sprung der −/+ Knöpfe (Gramm: 10). */
+  step?: number
 }) {
   const [editing, setEditing] = useState(false)
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <DecimalInput value={value} onChange={onChange} aria-label={label} className="text-base" />
+        <Stepper value={value} onChange={onChange} step={step} label={label} className="flex-1" />
         <span className="shrink-0 text-sm text-muted">{unit}</span>
       </div>
       <div className="flex gap-1.5">
@@ -554,7 +593,7 @@ export function AmountInput({
             aria-expanded={editing}
             className="shrink-0 rounded-lg border border-border px-2.5 text-xs text-muted transition hover:text-fg active:scale-95"
           >
-            ✎
+            <Pencil size={13} />
           </button>
         )}
       </div>

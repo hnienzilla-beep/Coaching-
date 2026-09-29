@@ -1,5 +1,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  ArrowUpDown,
+  BookOpen,
+  CalendarDays,
+  ChartColumn,
+  Compass,
+  Droplet,
+  Dumbbell,
+  Flame,
+  Medal,
+  PersonStanding,
+  Ruler,
+  Salad,
+  Scale,
+  Share,
+  Sparkles,
+  Target,
+  Timer,
+  Trophy,
+  Utensils,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { addDays, todayIso } from '../db/queries'
@@ -69,7 +92,7 @@ function useStoryInput(athlete: Athlete, kind: 'week' | 'month', start: string, 
  * -------------------------------------------------------------------------------------- */
 
 type Big = { value: number; decimals?: number; prefix?: string; suffix?: string }
-type Slide = { id: string; emoji: string; kicker: string; big?: Big; bigText?: string; unit?: string; lines: string[]; visual?: ReactNode }
+type Slide = { id: string; icon: LucideIcon; kicker: string; big?: Big; bigText?: string; unit?: string; lines: string[]; visual?: ReactNode }
 
 const fmt = (n: number, d = 0) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
@@ -192,7 +215,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   const slides: Slide[] = [
     {
       id: 'titel',
-      emoji: stats.kind === 'week' ? '📖' : '🗓️',
+      icon: stats.kind === 'week' ? BookOpen : CalendarDays,
       kicker: range,
       bigText: title,
       lines: [`${athlete.name}, hier ist deine Auswertung.`, 'Tippen oder wischen zum Blättern · halten zum Pausieren'],
@@ -203,7 +226,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('ernaehrung') && stats.avgKcal !== undefined) {
     slides.push({
       id: 'ernaehrung',
-      emoji: '🍽️',
+      icon: Utensils,
       kicker: 'Ernährung',
       big: { value: stats.avgKcal },
       unit: `kcal Ø · Vorgabe ${fmt(targetKcal)}`,
@@ -217,7 +240,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
     const best = stats.bestDay
     slides.push({
       id: 'kcalVerlauf',
-      emoji: '📊',
+      icon: ChartColumn,
       kicker: 'Kalorien-Verlauf',
       lines: [
         'Gestrichelt: deine Vorgabe · hell: im Ziel',
@@ -231,7 +254,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
     const pct = (g: number, f: number) => Math.round(((g * f) / total) * 100)
     slides.push({
       id: 'makros',
-      emoji: '🥗',
+      icon: Salad,
       kicker: 'Makro-Verteilung',
       lines: [
         `Protein ${pct(stats.avgProtein, 4)} % · Carbs ${pct(stats.avgCarbs, 4)} % · Fett ${pct(stats.avgFat, 9)} %`,
@@ -244,7 +267,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
     const d = stats.weightDelta
     slides.push({
       id: 'gewicht',
-      emoji: '⚖️',
+      icon: Scale,
       kicker: 'Gewicht',
       big: d !== undefined ? { value: Math.abs(d), decimals: 1, prefix: d > 0 ? '+' : d < 0 ? '−' : '±' } : { value: stats.avgWeight, decimals: 1 },
       unit: d !== undefined ? `kg zur ${prevWord(stats)}` : 'kg Ø',
@@ -255,7 +278,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('wasser') && stats.avgWaterMl !== undefined) {
     slides.push({
       id: 'wasser',
-      emoji: '💧',
+      icon: Droplet,
       kicker: 'Wasser',
       big: { value: stats.avgWaterMl / 1000, decimals: 1 },
       unit: 'Liter Ø pro Tag',
@@ -265,7 +288,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('training') && stats.trainings > 0) {
     slides.push({
       id: 'training',
-      emoji: '🏋️',
+      icon: Dumbbell,
       kicker: 'Training',
       big: { value: stats.trainings },
       unit: stats.trainings === 1 ? 'Einheit' : 'Einheiten',
@@ -275,7 +298,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('trainingszeit') && stats.durationMin > 0) {
     slides.push({
       id: 'trainingszeit',
-      emoji: '⏱️',
+      icon: Timer,
       kicker: 'Trainingszeit',
       big: { value: stats.durationMin },
       unit: 'Minuten insgesamt',
@@ -285,7 +308,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('heatmap') && stats.muscleRecords.length > 0) {
     slides.push({
       id: 'heatmap',
-      emoji: '🔥',
+      icon: PersonStanding,
       kicker: 'Deine Muskeln',
       lines: stats.missingMuscles.length ? [`Kam nicht vor: ${stats.missingMuscles.slice(0, 3).join(', ')}`] : ['Alle großen Muskelgruppen trainiert – stark!'],
       visual: <StoryHeatmap stats={stats} athlete={athlete} />,
@@ -294,7 +317,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('rekorde') && stats.prs.length > 0) {
     slides.push({
       id: 'rekorde',
-      emoji: '🏆',
+      icon: Trophy,
       kicker: 'Neue Rekorde',
       big: { value: stats.prs.length },
       unit: stats.prs.length === 1 ? 'Bestleistung' : 'Bestleistungen',
@@ -304,7 +327,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('topFood') && stats.topFoods.length > 0) {
     slides.push({
       id: 'topFood',
-      emoji: '🥇',
+      icon: Medal,
       kicker: 'Top-Lebensmittel',
       bigText: stats.topFoods[0].name,
       lines: stats.topFoods.map((f, i) => `${i + 1}. ${f.name} – ${f.grams >= 1000 ? `${fmt(f.grams / 1000, 1)} kg` : `${fmt(f.grams)} g`} (${f.count}×)`),
@@ -313,7 +336,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('serien') && stats.bestStreak > 0) {
     slides.push({
       id: 'serien',
-      emoji: '🔥',
+      icon: Flame,
       kicker: 'Serie',
       big: { value: stats.streak || stats.bestStreak },
       unit: stats.streak ? 'Tage in Folge geloggt' : 'Tage am Stück (beste Serie)',
@@ -328,29 +351,29 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
       `Trainings ${signed(c.trainings)}`,
       `Volumen ${signed(Math.round(c.volumeKg / 100) / 10, 1)} t`,
     ]
-    if (lines.length > 2) slides.push({ id: 'vergleich', emoji: '↕️', kicker: `Zur ${prevWord(stats)}`, lines })
+    if (lines.length > 2) slides.push({ id: 'vergleich', icon: ArrowUpDown, kicker: `Zur ${prevWord(stats)}`, lines })
   }
   if (on('prognose') && stats.forecast && athlete.targetWeightKg !== undefined) {
     const f = stats.forecast
     if (f.kind === 'eta') {
       slides.push({
         id: 'prognose',
-        emoji: '🎯',
+        icon: Target,
         kicker: 'Zielprognose',
         big: { value: Math.max(1, Math.round(f.days / 7)) },
         unit: `Wochen bis ${fmt(athlete.targetWeightKg, 1)} kg`,
         lines: [`Trend der letzten 2 Wochen: ${signed(f.perWeek, 2)} kg/Woche – etwa am ${shortDate(f.date)}.`],
       })
     } else if (f.kind === 'away') {
-      slides.push({ id: 'prognose', emoji: '🎯', kicker: 'Zielprognose', bigText: 'Kurs korrigieren', lines: [`Trend ${signed(f.perWeek, 2)} kg/Woche – so wird ${fmt(athlete.targetWeightKg, 1)} kg nicht erreicht.`] })
+      slides.push({ id: 'prognose', icon: Target, kicker: 'Zielprognose', bigText: 'Kurs korrigieren', lines: [`Trend ${signed(f.perWeek, 2)} kg/Woche – so wird ${fmt(athlete.targetWeightKg, 1)} kg nicht erreicht.`] })
     } else if (f.kind === 'reached') {
-      slides.push({ id: 'prognose', emoji: '🎯', kicker: 'Zielprognose', bigText: 'Ziel erreicht!', lines: ['Zeit für ein neues Ziel?'] })
+      slides.push({ id: 'prognose', icon: Target, kicker: 'Zielprognose', bigText: 'Ziel erreicht!', lines: ['Zeit für ein neues Ziel?'] })
     }
   }
   if (on('masse') && stats.measures.length > 0) {
     slides.push({
       id: 'masse',
-      emoji: '📏',
+      icon: Ruler,
       kicker: 'Körpermaße',
       lines: stats.measures.map((m) => `${m.label}: ${fmt(m.latest, 1)} cm (${signed(m.delta, 1)})`),
     })
@@ -358,7 +381,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
   if (on('highlights') && (stats.topSet || stats.bestDay)) {
     slides.push({
       id: 'highlights',
-      emoji: '✨',
+      icon: Sparkles,
       kicker: 'Highlights',
       bigText: 'Stark!',
       lines: [
@@ -368,7 +391,7 @@ function buildSlides(stats: PeriodStats, athlete: Athlete, targetKcal: number, d
     })
   }
   if (on('tipps')) {
-    slides.push({ id: 'tipps', emoji: '🧭', kicker: 'Coach-Tipps', bigText: stats.kind === 'week' ? 'Nächste Woche' : 'Nächster Monat', lines: stats.tips })
+    slides.push({ id: 'tipps', icon: Compass, kicker: 'Coach-Tipps', bigText: stats.kind === 'week' ? 'Nächste Woche' : 'Nächster Monat', lines: stats.tips })
   }
   return slides
 }
@@ -419,7 +442,7 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return lines
 }
 
-async function slideImage(slide: Slide, container: HTMLElement | null): Promise<File> {
+async function slideImage(slide: Slide, container: HTMLElement | null, iconHost: HTMLElement | null): Promise<File> {
   const W = 1080
   const H = 1920
   const canvas = document.createElement('canvas')
@@ -447,6 +470,15 @@ async function slideImage(slide: Slide, container: HTMLElement | null): Promise<
       // Grafik ließ sich nicht übernehmen - das Bild bekommt dann nur den Text.
     }
   }
+  const iconSvg = iconHost?.querySelector('svg') as SVGSVGElement | null
+  let icon: HTMLImageElement | undefined
+  if (iconSvg) {
+    try {
+      icon = await svgToImage(iconSvg)
+    } catch {
+      // Ohne Symbol geht es auch.
+    }
+  }
   const imgScale = img ? Math.min(860 / img.width, 620 / img.height) : 0
   const bigText = slide.big ? `${slide.big.prefix ?? ''}${fmt(slide.big.value, slide.big.decimals ?? 0)}` : slide.bigText
   ctx.font = '400 46px system-ui, sans-serif'
@@ -455,9 +487,7 @@ async function slideImage(slide: Slide, container: HTMLElement | null): Promise<
     150 + 110 + (bigText ? 190 : 0) + (slide.unit ? 70 : 0) + (img ? img.height * imgScale + 90 : 40) + textLines.length * 66
   let y = Math.max(160, (H - blockH) / 2) + 130
 
-  ctx.fillStyle = '#ffffff'
-  ctx.font = '150px system-ui, sans-serif'
-  ctx.fillText(slide.emoji, W / 2, y)
+  if (icon) ctx.drawImage(icon, W / 2 - 75, y - 130, 150, 150)
   y += 110
   ctx.font = '600 50px system-ui, sans-serif'
   ctx.fillStyle = 'rgba(255,255,255,0.75)'
@@ -503,6 +533,7 @@ function StoryViewer({ slides, onClose }: { slides: Slide[]; onClose: () => void
   const [paused, setPaused] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const visualRef = useRef<HTMLDivElement>(null)
+  const iconRef = useRef<HTMLSpanElement>(null)
   const gesture = useRef<{ x: number; y: number; t: number } | null>(null)
 
   // Fortschritt der aktuellen Folie - läuft nur, solange nicht pausiert (gedrückt gehalten).
@@ -552,8 +583,8 @@ function StoryViewer({ slides, onClose }: { slides: Slide[]; onClose: () => void
         ))}
       </div>
       <div className="flex items-center justify-end px-3 pt-2">
-        <button type="button" onClick={onClose} aria-label="Schließen" className="rounded-full px-3 py-1 text-2xl text-white/80">
-          ✕
+        <button type="button" onClick={onClose} aria-label="Schließen" className="rounded-full p-2 text-white/80">
+          <X size={24} />
         </button>
       </div>
 
@@ -583,7 +614,9 @@ function StoryViewer({ slides, onClose }: { slides: Slide[]; onClose: () => void
         }}
       >
         <div key={slide.id} className="story-slide flex flex-col items-center gap-3">
-          <span className="text-6xl">{slide.emoji}</span>
+          <span ref={iconRef} className="text-white">
+            <slide.icon size={60} strokeWidth={1.6} />
+          </span>
           <span className="text-sm font-semibold uppercase tracking-widest text-white/75">{slide.kicker}</span>
           {slide.big && (
             <span className="text-6xl font-extrabold tabular-nums">
@@ -611,12 +644,13 @@ function StoryViewer({ slides, onClose }: { slides: Slide[]; onClose: () => void
           type="button"
           onClick={async () => {
             setPaused(true)
-            await shareOrDownloadFile(await slideImage(slide, visualRef.current))
+            await shareOrDownloadFile(await slideImage(slide, visualRef.current, iconRef.current))
             setPaused(false)
           }}
           className="rounded-full bg-white/20 px-5 py-2.5 text-sm font-medium text-white backdrop-blur active:scale-95"
         >
-          ⤴ Teilen
+          <Share size={16} className="mr-1.5 inline -translate-y-px" />
+          Teilen
         </button>
       </div>
     </div>,
@@ -699,7 +733,7 @@ function StoryCard({
         <Card className="relative flex items-center gap-3 overflow-hidden">
           <span aria-hidden="true" className="story-bg absolute inset-0 opacity-30" />
           <span className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-2xl ${!seen ? 'story-ring' : 'bg-surface-2'}`}>
-            {kind === 'week' ? '📖' : '🗓️'}
+            {kind === 'week' ? <BookOpen size={26} strokeWidth={1.8} /> : <CalendarDays size={26} strokeWidth={1.8} />}
           </span>
           <span className="relative min-w-0 flex-1">
             <span className="block text-sm font-semibold text-fg">

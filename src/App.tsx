@@ -27,6 +27,7 @@ import TrainingPage from './pages/TrainingPage'
 import FoodDatabasePage from './pages/FoodDatabasePage'
 import SupplementDatabasePage from './pages/SupplementDatabasePage'
 import ExerciseDatabasePage from './pages/ExerciseDatabasePage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   // Auto-Sync und Pausen-Timer laufen für die gesamte App-Laufzeit (alle Aufrufe sind
@@ -92,6 +93,7 @@ function App() {
           <Route path="tracking" element={<TrackingPage />} />
           <Route path="ernaehrung" element={<ErnaehrungPage />} />
           <Route path="training" element={<TrainingPage />} />
+          <Route path="einstellungen" element={<SettingsPage />} />
         </Route>
         {/* Ohne Auffangroute rendert eine unbekannte Hash-Adresse eine leere Seite. */}
         <Route path="*" element={<Navigate to="/" replace />} />
