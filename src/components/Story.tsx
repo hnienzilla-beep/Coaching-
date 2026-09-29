@@ -27,7 +27,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { addDays, todayIso } from '../db/queries'
 import { caloriesFromMacros, mondayOf } from '../lib/calculator'
-import { CAL_TOLERANCE } from '../lib/macros'
+import { calTolerance } from '../lib/macros'
+import { getPrefs } from '../lib/prefs'
 import { haptic } from '../lib/feedback'
 import { primaryMuscle, muscleHeat, MUSCLES, targetFor } from '../lib/muscles'
 import { shareOrDownloadFile } from '../lib/share'
@@ -47,7 +48,8 @@ function useStoryInput(athlete: Athlete, kind: 'week' | 'month', start: string, 
     const logs = await db.workoutLogs.where('athleteId').equals(athlete.id).filter((l) => l.date <= end).toArray()
     const les = logs.length ? await db.workoutLogExercises.where('workoutLogId').anyOf(logs.map((l) => l.id)).toArray() : []
     const exercises = new Map((await db.exercises.toArray()).map((e) => [e.id, e]))
-    const sets = les.length ? await db.workoutSets.where('workoutLogExerciseId').anyOf(les.map((l) => l.id)).toArray() : []
+    // Aufwärmsätze zählen weder ins Volumen noch in Rekorde.
+    const sets = les.length ? (await db.workoutSets.where('workoutLogExerciseId').anyOf(les.map((l) => l.id)).toArray()).filter((s) => !s.warmup) : []
     const logById = new Map(logs.map((l) => [l.id, l]))
     const leById = new Map(les.map((l) => [l.id, l]))
     const storySets = sets.flatMap((s) => {
@@ -113,7 +115,7 @@ function KcalBars({ stats, target }: { stats: PeriodStats; target: number }) {
     <svg viewBox={`0 0 ${w} ${h + 18}`} className="w-72 max-w-full">
       {stats.kcalByDay.map((d, i) => {
         const bh = ((d.kcal ?? 0) / max) * h
-        const onTarget = d.kcal !== undefined && Math.abs(d.kcal - target) <= CAL_TOLERANCE
+        const onTarget = d.kcal !== undefined && Math.abs(d.kcal - target) <= calTolerance()
         return (
           <g key={d.date}>
             <rect
@@ -683,7 +685,7 @@ function StoryCard({
 }) {
   const [disabled] = useDisabledStorySlides()
   const target = useMemo(
-    () => ({ kcal: targetKcal, protein: targetProtein, tolerance: CAL_TOLERANCE, waterMl: waterGoalFor(athlete) }),
+    () => ({ kcal: targetKcal, protein: targetProtein, tolerance: calTolerance(), waterMl: waterGoalFor(athlete) }),
     [targetKcal, targetProtein, athlete],
   )
   const stats = useStoryInput(athlete, kind, start, end, entries, target)
@@ -759,7 +761,7 @@ function StoryCard({
 export default function StoryCards(props: { athlete: Athlete; entries: DailyEntry[]; targetKcal: number; targetProtein: number }) {
   const today = todayIso()
   const weekStart = addDays(mondayOf(today), -7)
-  const isMonday = mondayOf(today) === today
+  const isMonday = mondayOf(today) === today && getPrefs().storyAutoOpen
   const dayOfMonth = Number(today.slice(8, 10))
   const monthStart = `${addDays(`${today.slice(0, 7)}-01`, -1).slice(0, 7)}-01`
   const monthEnd = addDays(`${today.slice(0, 7)}-01`, -1)

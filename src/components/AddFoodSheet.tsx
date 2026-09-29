@@ -25,7 +25,8 @@ import {
   servingsOf,
 } from '../lib/recipes'
 import type { FoodItem, MealType, NutritionPlan } from '../models/types'
-import { MEAL_TYPES } from '../models/types'
+import MealOptions from './MealOptions'
+import { getPrefs } from '../lib/prefs'
 import BarcodeScanner from './BarcodeScanner'
 import QuickAddFood from './QuickAddFood'
 import Sheet from './Sheet'
@@ -237,11 +238,7 @@ export default function AddFoodSheet({
   const mealSelect = showMealType && (
     <Field label="Mahlzeit">
       <Select value={targetMeal} onChange={(e) => setTargetMeal(e.target.value as MealType)}>
-        {MEAL_TYPES.map((mt) => (
-          <option key={mt} value={mt}>
-            {mt}
-          </option>
-        ))}
+        <MealOptions current={targetMeal} />
       </Select>
     </Field>
   )
@@ -545,7 +542,7 @@ export function AmountInput({
   unit,
   label,
   format = (n: number) => String(n),
-  step = unit === 'g' ? 10 : 0.5,
+  step = unit === 'g' ? getPrefs().gramStep : 0.5,
 }: {
   value: number | undefined
   onChange: (n: number | undefined) => void
@@ -556,7 +553,7 @@ export function AmountInput({
   unit: string
   label: string
   format?: (n: number) => string
-  /** Sprung der −/+ Knöpfe (Gramm: 10). */
+  /** Sprung der −/+ Knöpfe (Gramm: aus den Einstellungen, Standard 10). */
   step?: number
 }) {
   const [editing, setEditing] = useState(false)

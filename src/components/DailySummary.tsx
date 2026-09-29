@@ -1,4 +1,4 @@
-import { CAL_TOLERANCE, MACRO_TOLERANCE, diffTone, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
+import { MACRO_TOLERANCE, calTolerance, diffTone, diffToneClass, type MacroTarget, type Sums } from '../lib/macros'
 import { PartyPopper } from 'lucide-react'
 import { useGrowIn } from '../lib/countUp'
 import { Card, CountUp } from './ui'
@@ -38,7 +38,7 @@ export default function DailySummary({
   const remaining = target.targetCalories - sums.kcal
   const over = remaining < 0
   const ringColor = evaluate
-    ? diffTone(sums.kcal - target.targetCalories, CAL_TOLERANCE) === 'ok'
+    ? diffTone(sums.kcal - target.targetCalories, calTolerance()) === 'ok'
       ? 'var(--color-ok)'
       : 'var(--color-danger)'
     : over

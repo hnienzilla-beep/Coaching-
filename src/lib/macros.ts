@@ -2,6 +2,8 @@
 // dieselben Summen gegen dieselben Zielwerte, deshalb liegen Typ, Toleranzen und die
 // Ampel-Logik hier statt doppelt in den Seiten.
 
+import { getPrefs } from './prefs'
+
 export interface Sums {
   kcal: number
   protein: number
@@ -22,6 +24,11 @@ export const EMPTY_SUMS: Sums = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
 // Ab welcher Abweichung vom Ziel ein Wert nicht mehr als "getroffen" gilt.
 export const CAL_TOLERANCE = 100
 export const MACRO_TOLERANCE = 15
+
+/** Kalorien-Toleranz aus den Einstellungen (Standard ±100 kcal). */
+export function calTolerance(): number {
+  return getPrefs().kcalTolerance || CAL_TOLERANCE
+}
 
 export function sumMacros(rows: Sums[]): Sums {
   return rows.reduce(

@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { sortAthletes } from '../db/queries'
 import { getLastAthleteId } from '../lib/lastAthlete'
+import { getPrefs } from '../lib/prefs'
+import { subViewQuery } from '../lib/swipeNavigation'
 import NewAthleteForm from '../components/NewAthleteForm'
 
 /**
@@ -36,5 +38,8 @@ export default function StartRedirect() {
 
   const lastId = getLastAthleteId()
   const target = athletes.find((a) => a.id === lastId) ?? sortAthletes(athletes)[0]
-  return <Navigate to={`/athlete/${target.id}`} replace />
+  // Startseite aus den Einstellungen (Dashboard liegt auf der Wurzel des Athleten).
+  const start = getPrefs().startTab
+  const path = start === 'dashboard' ? '' : `/${start}${subViewQuery(start)}`
+  return <Navigate to={`/athlete/${target.id}${path}`} replace />
 }

@@ -275,11 +275,12 @@ export default function TrainingPlanPage() {
         onClose={() => setEditRowId(null)}
       />
 
-      {activePlan && coachMode && (
-        <CollapsibleCard title="Export & Import" defaultExpanded={false}>
+      {/* Teilen in jeder Ansicht - ein Plan als Datei geht per AirDrop, Mail oder Messenger raus. */}
+      {activePlan && (
+        <CollapsibleCard title="Plan teilen & importieren" defaultExpanded={false}>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleExportPlan} className="flex-1">
-            Plan exportieren
+            Plan teilen
           </Button>
           <Button variant="secondary" onClick={() => importInputRef.current?.click()} className="flex-1">
             Plan importieren

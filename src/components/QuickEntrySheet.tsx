@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { caloriesFromMacros, mealTypeForTime } from '../lib/calculator'
+import { caloriesFromMacros } from '../lib/calculator'
 import { macroLine } from '../lib/macros'
 import { quickMacros, type QuickMacros } from '../lib/quickEntry'
 import type { MealType } from '../models/types'
-import { MEAL_TYPES } from '../models/types'
+import MealOptions from './MealOptions'
+import { suggestedMeal } from '../lib/meals'
 import Sheet from './Sheet'
 import { Button, DecimalInput, Field, Input, Select } from './ui'
 
@@ -27,7 +28,7 @@ export default function QuickEntrySheet({
   const [protein, setProtein] = useState<number | undefined>()
   const [carbs, setCarbs] = useState<number | undefined>()
   const [fat, setFat] = useState<number | undefined>()
-  const [mealType, setMealType] = useState<MealType>(mealTypeForTime())
+  const [mealType, setMealType] = useState<MealType>(suggestedMeal())
 
   useEffect(() => {
     if (!open) return
@@ -36,7 +37,7 @@ export default function QuickEntrySheet({
     setProtein(undefined)
     setCarbs(undefined)
     setFat(undefined)
-    setMealType(mealTypeForTime())
+    setMealType(suggestedMeal())
   }, [open])
 
   const macros = quickMacros({ kcal, protein, carbs, fat }, target)
@@ -80,11 +81,7 @@ export default function QuickEntrySheet({
       </div>
       <Field label="Mahlzeit">
         <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>
-          {MEAL_TYPES.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
+          <MealOptions current={mealType} />
         </Select>
       </Field>
       <div className="rounded-xl bg-surface-2 px-3 py-2.5 text-sm">

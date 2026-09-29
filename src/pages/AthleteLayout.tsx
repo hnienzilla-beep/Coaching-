@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } from 'react-router-dom'
 import { Check, ChevronDown, Dumbbell, LayoutDashboard, LineChart, Settings, UserPlus, Users, Utensils } from 'lucide-react'
-import { SWIPE_VIEWS, subViewQuery, swipeAnimationClass, swipeIndex, useSwipeNavigation } from '../lib/swipeNavigation'
+import { subViewQuery, swipeAnimationClass, useSwipeNavigation } from '../lib/swipeNavigation'
+import { usePrefs, type TabKey } from '../lib/prefs'
+import { startReminders } from '../lib/reminders'
+import { SECTIONS } from '../lib/settingsMeta'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { sortAthletes } from '../db/queries'
@@ -17,12 +20,13 @@ import type { Athlete } from '../models/types'
 // Ernährung (Plan/Log/Supplements) und Training (Plan/Log) sind je ein Tab mit einem
 // internen Umschalter auf der jeweiligen Seite selbst - dadurch bleiben nur 4
 // Haupt-Tabs, die bequem in eine einzeilige Bottom-Navigation passen.
-const TABS = [
-  { to: '', label: 'Dashboard', end: true, icon: LayoutDashboard },
-  { to: 'tracking', label: 'Tracking', end: false, icon: LineChart },
-  { to: 'ernaehrung', label: 'Ernährung', end: false, icon: Utensils },
-  { to: 'training', label: 'Training', end: false, icon: Dumbbell },
-]
+// Reihenfolge und Sichtbarkeit kommen aus den Einstellungen (Navigation).
+const ALL_TABS: Record<TabKey, { to: string; label: string; end: boolean; icon: typeof LayoutDashboard }> = {
+  dashboard: { to: '', label: 'Dashboard', end: true, icon: LayoutDashboard },
+  tracking: { to: 'tracking', label: 'Tracking', end: false, icon: LineChart },
+  ernaehrung: { to: 'ernaehrung', label: 'Ernährung', end: false, icon: Utensils },
+  training: { to: 'training', label: 'Training', end: false, icon: Dumbbell },
+}
 
 /** Abstand der schwebenden Navigation zum unteren Rand - über dem Home-Indikator. */
 const NAV_BOTTOM = 'max(0.75rem, calc(env(safe-area-inset-bottom) - 0.5rem))'
@@ -41,13 +45,15 @@ export default function AthleteLayout() {
     [athleteId],
   )
 
-  // Wischen: einen Reiter weiter bzw. zurück (lib/swipeNavigation).
+  const prefs = usePrefs()
+  const tabOrder = prefs.tabOrder.filter((t) => !prefs.hiddenTabs.includes(t))
+  const TABS = (tabOrder.length ? tabOrder : prefs.tabOrder).map((t) => ALL_TABS[t])
+
+  // Wischen: einen Reiter weiter bzw. zurück (lib/swipeNavigation) - in der eingestellten Reihenfolge.
   const mainRef = useRef<HTMLElement>(null)
   const swipeContentRef = useRef<HTMLDivElement>(null)
-  const currentView = swipeIndex(pathname.split('/')[3] ?? '')
   const activeTab = TABS.findIndex((t) => t.to === (pathname.split('/')[3] ?? ''))
-  const swipeTarget = (direction: 'next' | 'prev') =>
-    currentView === -1 ? undefined : SWIPE_VIEWS[currentView + (direction === 'next' ? 1 : -1)]
+  const swipeTarget = (direction: 'next' | 'prev') => (activeTab === -1 ? undefined : TABS[activeTab + (direction === 'next' ? 1 : -1)])
   useSwipeNavigation({
     area: mainRef,
     content: swipeContentRef,
@@ -56,10 +62,13 @@ export default function AthleteLayout() {
     onSwipe: (direction) => {
       const target = swipeTarget(direction)
       if (!athleteId || !target) return
-      const path = `/athlete/${athleteId}${target.path ? `/${target.path}${subViewQuery(target.path)}` : ''}`
+      const path = `/athlete/${athleteId}${target.to ? `/${target.to}${subViewQuery(target.to)}` : ''}`
       navigate(path, { state: { swipe: direction } })
     },
   })
+
+  // Erinnerungen laufen für den offenen Athleten (lib/reminders).
+  useEffect(() => (athleteId ? startReminders(athleteId) : undefined), [athleteId])
   // Beim Wischen gleitet die ganze Seite aus der Wischrichtung herein.
   const outerAnimation = swipeAnimationClass((state as { swipe?: unknown } | null)?.swipe)
   const athletes = useLiveQuery(() => db.athletes.toArray(), [])
@@ -116,7 +125,8 @@ export default function AthleteLayout() {
 
   const segment = pathname.split('/')[3] ?? ''
   const onSettings = segment === 'einstellungen'
-  const pageTitle = onSettings ? 'Einstellungen' : (TABS.find((t) => t.to === segment)?.label ?? '')
+  const settingsSection = SECTIONS.find((s) => s.key === pathname.split('/')[4])
+  const pageTitle = onSettings ? (settingsSection?.label ?? 'Einstellungen') : (Object.values(ALL_TABS).find((t) => t.to === segment)?.label ?? '')
 
   return (
     <div className="relative mx-auto flex h-full max-w-md flex-col overflow-hidden">
@@ -246,12 +256,12 @@ export default function AthleteLayout() {
         </div>
       </main>
 
-      {!onSettings && <QuickAddButton athlete={athlete} bottomOffset={`calc(${NAV_BOTTOM} + 4.75rem)`} />}
+      {!onSettings && prefs.quickAddButton && <QuickAddButton athlete={athlete} bottomOffset={`calc(${NAV_BOTTOM} + 4.75rem)`} />}
 
       {/* Schwebende Navigation: abgerundete Leiste über dem Inhalt, mit Icon und Beschriftung. */}
       <nav
-        className="absolute inset-x-3 z-30 grid grid-cols-4 gap-1 rounded-2xl border border-border bg-surface/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
-        style={{ bottom: NAV_BOTTOM }}
+        className="absolute inset-x-3 z-30 grid gap-1 rounded-2xl border border-border bg-surface/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        style={{ bottom: NAV_BOTTOM, gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
       >
         {/* Die Markierung gleitet zum aktiven Reiter - beim Antippen wie beim Wischen. */}
         {activeTab !== -1 && (
@@ -259,7 +269,7 @@ export default function AthleteLayout() {
             aria-hidden="true"
             className="absolute top-1.5 bottom-1.5 left-1.5 rounded-xl bg-accent shadow-sm shadow-black/20 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
             style={{
-              width: 'calc((100% - 0.75rem - 3 * 0.25rem) / 4)',
+              width: `calc((100% - 0.75rem - ${TABS.length - 1} * 0.25rem) / ${TABS.length})`,
               transform: `translateX(calc(${activeTab} * (100% + 0.25rem)))`,
             }}
           />

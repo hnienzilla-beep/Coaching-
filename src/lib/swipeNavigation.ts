@@ -1,22 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { getPrefs } from './prefs'
 
-/**
- * Die vier unteren Reiter als Reihe - Wischen nach links geht einen Reiter weiter, nach rechts
- * einen zurück. Die Unteransichten (Log/Plan/…) wechselt man über die schwebende Leiste oben
- * (`SubViewBar`), nicht per Wischen über die ganze Seite.
+/*
+ * Wischen nach links geht einen Reiter weiter, nach rechts einen zurück - in der Reihenfolge aus
+ * den Einstellungen (AthleteLayout). Die Unteransichten (Log/Plan/…) wechselt man über die
+ * schwebende Leiste oben (`SubViewBar`), nicht per Wischen über die ganze Seite.
  */
-export const SWIPE_VIEWS: { path: string; label: string }[] = [
-  { path: '', label: 'Dashboard' },
-  { path: 'tracking', label: 'Tracking' },
-  { path: 'ernaehrung', label: 'Ernährung' },
-  { path: 'training', label: 'Training' },
-]
-
-/** Position des Reiters in `SWIPE_VIEWS`. */
-export function swipeIndex(path: string): number {
-  return SWIPE_VIEWS.findIndex((v) => v.path === path)
-}
 
 // Zuletzt genutzte Unteransicht je Reiter - Wischen und die untere Leiste öffnen Ernährung und
 // Training wieder dort, wo man war. In sessionStorage, damit es ein Neuladen übersteht.
@@ -41,7 +31,7 @@ export function rememberSubView(tab: string, view: string): void {
 /** `?view=…` für den Reiter, falls er eine gemerkte Unteransicht hat - sonst leer. */
 export function subViewQuery(tab: string): string {
   const view = readSubViews()[tab]
-  return view ? `?view=${encodeURIComponent(view)}` : ''
+  return view && !getPrefs().hiddenSubViews.includes(`${tab}:${view}`) ? `?view=${encodeURIComponent(view)}` : ''
 }
 
 /**
@@ -51,7 +41,9 @@ export function subViewQuery(tab: string): string {
  */
 export function useSubView<T extends string>(tab: string, views: readonly { key: T }[]) {
   const [params, setParams] = useSearchParams()
-  const view: T = views.find((v) => v.key === params.get('view'))?.key ?? views[0].key
+  // Ohne `?view=` die Start-Ansicht aus den Einstellungen (sofern sie nicht ausgeblendet ist).
+  const start = getPrefs().startSubView[tab]
+  const view: T = views.find((v) => v.key === params.get('view'))?.key ?? views.find((v) => v.key === start)?.key ?? views[0].key
   const [direction, setDirection] = useState<SwipeDirection | null>(null)
 
   useEffect(() => rememberSubView(tab, view), [tab, view])
