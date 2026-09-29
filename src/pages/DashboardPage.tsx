@@ -516,10 +516,10 @@ function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-/** Ein Satz zur Zielprognose aus dem Trend der letzten 3 Wochen (siehe `forecastGoal`). */
+/** Ein Satz zur Zielprognose aus dem Trend der letzten 2 Wochen (siehe `forecastGoal`). */
 function ForecastLine({ forecast, targetKg, targetDate }: { forecast: Forecast; targetKg: number; targetDate?: string }) {
   if (forecast.kind === 'insufficient') {
-    return <p className="text-xs text-muted">📈 Prognose ab 5 Wiegungen innerhalb von 3 Wochen.</p>
+    return <p className="text-xs text-muted">📈 Prognose ab 5 Wiegungen innerhalb von 2 Wochen.</p>
   }
   if (forecast.kind === 'reached') return <p className="text-xs text-fg">🎯 Ziel laut Trend erreicht – stark!</p>
   const tempo = `${forecast.perWeek > 0 ? '+' : '−'}${Math.abs(forecast.perWeek).toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg/Woche`

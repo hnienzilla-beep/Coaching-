@@ -28,10 +28,10 @@ describe('forecastGoal', () => {
   })
 
   it('berücksichtigt nur das gewählte Zeitfenster', () => {
-    // Bis vor 3 Wochen stark abgenommen, seitdem Stillstand: mit 3-Wochen-Fenster keine Prognose.
-    const pts = Array.from({ length: 42 }, (_, i) => {
-      const date = addDays(today, i - 41)
-      return { date, weightKg: i < 21 ? 90 - i * 0.3 : 84 }
+    // Bis vor 2 Wochen stark abgenommen, seitdem Stillstand: mit 2-Wochen-Fenster keine Prognose.
+    const pts = Array.from({ length: 28 }, (_, i) => {
+      const date = addDays(today, i - 27)
+      return { date, weightKg: i < 14 ? 90 - i * 0.3 : 86.1 }
     })
     expect(forecastGoal(pts, 80, today, 28).kind).toBe('eta')
     expect(forecastGoal(pts, 80, today).kind).toBe('away')
