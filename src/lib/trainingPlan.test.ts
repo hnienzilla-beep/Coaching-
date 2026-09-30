@@ -52,12 +52,12 @@ describe('Plan-Grenzen', () => {
 describe('Schwerpunkte je Tag', () => {
   it('kommen nach vorn und bekommen mehr Sätze', () => {
     const plain = buildTrainingWeek(pro({ split: 'pushpullfb', trainingDays: [0, 2, 4, 5] }))
-    const week = buildTrainingWeek(pro({ split: 'pushpullfb', trainingDays: [0, 2, 4, 5], focusByUnit: { 'Push Fullbody': ['Seitl./hint. Schulter'] } }))
+    const week = buildTrainingWeek(pro({ split: 'pushpullfb', trainingDays: [0, 2, 4, 5], focusByUnit: { 'Push Fullbody': ['Seitl. Schulter'] } }))
     const push = week.days.find((d) => d.name === 'Push Fullbody')!
-    expect(push.exercises[0].muscle).toBe('Seitl./hint. Schulter')
+    expect(push.exercises[0].muscle).toBe('Seitl. Schulter')
     expect(push.exercises[0].focus).toBe(true)
-    const before = plain.volume.find((v) => v.muscle === 'Seitl./hint. Schulter')!.planned
-    const after = week.volume.find((v) => v.muscle === 'Seitl./hint. Schulter')!.planned
+    const before = plain.volume.find((v) => v.muscle === 'Seitl. Schulter')!.planned
+    const after = week.volume.find((v) => v.muscle === 'Seitl. Schulter')!.planned
     expect(after).toBeGreaterThan(before)
   })
   it('fehlender Muskel bekommt eine Übung', () => {
@@ -168,5 +168,21 @@ describe('Push/Pull Fullbody decken ihre Beine ab', () => {
         for (const m of ['Waden', 'Quadrizeps', 'Adduktoren'] as const) expect(muscles(0).has(m), `${goal} ${durationMin} ${m}`).toBe(true)
         for (const m of ['Beinbeuger', 'Bauch'] as const) expect(muscles(1).has(m), `${goal} ${durationMin} ${m}`).toBe(true)
       }
+  })
+})
+
+describe('Schwerpunkt immer im Plan, Schultern getrennt', () => {
+  it('Fokus-Übung bleibt auch bei 30 min und Satzgrenze 12', () => {
+    for (const m of ['Hint. Schulter', 'Seitl. Schulter', 'Trapez', 'Adduktoren', 'Vord. Schulter'] as const) {
+      const week = buildTrainingWeek(pro({ durationMin: 30, maxSets: 12, split: 'pushpullfb', focusByUnit: { 'Push Fullbody': [m], 'Pull Fullbody': [m] } }))
+      for (const d of week.days) expect(d.exercises.some((e) => e.muscle === m && e.focus), `${d.name} ${m}`).toBe(true)
+    }
+  })
+  it('seitliche und hintere Schulter getrennt', () => {
+    const week = buildTrainingWeek(pro({ split: 'pushpullfb' }))
+    expect(week.volume.map((v) => v.muscle)).toEqual(expect.arrayContaining(['Seitl. Schulter', 'Hint. Schulter']))
+    const all = week.days.flatMap((d) => d.exercises)
+    expect(all.find((e) => e.name === 'Seitheben')?.muscle).toBe('Seitl. Schulter')
+    expect(all.find((e) => /Reverse|Face/.test(e.name))?.muscle).toBe('Hint. Schulter')
   })
 })
