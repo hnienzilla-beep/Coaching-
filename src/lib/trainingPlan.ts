@@ -350,6 +350,12 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   Beine: ['squat', 'hinge', 'lunge', 'hamstring', 'glute', 'calves', 'core'],
 }
 
+/** Muskeln, die eine Einheit immer trainiert - ihre erste Übung wird nie gestrichen. */
+const REQUIRED: Record<string, VolumeMuscle[]> = {
+  'Push Fullbody': ['Waden', 'Quadrizeps', 'Adduktoren'],
+  'Pull Fullbody': ['Beinbeuger', 'Bauch'],
+}
+
 /** Welche Bewegung ein Schwerpunkt-Muskel bekommt, wenn die Einheit ihn sonst nicht trainiert. */
 const FOCUS_SLOT: Record<VolumeMuscle, Slot> = {
   Brust: 'hpush',
@@ -620,7 +626,7 @@ export interface TrainingWeek {
   schedule: { weekday: number; unit: number }[]
 }
 
-type Draft = { entry: CatalogExercise; slot: Slot; key: string; sets: number; focus: boolean; note?: string; alternatives: string[] }
+type Draft = { entry: CatalogExercise; slot: Slot; key: string; sets: number; focus: boolean; required?: boolean; note?: string; alternatives: string[] }
 
 function usable(c: CatalogExercise, a: StartAnswers, s: PlanSettings): boolean {
   return (
@@ -734,7 +740,9 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const variantPick = u.variant === 1 && cands.length > 1 ? cands[1] : cands[0]
       const pick = (swap && cands.find((c) => c.name === swap)) || variantPick
       used.add(pick.name)
-      list.push({ entry: pick, slot, key, sets: 0, focus: false, alternatives: cands.map((c) => c.name), note: undefined })
+      // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin.
+      const required = (REQUIRED[u.base] ?? []).includes(pick.p) && !list.some((d) => d.required && d.entry.p === pick.p)
+      list.push({ entry: pick, slot, key, sets: 0, focus: false, required, alternatives: cands.map((c) => c.name), note: undefined })
     }
     // Schwerpunkte: erste passende Übung je Muskel nach vorn (in der gewählten Reihenfolge).
     const front: Draft[] = []
@@ -761,7 +769,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       drafts.forEach((list) =>
         list.forEach((d) => {
           const m = d.entry.p
-          if (INDIRECT_ONLY.includes(m) && !allFocus.has(m)) {
+          if (INDIRECT_ONLY.includes(m) && !allFocus.has(m) && !d.required) {
             d.sets = 0
             return
           }
@@ -780,6 +788,8 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     pass(indirect)
     // Schwerpunkte: mindestens 2 Sätze, +1 Satz an ihrem Tag (höchstens 4).
     for (const list of drafts) for (const d of list) if (d.focus) d.sets = Math.min(4, Math.max(2, d.sets) + 1)
+    // Pflicht-Muskeln: mindestens 2 Sätze, auch wenn das Wochenziel 0 wäre.
+    for (const list of drafts) for (const d of list) if (d.required) d.sets = Math.max(2, d.sets)
     return (m: VolumeMuscle) => perSlot(m, indirect)
   }
 
@@ -820,7 +830,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false) =>
         list
           // Schwerpunkt-Muskeln bleiben auch an anderen Tagen möglichst unangetastet.
-          .filter((d) => d.sets > (reduceOnly ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
+          .filter((d) => d.sets > (reduceOnly || d.required ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
           .filter((d) => !onlyAboveMv || v.get(d.entry.p)! - freq[u] * (d.sets === 2 ? 2 : 1) >= LANDMARKS[d.entry.p].mv)
           // Am besten versorgte Muskeln zuerst (Ist / Ziel), bei Gleichstand die spätere Übung.
           .map((d, i) => ({ d, i, surplus: v.get(d.entry.p)! / Math.max(1, target.get(d.entry.p)!) }))
