@@ -247,3 +247,28 @@ describe('Schulterköpfe getrennt mit halben Werten', () => {
     expect(weeklyTarget('Seitl. Schulter', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(10)
   })
 })
+
+describe('Beine: Kniebeuge-Übung + Beinstrecker', () => {
+  it('jede Einheit mit Quadrizeps hat eine Kniebeuge-Grundübung und Beinstrecker', () => {
+    for (const split of ['fbppl', 'okuk', 'ppl', 'pushpullfb', 'ganzkoerper', 'torsolimbs', 'okukarme', 'bro'] as const)
+      for (const goal of ['abnehmen', 'aufbauen'] as const) {
+        const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal, split, trainingDays: [0, 1, 2, 3, 4], durationMin: 45 }))
+        for (const d of week.days) {
+          if (!d.exercises.some((e) => e.muscle === 'Quadrizeps')) continue
+          const names = d.exercises.map((e) => e.name)
+          expect(names, `${split} ${goal} ${d.name}`).toContain('Beinstrecker')
+          expect(names.some((n) => /Beinpresse|Kniebeuge|Squat/.test(n)), `${split} ${goal} ${d.name}: ${names}`).toBe(true)
+        }
+      }
+  })
+})
+
+describe('Pull ohne RDL', () => {
+  it('Pull-Einheit enthält kein Kreuzheben', () => {
+    for (const split of ['ppl', 'fbppl', 'pplokuk'] as const) {
+      const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays: [0, 1, 2, 3, 4] }))
+      const pull = week.days.find((d) => d.name === 'Pull')!
+      expect(pull.exercises.map((e) => e.name).some((n) => /Kreuzheben|Good Morning/.test(n)), split).toBe(false)
+    }
+  })
+})
