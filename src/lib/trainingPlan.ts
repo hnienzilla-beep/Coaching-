@@ -14,7 +14,7 @@ export type Restriction = 'knie' | 'schulter' | 'ruecken' | 'handgelenk' | 'ellb
 export type TrainingGoal = 'kraft' | 'aufbau' | 'fitness'
 export type Preference = 'frei' | 'gemischt' | 'maschinen'
 export type Lift = 'kniebeuge' | 'kreuzheben' | 'bankdruecken' | 'klimmzuege' | 'schulterdruecken'
-export type Zone = 'MV' | 'MEV' | 'MAV'
+export type Zone = 'MV' | 'MEV' | 'MAV' | 'MRV'
 export type ScheduleMode = 'fixed' | 'rotation'
 
 /* ------------------------------------------------------------------------------------------
@@ -596,7 +596,7 @@ export function weeklyTarget(muscle: VolumeMuscle, a: StartAnswers): number {
   const s = settingsFor(a)
   const beginner = a.experience === 'einsteiger'
   const zone = s.zones[muscle]
-  if (zone) return zone === 'MV' ? l.mv : zone === 'MEV' ? l.mev : l.mavLo
+  if (zone) return zone === 'MV' ? l.mv : zone === 'MEV' ? l.mev : zone === 'MAV' ? l.mavLo : l.mavHi
   // Aufbauen: sicher im MAV (Untergrenze) - so ist das Ziel mit 3–5 Trainings auch erreichbar.
   const byGoal = a.goal === 'aufbauen' ? l.mavLo : a.goal === 'recomp' ? Math.round((l.mev + l.mavLo) / 2) : l.mev
   if (!beginner) return byGoal
@@ -1038,7 +1038,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     const ceiling = (m: VolumeMuscle) => {
       const l = LANDMARKS[m]
       const zone = s.zones[m]
-      const top = zone === 'MV' ? l.mev : zone === 'MEV' ? l.mavLo : zone === 'MAV' ? l.mavHi : a.goal === 'aufbauen' ? Math.round((l.mavLo + l.mavHi) / 2) : a.goal === 'recomp' ? l.mavLo : Math.round((l.mev + l.mavLo) / 2)
+      const top = zone === 'MV' ? l.mev : zone === 'MEV' ? l.mavLo : zone === 'MAV' ? l.mavHi : zone === 'MRV' ? l.mrv - 1 : a.goal === 'aufbauen' ? Math.round((l.mavLo + l.mavHi) / 2) : a.goal === 'recomp' ? l.mavLo : Math.round((l.mev + l.mavLo) / 2)
       return Math.max(goal(m), Math.min(l.mrv - 1, top))
     }
     fillTo(ceiling, true)

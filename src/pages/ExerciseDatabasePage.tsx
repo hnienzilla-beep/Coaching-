@@ -157,9 +157,16 @@ function ExerciseSheet({
   onClose: () => void
 }) {
   const existing = exercise && exercise !== 'new' ? exercise : undefined
-  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string; primaryMuscle?: Muscle; weightStepKg?: number }>(
+  const [form, setForm] = useState<{ name: string; muscleGroup: MuscleGroup; imageDataUrl?: string; primaryMuscle?: Muscle; secondaryMuscles?: Muscle[]; weightStepKg?: number }>(
     existing
-      ? { name: existing.name, muscleGroup: existing.muscleGroup, imageDataUrl: existing.imageDataUrl, primaryMuscle: existing.primaryMuscle, weightStepKg: existing.weightStepKg }
+      ? {
+          name: existing.name,
+          muscleGroup: existing.muscleGroup,
+          imageDataUrl: existing.imageDataUrl,
+          primaryMuscle: existing.primaryMuscle,
+          secondaryMuscles: existing.secondaryMuscles,
+          weightStepKg: existing.weightStepKg,
+        }
       : { name: initialName, muscleGroup: MUSCLE_GROUPS[0] },
   )
   const [error, setError] = useState<string | null>(null)
@@ -174,7 +181,14 @@ function ExerciseSheet({
       setError(`„${duplicate.name}" steht schon in der Datenbank.`)
       return
     }
-    const values = { name, muscleGroup: form.muscleGroup, imageDataUrl: form.imageDataUrl, primaryMuscle: form.primaryMuscle, weightStepKg: form.weightStepKg }
+    const values = {
+      name,
+      muscleGroup: form.muscleGroup,
+      imageDataUrl: form.imageDataUrl,
+      primaryMuscle: form.primaryMuscle,
+      secondaryMuscles: form.secondaryMuscles?.length ? form.secondaryMuscles : undefined,
+      weightStepKg: form.weightStepKg,
+    }
     if (existing) await db.exercises.update(existing.id, values)
     else await db.exercises.add({ id: crypto.randomUUID(), ...values })
     onClose()
@@ -217,7 +231,7 @@ function ExerciseSheet({
           ))}
         </Select>
       </Field>
-      <Field label="Hauptmuskel (Heatmap)">
+      <Field label="Hauptmuskel">
         <Select
           value={form.primaryMuscle ?? ''}
           onChange={(e) => setForm({ ...form, primaryMuscle: (e.target.value || undefined) as Muscle | undefined })}
@@ -231,6 +245,27 @@ function ExerciseSheet({
             </option>
           ))}
         </Select>
+      </Field>
+      <Field label="Nebenmuskeln (bis zu 3, zählen im Wochenvolumen halb)">
+        <div className="flex flex-wrap gap-1.5">
+          {MUSCLES.map((m) => {
+            const list = form.secondaryMuscles ?? []
+            const on = list.includes(m)
+            return (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={on}
+                disabled={!on && list.length >= 3}
+                onClick={() => setForm({ ...form, secondaryMuscles: on ? list.filter((x) => x !== m) : [...list, m] })}
+                className={`rounded-full px-2.5 py-1 text-xs transition active:scale-95 disabled:opacity-40 ${on ? 'bg-accent font-medium text-accent-fg' : 'bg-surface-2 text-fg'}`}
+              >
+                {m}
+              </button>
+            )
+          })}
+        </div>
+        <p className="mt-1 text-[11px] text-muted">Ohne Angabe nimmt die App die Muskeln aus ihrem Übungskatalog bzw. aus dem Namen.</p>
       </Field>
       <Field label="Gewichtsschritt der ± Knöpfe">
         <Select

@@ -634,7 +634,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
               <div key={m} className="flex items-center justify-between gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm text-fg">{m}</span>
                 <div className="flex gap-1">
-                  {(['auto', 'MV', 'MEV', 'MAV'] as const).map((z) => {
+                  {(['auto', 'MV', 'MEV', 'MAV', 'MRV'] as const).map((z) => {
                     const on = (a.volumeZones?.[m] ?? 'auto') === z
                     return (
                       <button
