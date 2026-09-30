@@ -212,7 +212,9 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
   const targets = useMemo(() => computeTargets(a, today), [a, today])
   const weightGoal = a.goal === 'abnehmen' || a.goal === 'aufbauen'
   const suggestion = suggestTargetWeight(a)
-  const warning = weightGoal ? targetWarning(a, a.targetWeightKg ?? suggestion) : undefined
+  // Während des Tippens (z.B. erst „7“) noch nicht warnen.
+  const typedTarget = a.targetWeightKg ?? suggestion
+  const warning = weightGoal && typedTarget >= 30 ? targetWarning(a, typedTarget) : undefined
   const week = useMemo(() => buildTrainingWeek(a), [a])
   const units = useMemo(() => planUnits(a), [a])
   const t = tier(a.experience)
@@ -275,7 +277,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           <DecimalInput value={a.heightCm} onChange={(n) => n && set({ heightCm: n })} inputMode="decimal" />
         </Question>
         <Question label="Gewicht (kg)">
-          <DecimalInput value={a.weightKg} onChange={(n) => n && set({ weightKg: n, targetWeightKg: undefined })} inputMode="decimal" />
+          <DecimalInput value={a.weightKg} onChange={(n) => n && set({ weightKg: n, targetWeightKg: undefined, targetWeightTyped: false })} inputMode="decimal" />
         </Question>
       </div>
       <Question label="Körperfett – ungefähr (optional)" info="Hilft beim Vorschlag fürs Zielgewicht. Schätz nach dem Spiegelbild, es muss nicht genau sein.">
@@ -287,7 +289,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
               <button
                 key={b.pct}
                 type="button"
-                onClick={() => set({ bodyFatPct: active ? undefined : pct, targetWeightKg: undefined })}
+                onClick={() => set({ bodyFatPct: active ? undefined : pct, targetWeightKg: undefined, targetWeightTyped: false })}
                 className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-center transition active:scale-95 ${active ? 'border-accent bg-accent/15' : 'border-border bg-surface-2'}`}
               >
                 <Silhouette fat={b.pct} />
@@ -301,7 +303,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           Oder genau:
           <DecimalInput
             value={a.bodyFatPct}
-            onChange={(n) => set({ bodyFatPct: n !== undefined && n > 2 && n < 70 ? n : undefined, targetWeightKg: undefined })}
+            onChange={(n) => set({ bodyFatPct: n !== undefined && n > 2 && n < 70 ? n : undefined, targetWeightKg: undefined, targetWeightTyped: false })}
             placeholder="z.B. 18,5"
             aria-label="Körperfett in Prozent"
             inputMode="decimal"
@@ -353,7 +355,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
             { value: 'halten', label: 'Halten & fitter werden', hint: 'Gewicht halten, Leistung steigern' },
           ]}
           value={a.goal}
-          onChange={(goal) => set({ goal, targetWeightKg: undefined })}
+          onChange={(goal) => set({ goal, targetWeightKg: undefined, targetWeightTyped: false })}
         />
       </Question>
       {weightGoal && (
@@ -372,7 +374,18 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
     <Block key="5">
       {weightGoal ? (
         <Question label="Zielgewicht (kg)" info="Vorschlag aus Größe, Gewicht und – falls angegeben – Körperfett. Du kannst ihn ändern.">
-          <DecimalInput value={a.targetWeightKg ?? suggestion} onChange={(n) => set({ targetWeightKg: n })} inputMode="decimal" />
+          {/* Einmal selbst getippt, bleibt das Feld frei - auch leer, damit man die Zahl komplett neu eingeben kann. */}
+          <DecimalInput
+            value={a.targetWeightTyped ? a.targetWeightKg : (a.targetWeightKg ?? suggestion)}
+            onChange={(n) => set({ targetWeightKg: n, targetWeightTyped: true })}
+            placeholder={`Vorschlag: ${suggestion.toLocaleString('de-DE')}`}
+            inputMode="decimal"
+          />
+          {a.targetWeightTyped && a.targetWeightKg !== suggestion && (
+            <button type="button" onClick={() => set({ targetWeightKg: undefined, targetWeightTyped: false })} className="self-start text-xs text-accent">
+              Vorschlag übernehmen ({suggestion.toLocaleString('de-DE')} kg)
+            </button>
+          )}
           {warning ? (
             <p className="flex gap-1.5 rounded-lg bg-danger/10 px-2.5 py-1.5 text-xs text-danger">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" /> {warning}
