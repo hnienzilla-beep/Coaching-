@@ -143,3 +143,18 @@ describe('Hybrid-Splits', () => {
     expect(ok.exercises[0].alternatives).toEqual(expect.arrayContaining(['Kabelrudern (breit, zur Brust)', 'Seal Row', 'Shrugs (Kurzhantel)']))
   })
 })
+
+describe('RDLs treffen auch den Po', () => {
+  it('zählen voll für Beinbeuger und Po', async () => {
+    const { catalogExercise, muscleShare, volumeFromRecords } = await import('./trainingPlan')
+    const rdl = catalogExercise('Rumänisches Kreuzheben')!
+    expect(muscleShare(rdl, 'Beinbeuger')).toBe(1)
+    expect(muscleShare(rdl, 'Po')).toBe(1)
+    const { setRecords } = await import('./muscles')
+    const records = setRecords({ date: '2026-09-30', exercise: 'Rumänisches Kreuzheben' }, 'Beinbeuger')
+    expect(records.map((r) => r.muscle)).toEqual(['Beinbeuger', 'Po'])
+    const v = volumeFromRecords(records)
+    expect(v.get('Po')).toBe(1)
+    expect(v.get('Beinbeuger')).toBe(1)
+  })
+})

@@ -2,7 +2,7 @@ import { addDays } from '../db/queries'
 import type { DailyEntry } from '../models/types'
 import { estimateOneRepMax } from './calculator'
 import { forecastGoal, type Forecast } from './goalForecast'
-import type { Muscle, MuscleSetRecord } from './muscles'
+import { setRecords, type Muscle, type MuscleSetRecord } from './muscles'
 
 /*
  * Auswertung für die Wochen- bzw. Monats-Story. Reine Rechnung auf bereits geladenen Daten -
@@ -162,7 +162,7 @@ export function buildPeriodStats(input: StoryInput): PeriodStats {
 
   const muscleRecords: MuscleSetRecord[] = c.sets
     .filter((s) => s.muscle)
-    .map((s) => ({ muscle: s.muscle!, date: s.date, reps: s.reps, weightKg: s.weightKg, exercise: s.exercise }))
+    .flatMap((s) => setRecords({ date: s.date, reps: s.reps, weightKg: s.weightKg, exercise: s.exercise }, s.muscle!))
   const trained = new Set(muscleRecords.map((r) => r.muscle))
   const missingMuscles = c.trainings > 0 ? MAJOR.filter((m) => !trained.has(m)) : []
 
