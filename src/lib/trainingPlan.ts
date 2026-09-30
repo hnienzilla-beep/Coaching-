@@ -69,6 +69,14 @@ export const LANDMARKS: Record<VolumeMuscle, Landmarks> = {
 const INDIRECT_ONLY: VolumeMuscle[] = ['Trapez', 'Vord. Schulter', 'Adduktoren']
 const BIG_MUSCLES: VolumeMuscle[] = ['Quadrizeps', 'Beinbeuger', 'Rücken', 'Po']
 
+/**
+ * Höchstens so viele Sätze je Muskel und Training (ohne Fokus-Bonus): große Muskeln 8, kleine 4.
+ * Mehr bringt in einer Einheit kaum etwas - der Rest der Woche verteilt sich auf andere Tage.
+ */
+export function maxSetsPerSession(m: VolumeMuscle): number {
+  return ['Brust', 'Rücken', 'Quadrizeps', 'Beinbeuger', 'Po'].includes(m) ? 8 : 4
+}
+
 /* ------------------------------------------------------------------------------------------
  * Übungskatalog
  * ---------------------------------------------------------------------------------------- */
@@ -806,7 +814,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       }
       let n = Math.round(Math.max(0, target.get(m)! - (indirect.get(m) ?? 0)) / Math.max(0.5, w.get(m) ?? 1))
       if (n === 1) n = 2
-      share.set(m, n)
+      share.set(m, Math.min(maxSetsPerSession(m), n))
     }
     return share
   }

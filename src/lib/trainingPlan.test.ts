@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_ANSWERS, type StartAnswers } from './startPlan'
-import { LANDMARKS, buildTrainingWeek, planUnits, recoveryHours, sessionsPerWeek, splitOptions, weeklyTarget } from './trainingPlan'
+import { LANDMARKS, buildTrainingWeek, maxSetsPerSession, planUnits, recoveryHours, sessionsPerWeek, splitOptions, weeklyTarget, type VolumeMuscle } from './trainingPlan'
 
 const a = (patch: Partial<StartAnswers> = {}): StartAnswers => ({ ...DEFAULT_ANSWERS, firstName: 'Test', ...patch })
 const pro = (patch: Partial<StartAnswers> = {}) => a({ experience: 'erfahren', goal: 'aufbauen', ...patch })
@@ -223,5 +223,19 @@ describe('Gleiches Volumen an allen Tagen eines Muskels', () => {
         if (vals.length > 1) expect(Math.max(...vals) - Math.min(...vals), `${split} ${m} ${vals}`).toBe(0)
       }
     }
+  })
+})
+
+describe('Obergrenze je Muskel und Training', () => {
+  it('kleine Muskeln höchstens 4, große 8 - am Fokus-Tag +1', () => {
+    for (const split of ['fbppl', 'okuk', 'ppl', 'pushpullfb', 'ganzkoerper', 'bro', 'arnold'] as const)
+      for (const days of [[0, 3], [0, 2, 4], [0, 1, 3, 4], [0, 1, 2, 3, 4]]) {
+        const week = buildTrainingWeek(a({ experience: 'erfahren', goal: 'aufbauen', split, trainingDays: days, durationMin: 90, maxSets: 25, focusByUnit: { 'Push Fullbody': ['Seitl. Schulter'] } }))
+        for (const d of week.days) {
+          const per = new Map<VolumeMuscle, number>()
+          for (const e of d.exercises) if (!e.cardio) per.set(e.muscle, (per.get(e.muscle) ?? 0) + e.sets)
+          for (const [m, n] of per) expect(n, `${split} ${days.length} ${d.name} ${m}`).toBeLessThanOrEqual(maxSetsPerSession(m) + (d.focus.includes(m) ? 1 : 0))
+        }
+      }
   })
 })
