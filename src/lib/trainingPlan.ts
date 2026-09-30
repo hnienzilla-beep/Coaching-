@@ -564,12 +564,11 @@ export function settingsFor(a: StartAnswers): PlanSettings {
 
 const midMav = (l: Landmarks) => Math.round((l.mavLo + l.mavHi) / 2)
 
-/** Ziel-Sätze pro Woche je Muskel - aus Ziel, Erfahrung, Schwerpunkt und (Profi) eigener Zone. */
-export function weeklyTarget(muscle: VolumeMuscle, a: StartAnswers, focused: boolean): number {
+/** Grund-Ziel (Sätze pro Woche) je Muskel - aus Ziel, Erfahrung und (Profi) eigener Zone. */
+export function weeklyTarget(muscle: VolumeMuscle, a: StartAnswers): number {
   const l = LANDMARKS[muscle]
   const s = settingsFor(a)
   const beginner = a.experience === 'einsteiger'
-  if (focused) return Math.min(l.mrv - 1, beginner ? l.mavLo + 2 : midMav(l) + 2)
   const zone = s.zones[muscle]
   if (zone) return zone === 'MV' ? l.mv : zone === 'MEV' ? l.mev : midMav(l)
   const byGoal = a.goal === 'aufbauen' ? midMav(l) : a.goal === 'recomp' ? Math.round((l.mev + l.mavLo) / 2) : l.mev
@@ -719,8 +718,8 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const dayIdx = fixed ? dayUnitIndexes(a, units.length) : []
   const freq = units.map((_, u) => (fixed ? dayIdx.filter((x) => x === u).length : perWeek / units.length))
   const focusOf = (u: Unit) => (a.focusByUnit?.[u.key] ?? []).filter((m) => m in LANDMARKS).slice(0, 2)
-  const allFocus = new Set(units.flatMap((u) => (freq[units.indexOf(u)] > 0 ? focusOf(u) : [])))
-  const target = new Map(VOLUME_MUSCLES.map((m) => [m, weeklyTarget(m, a, allFocus.has(m))]))
+  // Grundvolumen je Muskel - Schwerpunkte erhöhen nur ihren Tag (siehe unten), nicht die ganze Woche.
+  const target = new Map(VOLUME_MUSCLES.map((m) => [m, weeklyTarget(m, a)]))
 
   // 1. Übungen je Einheit: Vorlage (+ Ergänzungen), fehlende Schwerpunkte, Schwerpunkte nach vorn.
   const buildUnit = (u: Unit, extra: { slot: Slot; muscle: VolumeMuscle }[]): Draft[] => {
@@ -772,23 +771,26 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   // 2. Sätze aus dem Wochenziel: direkte Sätze je Muskel verteilt auf alle Übungen der Woche,
   // abzüglich des indirekten Volumens (halb) aus anderen Übungen.
   const allot = (drafts: Draft[][]) => {
-    const directSlots = new Map<VolumeMuscle, number>()
-    drafts.forEach((list, u) => list.forEach((d) => directSlots.set(d.entry.p, (directSlots.get(d.entry.p) ?? 0) + freq[u])))
-    const perSlot = (m: VolumeMuscle, indirect: Map<VolumeMuscle, number>) =>
-      Math.max(0, target.get(m)! - (indirect.get(m) ?? 0)) / Math.max(0.5, directSlots.get(m) ?? 1)
+    // Einheiten, die einen Muskel direkt trainieren (gewichtet mit ihrer Häufigkeit pro Woche).
+    const unitsWith = new Map<VolumeMuscle, number>()
+    drafts.forEach((list, u) => {
+      for (const m of new Set(list.map((d) => d.entry.p))) unitsWith.set(m, (unitsWith.get(m) ?? 0) + freq[u])
+    })
+    const perUnit = (m: VolumeMuscle, indirect: Map<VolumeMuscle, number>) =>
+      Math.max(0, target.get(m)! - (indirect.get(m) ?? 0)) / Math.max(0.5, unitsWith.get(m) ?? 1)
     const pass = (indirect: Map<VolumeMuscle, number>) =>
-      drafts.forEach((list) =>
-        list.forEach((d) => {
-          const m = d.entry.p
-          if (INDIRECT_ONLY.includes(m) && !allFocus.has(m) && !d.required) {
-            d.sets = 0
-            return
-          }
-          let sets = Math.round(perSlot(m, indirect))
-          if (sets === 1) sets = 2
-          d.sets = Math.min(4, sets)
-        }),
-      )
+      drafts.forEach((list) => {
+        // Je Einheit gleich viel; innerhalb der Einheit auf ihre Übungen für den Muskel verteilt.
+        for (const m of new Set(list.map((d) => d.entry.p))) {
+          const own = list.filter((d) => d.entry.p === m)
+          const total = INDIRECT_ONLY.includes(m) ? 0 : Math.round(perUnit(m, indirect))
+          own.forEach((d, i) => {
+            let sets = Math.floor(total / own.length) + (i < total % own.length ? 1 : 0)
+            if (sets === 1) sets = 2
+            d.sets = Math.min(4, sets)
+          })
+        }
+      })
     pass(new Map())
     const indirect = new Map<VolumeMuscle, number>()
     drafts.forEach((list, u) =>
@@ -797,22 +799,22 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       }),
     )
     pass(indirect)
-    // Schwerpunkte: mindestens 2 Sätze, +1 Satz an ihrem Tag (höchstens 4).
-    for (const list of drafts) for (const d of list) if (d.focus) d.sets = Math.min(4, Math.max(2, d.sets) + 1)
+    // Schwerpunkt-Übung ist immer dabei; den Bonus-Satz gibt es nach dem Kürzen (Schritt 3).
+    for (const list of drafts) for (const d of list) if (d.focus) d.sets = Math.max(2, d.sets)
     // Pflicht-Muskeln: mindestens 2 Sätze, auch wenn das Wochenziel 0 wäre.
     for (const list of drafts) for (const d of list) if (d.required) d.sets = Math.max(2, d.sets)
-    return (m: VolumeMuscle) => perSlot(m, indirect)
+    return (m: VolumeMuscle, list: Draft[]) => perUnit(m, indirect) / Math.max(1, list.filter((d) => d.entry.p === m).length)
   }
 
   const extras: { slot: Slot; muscle: VolumeMuscle }[][] = units.map(() => [])
   let drafts = units.map((u, i) => buildUnit(u, extras[i]))
   const need = allot(drafts)
-  // Reichen 4 Sätze je Übung nicht fürs Wochenziel, bekommt die Einheit eine zweite Übung dafür.
+  // Reichen 4 Sätze je Übung nicht für den Anteil der Einheit, bekommt sie eine zweite Übung dafür.
   let added = false
   for (const m of VOLUME_MUSCLES) {
-    if ((INDIRECT_ONLY.includes(m) && !allFocus.has(m)) || need(m) <= 4.5) continue
+    if (INDIRECT_ONLY.includes(m)) continue
     drafts.forEach((list, u) => {
-      if (freq[u] <= 0 || !list.some((d) => d.entry.p === m)) return
+      if (freq[u] <= 0 || !list.some((d) => d.entry.p === m) || need(m, list) <= 4.5) return
       const slot = EXTRA_SLOT[m]?.find((sl) => candidates(sl, a, s).some((c) => c.p === m && !list.some((d) => d.entry.name === c.name)))
       if (!slot) return
       extras[u].push({ slot, muscle: m })
@@ -824,42 +826,54 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     allot(drafts)
   }
 
-  // 3. Grenzen je Einheit: Satzgrenze und Zeit. Gekürzt wird bei Nicht-Schwerpunkten mit dem
-  // größten Überschuss - erst bis MV, dann notfalls weiter.
+  // 3. Grenzen je Einheit: Satzgrenze und Zeit. Erst der normale Plan, dann bekommt jede
+  // Fokus-Übung an ihrem Tag einen Satz mehr, und es wird nur bei den anderen Muskeln nachgekürzt.
   const cardioMin = cardioMinutesPerSession(a)
   const budget = a.durationMin * 60
-  drafts.forEach((list, u) => {
-    const over = () => {
-      const sets = list.reduce((n, d) => n + d.sets, 0)
-      return sets > s.maxSets || (sets > 0 && sessionSeconds(list, s, cardioMin) > budget)
-    }
-    let guard = 0
-    while (over() && guard++ < 200) {
-      const v = volumeOf(drafts, freq)
-      // Erst Sätze abbauen (Übungen mit mehr als 2 Sätzen), erst danach ganze Übungen streichen -
-      // so bleibt die Übungsauswahl der Vorlage erhalten.
-      const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false, extrasOnly = false) =>
-        list
-          .filter((d) => !extrasOnly || d.extra)
-          // Schwerpunkt-Muskeln bleiben auch an anderen Tagen möglichst unangetastet.
-          // Schwerpunkt- und Pflicht-Übungen werden nur gekürzt, nie gestrichen.
-          .filter((d) => d.sets > (reduceOnly || d.required || d.focus ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
-          .filter((d) => !onlyAboveMv || v.get(d.entry.p)! - freq[u] * (d.sets === 2 ? 2 : 1) >= LANDMARKS[d.entry.p].mv)
-          // Am besten versorgte Muskeln zuerst (Ist / Ziel), bei Gleichstand die spätere Übung.
-          .map((d, i) => ({ d, i, surplus: v.get(d.entry.p)! / Math.max(1, target.get(d.entry.p)!) }))
-          .sort((x, y) => y.surplus - x.surplus || y.i - x.i)[0]?.d
-      // Reihenfolge: Sätze abbauen → ergänzte Übungen streichen → Vorlagen-Übungen streichen.
-      const victim =
-        pickFrom(true, false, true) ??
-        pickFrom(false, false, true) ??
-        pickFrom(false, false, false, true) ??
-        pickFrom(true, false) ??
-        pickFrom(false, false) ??
-        pickFrom(false, true)
-      if (!victim) break
-      victim.sets = victim.sets <= 2 ? 0 : victim.sets - 1
-    }
-  })
+  const trim = (protectFocus: boolean, goalOf: (m: VolumeMuscle) => number) =>
+    drafts.forEach((list, u) => {
+      const over = () => {
+        const sets = list.reduce((n, d) => n + d.sets, 0)
+        return sets > s.maxSets || (sets > 0 && sessionSeconds(list, s, cardioMin) > budget)
+      }
+      const unitFocus = new Set(protectFocus ? focusOf(units[u]) : [])
+      let guard = 0
+      while (over() && guard++ < 200) {
+        const v = volumeOf(drafts, freq)
+        const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false, extrasOnly = false) =>
+          list
+            .filter((d) => !extrasOnly || d.extra)
+            // Schwerpunkt- und Pflicht-Übungen werden nur gekürzt, nie gestrichen; nach dem
+            // Fokus-Bonus bleibt der Fokus-Muskel an seinem Tag ganz unangetastet.
+            .filter((d) => d.sets > (reduceOnly || d.required || d.focus ? 2 : 0) && (allowFocus || !unitFocus.has(d.entry.p)))
+            .filter((d) => !onlyAboveMv || v.get(d.entry.p)! - freq[u] * (d.sets === 2 ? 2 : 1) >= LANDMARKS[d.entry.p].mv)
+            // Am besten versorgte Muskeln zuerst (Ist / Ziel), bei Gleichstand die spätere Übung.
+            .map((d, i) => ({ d, i, surplus: v.get(d.entry.p)! / Math.max(1, goalOf(d.entry.p)) }))
+            .sort((x, y) => y.surplus - x.surplus || y.i - x.i)[0]?.d
+        // Reihenfolge: Sätze abbauen → ergänzte Übungen streichen → Vorlagen-Übungen streichen.
+        const victim =
+          pickFrom(true, false, true) ??
+          pickFrom(false, false, true) ??
+          pickFrom(false, false, false, true) ??
+          pickFrom(true, false) ??
+          pickFrom(false, false) ??
+          pickFrom(false, true)
+        if (!victim) break
+        victim.sets = victim.sets <= 2 ? 0 : victim.sets - 1
+      }
+    })
+  trim(false, (m) => target.get(m)!)
+  // Fokus: an seinem Tag ein Satz mehr (höchstens 4) - die Woche sonst unverändert.
+  const bonus = new Map<VolumeMuscle, number>()
+  drafts.forEach((list, u) =>
+    list.forEach((d) => {
+      if (!d.focus || d.sets >= 4) return
+      d.sets += 1
+      bonus.set(d.entry.p, (bonus.get(d.entry.p) ?? 0) + freq[u])
+    }),
+  )
+  const goal = (m: VolumeMuscle) => target.get(m)! + (bonus.get(m) ?? 0)
+  trim(true, goal)
 
   // 4. Eigene Satzzahlen aus der Zusammenfassung.
   for (const list of drafts)
@@ -895,7 +909,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   })
 
   const v = volumeOf(drafts, freq)
-  const volume = VOLUME_MUSCLES.map((m) => ({ muscle: m, planned: Math.round(v.get(m)! * 2) / 2, target: target.get(m)! }))
+  const volume = VOLUME_MUSCLES.map((m) => ({ muscle: m, planned: Math.round(v.get(m)! * 2) / 2, target: Math.round(goal(m)) }))
   const schedule = fixed ? [...a.trainingDays].sort((x, y) => x - y).map((weekday, i) => ({ weekday, unit: dayIdx[i] })) : []
   const warnings = [...recoveryWarnings(a, drafts, units, schedule), ...limitWarnings(days)]
   return { days, frequency: freq, volume, warnings, schedule }
@@ -1010,6 +1024,5 @@ export function volumeFromRecords(records: { exercise: string; muscle: Muscle; s
 
 /** Ziele je Muskel aus den gespeicherten „Dein Start“-Antworten (mit Schwerpunkten). */
 export function weeklyTargetsFor(a: StartAnswers): Map<VolumeMuscle, number> {
-  const focus = new Set(Object.values(a.focusByUnit ?? {}).flat())
-  return new Map(VOLUME_MUSCLES.map((m) => [m, weeklyTarget(m, a, focus.has(m))]))
+  return new Map(buildTrainingWeek(a).volume.map((v) => [v.muscle, v.target]))
 }
