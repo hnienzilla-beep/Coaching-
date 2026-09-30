@@ -1,4 +1,5 @@
 import type { MuscleGroup } from '../models/types'
+import { CATALOG, type VolumeMuscle } from '../lib/trainingPlan'
 
 export interface ExerciseSeed {
   name: string
@@ -57,4 +58,26 @@ export const EXERCISE_SEED: ExerciseSeed[] = [
   { name: 'Radfahren (Ergometer)', muscleGroup: 'Sonstiges' },
   { name: 'Crosstrainer', muscleGroup: 'Sonstiges' },
   { name: 'Seilspringen', muscleGroup: 'Sonstiges' },
+  // Übungskatalog für „Dein Start“ (lib/trainingPlan) - was oben noch fehlt.
+  ...catalogSeed(),
 ]
+
+function catalogSeed(): ExerciseSeed[] {
+  const group: Record<VolumeMuscle, MuscleGroup> = {
+    Brust: 'Brust',
+    Rücken: 'Rücken',
+    Trapez: 'Rücken',
+    'Seitl./hint. Schulter': 'Schultern',
+    'Vord. Schulter': 'Schultern',
+    Bizeps: 'Arme',
+    Trizeps: 'Arme',
+    Quadrizeps: 'Beine',
+    Beinbeuger: 'Beine',
+    Po: 'Beine',
+    Bauch: 'Bauch',
+    Waden: 'Beine',
+    Adduktoren: 'Beine',
+  }
+  const seen = new Set<string>()
+  return CATALOG.filter((c) => !seen.has(c.name) && seen.add(c.name)).map((c) => ({ name: c.name, muscleGroup: group[c.p] }))
+}

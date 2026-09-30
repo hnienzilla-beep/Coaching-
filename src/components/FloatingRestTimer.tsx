@@ -14,14 +14,14 @@ const C = 2 * Math.PI * R
  * ist. Antippen dehnt sie aus und zeigt Neustart/Abbrechen.
  */
 export default function FloatingRestTimer() {
-  const { endTime, remaining, duration, finishedAt, inlineVisible } = useSyncExternalStore(subscribeRestTimer, getRestTimer)
+  const { endTime, remaining, duration, length, finishedAt, inlineVisible } = useSyncExternalStore(subscribeRestTimer, getRestTimer)
   const [expanded, setExpanded] = useState(false)
   const running = endTime !== null
   if (inlineVisible || (!running && finishedAt === null)) return null
 
   const mm = Math.floor(remaining / 60)
   const ss = String(remaining % 60).padStart(2, '0')
-  const fraction = running && duration > 0 ? remaining / duration : 0
+  const fraction = running && length > 0 ? remaining / length : 0
 
   return createPortal(
     <div className="pointer-events-none fixed inset-x-0 top-[max(0.5rem,calc(env(safe-area-inset-top)+0.25rem))] z-40 flex justify-center">

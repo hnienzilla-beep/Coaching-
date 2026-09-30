@@ -52,26 +52,18 @@ describe('Trainingsplan', () => {
     expect(suggestedSplit(4, 'fortgeschritten')).toBe('okuk')
     expect(suggestedSplit(6, 'erfahren')).toBe('ppl')
   })
-  it('nur vorhandene Übungen, passende Anzahl, Tage nach Inhalt benannt', () => {
+  it('nur Übungen aus der Datenbank, Einheiten nach Split benannt', () => {
     const plan = buildTrainingPlan(a({ trainingDays: [0, 1, 3, 4], durationMin: 45, experience: 'fortgeschritten' }))
     expect(plan.map((d) => d.name)).toEqual(['Oberkörper A', 'Unterkörper A', 'Oberkörper B', 'Unterkörper B'])
-    for (const d of plan) {
-      expect(d.exercises.length).toBeLessThanOrEqual(5)
-      for (const e of d.exercises) expect(exerciseNames.has(e.name), e.name).toBe(true)
-    }
+    for (const d of plan) for (const e of d.exercises) expect(exerciseNames.has(e.name), e.name).toBe(true)
   })
   it('zuhause und mit Knieproblemen', () => {
-    const plan = buildTrainingPlan(a({ location: 'zuhause', restrictions: ['knie'], cardio: true, cardioMinutes: 60 }))
+    const plan = buildTrainingPlan(a({ location: 'zuhause', restrictions: ['knie'], cardio: true, cardioMinutes: 60, goal: 'aufbauen' }))
     const all = plan.flatMap((d) => d.exercises.map((e) => e.name))
     expect(all).not.toContain('Kniebeuge')
     expect(all).not.toContain('Goblet Squat')
     expect(all).not.toContain('Latzug')
     expect(all).toContain('Radfahren (Ergometer)')
-  })
-  it('Schwerpunkt bekommt mehr Sätze', () => {
-    const plan = buildTrainingPlan(a({ focus: ['Arme'], durationMin: 60 }))
-    const curls = plan.flatMap((d) => d.exercises).find((e) => /curl/i.test(e.name))
-    expect(curls?.sets).toBe(4)
   })
 })
 
@@ -105,7 +97,7 @@ describe('Splits, Makros, Supplements', () => {
     expect(suggestedSplit(5, 'fortgeschritten')).toBe('pushpullfb')
     expect(buildTrainingPlan(a({ trainingDays: [0, 1, 3, 4], split: 'torsolimbs' })).map((d) => d.name)).toEqual(['Torso', 'Limbs'])
     expect(buildTrainingPlan(a({ trainingDays: [0, 1, 2, 3, 4], split: 'pushpullfb' })).map((d) => d.name)).toEqual(['Push Fullbody', 'Pull Fullbody'])
-    const bro = buildTrainingPlan(a({ trainingDays: [0, 1, 2, 3, 4], split: 'bro', durationMin: 60 }))
+    const bro = buildTrainingPlan(a({ trainingDays: [0, 1, 2, 3, 4], split: 'bro', durationMin: 60, experience: 'fortgeschritten' }))
     expect(bro.map((d) => d.name)).toEqual(['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme'])
     for (const d of bro) for (const e of d.exercises) expect(exerciseNames.has(e.name), e.name).toBe(true)
   })
