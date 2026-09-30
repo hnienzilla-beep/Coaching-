@@ -229,7 +229,15 @@ export const CATALOG: CatalogExercise[] = [
   ex('hpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('hpull', 'Umgekehrtes Rudern', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('hpull', 'Rudern mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
-  // Nacken
+  // Nacken / Trapez: Rudervarianten mit breitem Griff zuerst (mittlerer Trapez), dann Shrugs (oberer)
+  ex('shrug', 'T-Bar', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
+  ex('shrug', 'Kabelrudern (breit, zur Brust)', 'Trapez', ['kabel'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
+  ex('shrug', 'Rudern breit (Maschine)', 'Trapez', ['maschine'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
+  ex('shrug', 'Langhantelrudern (breiter Obergriff)', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
+  ex('shrug', 'Seal Row', 'Trapez', ['lh', 'bank'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
+  ex('shrug', 'Brustgestütztes Kurzhantelrudern (breit)', 'Trapez', ['kh', 'bank'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
+  ex('shrug', 'Kabelrudern hoch (zum Gesicht)', 'Trapez', ['kabel'], 'isolation', { s: ['Seitl./hint. Schulter'] }),
+  ex('shrug', 'Rudern breit mit Band', 'Trapez', ['band'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
   ex('shrug', 'Shrugs (Kurzhantel)', 'Trapez', ['kh'], 'small'),
   ex('shrug', 'Shrugs (Langhantel)', 'Trapez', ['lh'], 'small'),
   ex('shrug', 'Shrugs (Maschine)', 'Trapez', ['maschine'], 'small'),
@@ -361,6 +369,7 @@ const FOCUS_SLOT: Record<VolumeMuscle, Slot> = {
 const EXTRA_SLOT: Partial<Record<VolumeMuscle, Slot[]>> = {
   Brust: ['incline', 'hpush', 'fly'],
   Rücken: ['vpull', 'hpull'],
+  Trapez: ['shrug'],
   Quadrizeps: ['lunge', 'squat', 'legext'],
   Beinbeuger: ['hamstring', 'hinge'],
   'Seitl./hint. Schulter': ['lateral', 'rear'],
