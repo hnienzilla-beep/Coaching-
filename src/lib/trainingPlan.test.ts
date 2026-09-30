@@ -285,3 +285,20 @@ describe('Wochenziel wird eingehalten, wenn der Plan Platz hat', () => {
     expect(week.warnings.some((w) => w.startsWith('Unter dem Wochenziel'))).toBe(true)
   })
 })
+
+describe('Split-Struktur bleibt erhalten', () => {
+  const pushM = ['Brust', 'Seitl. Schulter', 'Trizeps', 'Vord. Schulter', 'Bauch', 'Waden']
+  const pullM = ['Rücken', 'Hint. Schulter', 'Bizeps', 'Trapez', 'Bauch', 'Waden']
+  const legM = ['Quadrizeps', 'Beinbeuger', 'Po', 'Waden', 'Bauch', 'Adduktoren']
+  it('PPL: Push nur Push-Muskeln, Pull nur Pull-Muskeln, Beine nur Beine - bei 3, 5, 6 Tagen und jedem Ziel', () => {
+    for (const days of [[0, 2, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4, 5]])
+      for (const goal of ['aufbauen', 'recomp', 'abnehmen'] as const) {
+        const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal, split: 'ppl', trainingDays: days, durationMin: 60 }))
+        const allowed: Record<string, string[]> = { Push: pushM, Pull: pullM, Beine: legM }
+        for (const d of week.days) for (const e of d.exercises) if (!e.cardio) expect(allowed[d.name], `${days.length} ${goal} ${d.name}: ${e.name}`).toContain(e.muscle)
+        const pull = week.days.find((d) => d.name === 'Pull')!
+        expect(pull.exercises.some((e) => e.muscle === 'Bizeps'), `${days.length} ${goal} Pull Bizeps`).toBe(true)
+        expect(pull.exercises.some((e) => e.muscle === 'Rücken'), `${days.length} ${goal} Pull Rücken`).toBe(true)
+      }
+  })
+})
