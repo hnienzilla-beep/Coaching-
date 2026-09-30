@@ -203,8 +203,25 @@ describe('Volumen je Einheit verteilt, Fokus nur an seinem Tag', () => {
     const chest = (d: (typeof ab.days)[number]) => d.exercises.filter((e) => e.muscle === 'Brust').reduce((n, e) => n + e.sets, 0)
     expect(chest(ab.days[0])).toBe(chest(ab.days[2]))
     const focus = buildTrainingWeek(a({ ...base, split: 'okuk', focusByUnit: { 'Oberkörper A': ['Brust'] } }))
-    expect(chest(focus.days[0])).toBeGreaterThan(chest(ab.days[0]))
-    expect(chest(focus.days[2])).toBe(chest(ab.days[2]))
+    expect(chest(focus.days[0])).toBe(chest(focus.days[2]) + 1)
     expect(plain.days.length).toBe(2)
+  })
+})
+
+describe('Gleiches Volumen an allen Tagen eines Muskels', () => {
+  const setsOf = (d: { exercises: { muscle: string; sets: number; cardio?: boolean }[] }, m: string) => d.exercises.filter((e) => e.muscle === m && !e.cardio).reduce((n, e) => n + e.sets, 0)
+  it('Push FB (Fokus Seitl. Schulter + Trizeps) hat genau einen Satz mehr als Push, alle anderen Muskeln gleich', () => {
+    const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split: 'fbppl', trainingDays: [0, 1, 2, 3, 4], durationMin: 75, focusByUnit: { 'Push Fullbody': ['Seitl. Schulter', 'Trizeps'] } }))
+    const byName = new Map(week.days.map((d) => [d.name, d]))
+    for (const m of ['Seitl. Schulter', 'Trizeps']) expect(setsOf(byName.get('Push Fullbody')!, m), m).toBe(setsOf(byName.get('Push')!, m) + 1)
+  })
+  it('ohne Fokus: jeder Muskel an jedem seiner Tage gleich (außer Pflicht-Minimum)', () => {
+    for (const split of ['fbppl', 'okuk', 'ppl', 'pushpullfb', 'ganzkoerper', 'torsolimbs', 'okukarme'] as const) {
+      const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays: [0, 1, 2, 3, 4], durationMin: 60 }))
+      for (const m of ['Brust', 'Rücken', 'Seitl. Schulter', 'Hint. Schulter', 'Bizeps', 'Trizeps', 'Quadrizeps', 'Beinbeuger']) {
+        const vals = week.days.map((d) => setsOf(d, m)).filter((n) => n > 2)
+        if (vals.length > 1) expect(Math.max(...vals) - Math.min(...vals), `${split} ${m} ${vals}`).toBe(0)
+      }
+    }
   })
 })
