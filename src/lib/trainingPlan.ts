@@ -90,6 +90,8 @@ type Slot =
   | 'triceps'
   | 'core'
   | 'adductor'
+  | 'fly'
+  | 'legext'
 
 /** lh Langhantel, kh Kurzhanteln, kg Körpergewicht, stange Klimmzugstange/Dipbarren. */
 type Equipment = 'lh' | 'kh' | 'kg' | 'band' | 'stange' | 'bank' | 'kabel' | 'maschine'
@@ -119,6 +121,7 @@ const ex = (
 // Je Bewegungsmuster in Vorzugsreihenfolge („Gemischt“). Frei/Maschinen sortiert um.
 export const CATALOG: CatalogExercise[] = [
   // Kniebeuge-Muster
+  ex('squat', 'Beinpresse', 'Quadrizeps', ['maschine'], 'compound', { s: ['Po', 'Adduktoren'], avoid: ['knie'] }),
   ex('squat', 'Kniebeuge', 'Quadrizeps', ['lh'], 'compound', { s: ['Po', 'Adduktoren'], tech: 'kniebeuge', avoid: ['knie', 'ruecken'] }),
   ex('squat', 'Hackenschmidt-Kniebeuge', 'Quadrizeps', ['maschine'], 'compound', { s: ['Po'], avoid: ['knie'] }),
   ex('squat', 'Beinpresse', 'Quadrizeps', ['maschine'], 'compound', { s: ['Po', 'Adduktoren'], avoid: ['knie'] }),
@@ -165,8 +168,8 @@ export const CATALOG: CatalogExercise[] = [
   ex('calves', 'Wadenheben an der Beinpresse', 'Waden', ['maschine'], 'small'),
   ex('calves', 'Einbeiniges Wadenheben', 'Waden', ['kh'], 'small'),
   // Drücken horizontal
+  ex('hpush', 'Bankdrücken (Kurzhantel)', 'Brust', ['kh', 'bank'], 'compound', { s: ['Trizeps', 'Vord. Schulter'] }),
   ex('hpush', 'Bankdrücken', 'Brust', ['lh', 'bank'], 'compound', { s: ['Trizeps', 'Vord. Schulter'], tech: 'bankdruecken', avoid: ['schulter'] }),
-  ex('hpush', 'Kurzhantel-Bankdrücken', 'Brust', ['kh', 'bank'], 'compound', { s: ['Trizeps', 'Vord. Schulter'] }),
   ex('hpush', 'Brustpresse (Maschine)', 'Brust', ['maschine'], 'compound', { s: ['Trizeps', 'Vord. Schulter'] }),
   ex('hpush', 'Smith-Maschine Bankdrücken', 'Brust', ['maschine'], 'compound', { s: ['Trizeps', 'Vord. Schulter'], avoid: ['schulter'] }),
   ex('hpush', 'Dips', 'Brust', ['stange'], 'compound', { s: ['Trizeps', 'Vord. Schulter'], avoid: ['schulter', 'ellbogen'] }),
@@ -174,6 +177,7 @@ export const CATALOG: CatalogExercise[] = [
   ex('hpush', 'Kurzhantel-Bodendrücken', 'Brust', ['kh'], 'compound', { s: ['Trizeps'] }),
   ex('hpush', 'Butterfly (Maschine)', 'Brust', ['maschine'], 'isolation'),
   // Drücken schräg / Brust oben
+  ex('incline', 'Schrägbankdrücken (Smith Maschine)', 'Brust', ['maschine'], 'compound', { s: ['Vord. Schulter', 'Trizeps'] }),
   ex('incline', 'Schrägbankdrücken', 'Brust', ['lh', 'bank'], 'compound', { s: ['Vord. Schulter', 'Trizeps'], tech: 'bankdruecken', avoid: ['schulter'] }),
   ex('incline', 'Kurzhantel-Schrägbankdrücken', 'Brust', ['kh', 'bank'], 'compound', { s: ['Vord. Schulter', 'Trizeps'] }),
   ex('incline', 'Schräge Brustpresse (Maschine)', 'Brust', ['maschine'], 'compound', { s: ['Vord. Schulter', 'Trizeps'] }),
@@ -183,6 +187,7 @@ export const CATALOG: CatalogExercise[] = [
   ex('incline', 'Liegestütze (Füße erhöht)', 'Brust', ['kg'], 'compound', { s: ['Vord. Schulter', 'Trizeps'], avoid: ['handgelenk'] }),
   ex('incline', 'Fliegende mit Band', 'Brust', ['band'], 'isolation'),
   // Drücken vertikal
+  ex('vpush', 'Schulterdrücken', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
   ex('vpush', 'Schulterdrücken (Kurzhantel)', 'Vord. Schulter', ['kh'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
   ex('vpush', 'Schulterdrücken (Langhantel)', 'Vord. Schulter', ['lh'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], tech: 'schulterdruecken', avoid: ['schulter', 'ruecken'] }),
   ex('vpush', 'Schulterpresse (Maschine)', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
@@ -201,12 +206,14 @@ export const CATALOG: CatalogExercise[] = [
   ex('lateral', 'Seitheben mit Band', 'Seitl./hint. Schulter', ['band'], 'small'),
   ex('lateral', 'Aufrechtes Rudern', 'Seitl./hint. Schulter', ['lh'], 'isolation', { s: ['Trapez'], avoid: ['schulter'] }),
   // Hintere Schulter
+  ex('rear', 'Reverse kablefly (einarmig)', 'Seitl./hint. Schulter', ['kabel'], 'small'),
   ex('rear', 'Face Pulls', 'Seitl./hint. Schulter', ['kabel'], 'small', { s: ['Trapez'] }),
   ex('rear', 'Reverse Butterfly', 'Seitl./hint. Schulter', ['maschine'], 'small'),
   ex('rear', 'Vorgebeugtes Seitheben', 'Seitl./hint. Schulter', ['kh'], 'small'),
   ex('rear', 'Face Pulls mit Band', 'Seitl./hint. Schulter', ['band'], 'small'),
   // Ziehen vertikal
   ex('vpull', 'Latzug', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
+  ex('vpull', 'Front Latpulldown', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('vpull', 'Klimmzüge', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'], tech: 'klimmzuege', avoid: ['schulter', 'ellbogen'] }),
   ex('vpull', 'Latzug (eng)', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps'] }),
   ex('vpull', 'Klimmzüge (assistiert)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps'], avoid: ['ellbogen'] }),
@@ -214,10 +221,11 @@ export const CATALOG: CatalogExercise[] = [
   ex('vpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('vpull', 'Latziehen mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
   // Ziehen horizontal
+  ex('hpull', 'Rudern (Maschine) (einarmig)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
+  ex('hpull', 'T-Bar', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Trapez', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
   ex('hpull', 'Kabelrudern (sitzend)', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'] }),
   ex('hpull', 'Langhantelrudern', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'], avoid: ['ruecken'] }),
   ex('hpull', 'Brustgestütztes Rudern (Maschine)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'] }),
-  ex('hpull', 'T-Bar-Rudern', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Trapez'], avoid: ['ruecken'] }),
   ex('hpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('hpull', 'Umgekehrtes Rudern', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
   ex('hpull', 'Rudern mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
@@ -226,14 +234,16 @@ export const CATALOG: CatalogExercise[] = [
   ex('shrug', 'Shrugs (Langhantel)', 'Trapez', ['lh'], 'small'),
   ex('shrug', 'Shrugs (Maschine)', 'Trapez', ['maschine'], 'small'),
   // Bizeps
+  ex('biceps', 'Preacher Curls (kurzhantel)', 'Bizeps', ['kh', 'bank'], 'isolation'),
+  ex('biceps', 'Hammercurls', 'Bizeps', ['kh'], 'isolation'),
   ex('biceps', 'Bizepscurls (Kurzhantel)', 'Bizeps', ['kh'], 'isolation'),
   ex('biceps', 'Bizepscurls (Langhantel)', 'Bizeps', ['lh'], 'isolation', { avoid: ['handgelenk'] }),
   ex('biceps', 'Kabelcurls', 'Bizeps', ['kabel'], 'isolation'),
-  ex('biceps', 'Hammercurls', 'Bizeps', ['kh'], 'isolation'),
   ex('biceps', 'Scottcurls (Maschine)', 'Bizeps', ['maschine'], 'isolation'),
   ex('biceps', 'Schrägbankcurls', 'Bizeps', ['kh', 'bank'], 'isolation'),
   ex('biceps', 'Curls mit Band', 'Bizeps', ['band'], 'isolation'),
   // Trizeps
+  ex('triceps', 'Trizeps Extensions (einarmig)', 'Trizeps', ['kh'], 'isolation', { avoid: ['ellbogen'] }),
   ex('triceps', 'Trizepsdrücken (Kabel)', 'Trizeps', ['kabel'], 'isolation'),
   ex('triceps', 'Überkopf-Trizepsdrücken (Kabel)', 'Trizeps', ['kabel'], 'isolation', { avoid: ['ellbogen'] }),
   ex('triceps', 'French Press', 'Trizeps', ['kh'], 'isolation', { avoid: ['ellbogen', 'handgelenk'] }),
@@ -250,19 +260,30 @@ export const CATALOG: CatalogExercise[] = [
   ex('core', 'Crunches', 'Bauch', ['kg'], 'small'),
   ex('core', 'Ab Wheel', 'Bauch', ['kg'], 'small', { avoid: ['ruecken'] }),
   ex('core', 'Dead Bug', 'Bauch', ['kg'], 'small'),
+  // Brust isoliert
+  ex('fly', 'Butterfly (Maschine)', 'Brust', ['maschine'], 'isolation'),
+  ex('fly', 'Kabel-Crossover', 'Brust', ['kabel'], 'isolation'),
+  ex('fly', 'Kurzhantel-Fliegende', 'Brust', ['kh', 'bank'], 'isolation'),
+  ex('fly', 'Fliegende mit Band', 'Brust', ['band'], 'isolation'),
+  // Quadrizeps isoliert
+  ex('legext', 'Beinstrecker', 'Quadrizeps', ['maschine'], 'isolation', { avoid: ['knie'] }),
+  ex('legext', 'Bulgarian Split Squat', 'Quadrizeps', ['kh'], 'compound', { s: ['Po', 'Adduktoren'], avoid: ['knie'] }),
+  ex('legext', 'Ausfallschritte', 'Quadrizeps', ['kh'], 'compound', { s: ['Po'], avoid: ['knie'] }),
+  ex('legext', 'Glute Bridge', 'Po', ['kg'], 'compound', { s: ['Beinbeuger'] }),
   // Adduktoren
-  ex('adductor', 'Adduktoren-Maschine', 'Adduktoren', ['maschine'], 'isolation'),
+  ex('adductor', 'Adductor (Maschine)', 'Adduktoren', ['maschine'], 'isolation'),
   ex('adductor', 'Adduktoren am Kabel', 'Adduktoren', ['kabel'], 'isolation'),
   ex('adductor', 'Sumo-Kniebeuge', 'Adduktoren', ['kh'], 'compound', { s: ['Quadrizeps', 'Po'], avoid: ['knie'] }),
   ex('adductor', 'Copenhagen Plank', 'Adduktoren', ['kg'], 'small', { timed: true }),
 ]
 
 const FIRST_BY_NAME = new Map<string, CatalogExercise>()
-for (const c of CATALOG) if (!FIRST_BY_NAME.has(c.name)) FIRST_BY_NAME.set(c.name, c)
+const key = (n: string) => n.trim().toLowerCase()
+for (const c of CATALOG) if (!FIRST_BY_NAME.has(key(c.name))) FIRST_BY_NAME.set(key(c.name), c)
 
 /** Katalog-Eintrag zu einem Übungsnamen (für Muskeln und Volumen im Log). */
 export function catalogExercise(name: string): CatalogExercise | undefined {
-  return FIRST_BY_NAME.get(name)
+  return FIRST_BY_NAME.get(key(name))
 }
 
 /** Alle Übungsnamen, nach Hauptmuskel gruppiert - für Favoriten/Ausschlüsse. */
@@ -303,8 +324,9 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   'Unterkörper A': ['squat', 'hinge', 'lunge', 'hamstring', 'calves', 'core', 'glute'],
   'Oberkörper B': ['incline', 'vpull', 'hpull', 'lateral', 'rear', 'triceps', 'biceps', 'vpush'],
   'Unterkörper B': ['hinge', 'glute', 'lunge', 'squat', 'calves', 'core', 'hamstring'],
-  'Push Fullbody': ['squat', 'hpush', 'vpush', 'lunge', 'lateral', 'triceps', 'core', 'calves'],
-  'Pull Fullbody': ['hinge', 'vpull', 'hpull', 'hamstring', 'rear', 'biceps', 'glute', 'core'],
+  // Nach der eigenen Vorlage: Brust zuerst, Beine am Ende.
+  'Push Fullbody': ['incline', 'hpush', 'fly', 'lateral', 'triceps', 'vpush', 'calves', 'adductor', 'squat', 'legext'],
+  'Pull Fullbody': ['vpull', 'hpull', 'biceps', 'hpull', 'vpull', 'rear', 'biceps', 'hamstring', 'core'],
   Torso: ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'rear', 'incline', 'core'],
   Limbs: ['squat', 'hinge', 'biceps', 'triceps', 'lunge', 'hamstring', 'calves', 'biceps'],
   'Brust & Rücken': ['hpush', 'vpull', 'incline', 'hpull', 'incline', 'core', 'rear'],
@@ -337,9 +359,9 @@ const FOCUS_SLOT: Record<VolumeMuscle, Slot> = {
 
 /** Zweite Übung, wenn ein Muskel mit einer Übung je Einheit sein Wochenziel nicht erreicht. */
 const EXTRA_SLOT: Partial<Record<VolumeMuscle, Slot[]>> = {
-  Brust: ['incline', 'hpush'],
+  Brust: ['incline', 'hpush', 'fly'],
   Rücken: ['vpull', 'hpull'],
-  Quadrizeps: ['lunge', 'squat'],
+  Quadrizeps: ['lunge', 'squat', 'legext'],
   Beinbeuger: ['hamstring', 'hinge'],
   'Seitl./hint. Schulter': ['lateral', 'rear'],
   Bizeps: ['biceps'],
@@ -782,14 +804,17 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     let guard = 0
     while (over() && guard++ < 200) {
       const v = volumeOf(drafts, freq)
-      const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean) =>
+      // Erst Sätze abbauen (Übungen mit mehr als 2 Sätzen), erst danach ganze Übungen streichen -
+      // so bleibt die Übungsauswahl der Vorlage erhalten.
+      const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false) =>
         list
-          .filter((d) => d.sets > 0 && (allowFocus || !d.focus))
+          // Schwerpunkt-Muskeln bleiben auch an anderen Tagen möglichst unangetastet.
+          .filter((d) => d.sets > (reduceOnly ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
           .filter((d) => !onlyAboveMv || v.get(d.entry.p)! - freq[u] * (d.sets === 2 ? 2 : 1) >= LANDMARKS[d.entry.p].mv)
           // Am besten versorgte Muskeln zuerst (Ist / Ziel), bei Gleichstand die spätere Übung.
           .map((d, i) => ({ d, i, surplus: v.get(d.entry.p)! / Math.max(1, target.get(d.entry.p)!) }))
           .sort((x, y) => y.surplus - x.surplus || y.i - x.i)[0]?.d
-      const victim = pickFrom(true, false) ?? pickFrom(false, false) ?? pickFrom(false, true)
+      const victim = pickFrom(true, false, true) ?? pickFrom(false, false, true) ?? pickFrom(true, false) ?? pickFrom(false, false) ?? pickFrom(false, true)
       if (!victim) break
       victim.sets = victim.sets <= 2 ? 0 : victim.sets - 1
     }
