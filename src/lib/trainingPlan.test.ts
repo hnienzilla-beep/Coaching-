@@ -287,8 +287,8 @@ describe('Wochenziel wird eingehalten, wenn der Plan Platz hat', () => {
 })
 
 describe('Split-Struktur bleibt erhalten', () => {
-  const pushM = ['Brust', 'Seitl. Schulter', 'Trizeps', 'Vord. Schulter', 'Bauch', 'Waden']
-  const pullM = ['Rücken', 'Hint. Schulter', 'Bizeps', 'Trapez', 'Bauch', 'Waden']
+  const pushM = ['Brust', 'Seitl. Schulter', 'Trizeps', 'Vord. Schulter', 'Bauch']
+  const pullM = ['Rücken', 'Hint. Schulter', 'Bizeps', 'Trapez', 'Bauch']
   const legM = ['Quadrizeps', 'Beinbeuger', 'Po', 'Waden', 'Bauch', 'Adduktoren']
   it('PPL: Push nur Push-Muskeln, Pull nur Pull-Muskeln, Beine nur Beine - bei 3, 5, 6 Tagen und jedem Ziel', () => {
     for (const days of [[0, 2, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4, 5]])
