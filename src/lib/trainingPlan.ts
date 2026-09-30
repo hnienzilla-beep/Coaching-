@@ -357,7 +357,8 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   Schultern: ['vpush', 'lateral', 'rear', 'vpush', 'core'],
   Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps'],
   Push: ['hpush', 'vpush', 'incline', 'lateral', 'triceps', 'core', 'triceps'],
-  Pull: ['vpull', 'hpull', 'rear', 'biceps', 'hinge', 'core', 'biceps'],
+  // Pull ohne Hüftstreckung (kein Rumänisches Kreuzheben) - die gehört an den Beine-Tag.
+  Pull: ['vpull', 'hpull', 'rear', 'biceps', 'hpull', 'core', 'biceps'],
   Beine: ['squat', 'hinge', 'lunge', 'hamstring', 'glute', 'calves', 'core'],
 }
 
@@ -745,6 +746,19 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       for (const i of [...shifted, at]) extraAt.add(i)
     }
     for (const m of focus) if (!slots.some((sl) => mainMuscle(sl) === m)) slots.push(FOCUS_SLOT[m])
+    // Beine: immer eine Kniebeuge-Übung (Grundübung) und Beinstrecker (Isolation), sobald die
+    // Einheit Quadrizeps trainiert. Ein Ausfallschritt wird dafür zum Beinstrecker.
+    const quadSlots: Slot[] = ['squat', 'lunge', 'legext']
+    const firstQuad = slots.findIndex((sl) => quadSlots.includes(sl))
+    if (firstQuad !== -1) {
+      if (!slots.includes('legext')) {
+        const lunge = slots.indexOf('lunge')
+        if (lunge !== -1) slots[lunge] = 'legext'
+        else slots.splice(slots.map((sl) => quadSlots.includes(sl)).lastIndexOf(true) + 1, 0, 'legext')
+      }
+      if (!slots.includes('squat')) slots.splice(firstQuad, 0, 'squat')
+    }
+    const legSlots = new Set<Slot>(firstQuad !== -1 ? ['squat', 'legext'] : [])
     const used = new Set<string>()
     const seen = new Map<Slot, number>()
     const list: Draft[] = []
@@ -759,7 +773,9 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const pick = (swap && cands.find((c) => c.name === swap)) || variantPick
       used.add(pick.name)
       // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin.
-      const required = (REQUIRED[u.base] ?? []).includes(pick.p) && !list.some((d) => d.required && d.entry.p === pick.p)
+      const required =
+        ((REQUIRED[u.base] ?? []).includes(pick.p) && !list.some((d) => d.required && d.entry.p === pick.p)) ||
+        (legSlots.has(slot) && !list.some((d) => d.slot === slot))
       list.push({ entry: pick, slot, key, sets: 0, focus: false, required, extra: extraAt.has(si), alternatives: cands.map((c) => c.name), note: undefined })
     }
     // Schwerpunkte: erste passende Übung je Muskel nach vorn (in der gewählten Reihenfolge).
