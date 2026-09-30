@@ -23,6 +23,11 @@ export interface Athlete {
   muscleTargets?: Partial<Record<Muscle, number>> // eigene Wochen-Richtwerte (Sätze) je Muskel
   birthDate?: string // ISO date - wenn gesetzt, wird `age` daraus aktuell gehalten
   trainingDays?: number[] // geplante Trainingstage, 0 = Montag … 6 = Sonntag
+  /**
+   * Wochenplan: feste Tage mit Einheit je Tag (Index = Plan-Reihenfolge, passend zu den
+   * sortierten `trainingDays`) oder ein rotierender Rhythmus ab einem Startdatum.
+   */
+  schedule?: { mode: 'fixed'; dayPlans?: number[] } | { mode: 'rotation'; on: number; off: number; start: string }
   startAnswers?: unknown // Antworten aus „Dein Start“ (lib/startPlan StartAnswers)
 }
 
@@ -196,6 +201,8 @@ export interface TrainingPlanExercise {
   reps: string // z.B. "8-12" oder "10"
   targetWeightKg?: number
   notes?: string
+  restSeconds?: number // Pause nach jedem Satz; ohne gilt die Standard-Pause
+  warmupSets?: number // Aufwärmsätze vor den Arbeitssätzen
 }
 
 export interface WorkoutLog {

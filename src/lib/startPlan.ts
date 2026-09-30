@@ -11,13 +11,34 @@ import { isCreatine, waterGoalFor } from './water'
 export type StartGoal = 'abnehmen' | 'aufbauen' | 'recomp' | 'halten'
 export type Tempo = 'sanft' | 'normal' | 'ehrgeizig'
 export type MacroStyle = 'ausgewogen' | 'protein' | 'lowcarb'
-export type Experience = 'einsteiger' | 'fortgeschritten' | 'erfahren'
-export type Location = 'studio' | 'zuhause' | 'beides'
-export type Split = 'ganzkoerper' | 'okuk' | 'pushpullfb' | 'torsolimbs' | 'ppl' | 'pplokuk' | 'arnold' | 'bro'
+import type { Experience, Lift, Location, Preference, Restriction, ScheduleMode, Split, TrainingGoal, VolumeMuscle, Zone } from './trainingPlan'
+import { sessionsPerWeek } from './trainingPlan'
+export type { Experience, Lift, Location, Preference, Restriction, ScheduleMode, Split, TrainingGoal, VolumeMuscle, Zone } from './trainingPlan'
+export {
+  CATALOG,
+  LANDMARKS,
+  LIFT_LABELS,
+  LOCATION_LABELS,
+  SPLIT_LABELS,
+  VOLUME_MUSCLES,
+  buildTrainingPlan,
+  buildTrainingWeek,
+  catalogByMuscle,
+  effectiveSplit,
+  planUnits,
+  sessionsPerWeek,
+  settingsFor,
+  splitOptions,
+  splitsFor,
+  suggestedSplit,
+  suggestedSplitFor,
+  tier,
+  type PlanDay,
+  type PlanExercise,
+  type TrainingWeek,
+} from './trainingPlan'
 export type Diet = 'alles' | 'vegetarisch' | 'vegan' | 'pescetarisch'
 export type Allergen = 'laktose' | 'gluten' | 'nuesse' | 'ei' | 'fisch' | 'soja'
-export type Restriction = 'knie' | 'schulter' | 'ruecken' | 'handgelenk' | 'ellbogen'
-export type Focus = 'Brust' | 'Rücken' | 'Beine' | 'Po' | 'Schultern' | 'Arme' | 'Bauch'
 
 export interface StartAnswers {
   firstName: string
@@ -34,13 +55,33 @@ export interface StartAnswers {
   targetWeightKg?: number
   macroStyle: MacroStyle
   experience: Experience
-  /** Wochentage 0 = Montag … 6 = Sonntag. */
+  /** Feste Wochentage oder rotierender Rhythmus (z.B. 1 an / 1 aus). */
+  scheduleMode: ScheduleMode
+  /** Wochentage 0 = Montag … 6 = Sonntag (feste Tage). */
   trainingDays: number[]
+  /** Einheit je Trainingstag (Index in planUnits) - feste Tage, sonst reihum. */
+  dayUnits?: number[]
+  rotation: { on: number; off: number; start: string }
   location: Location
-  durationMin: 30 | 45 | 60 | 90
-  focus: Focus[]
+  durationMin: 30 | 45 | 60 | 75 | 90
+  /** Schwerpunkte je Einheit (bis zu 2), Schlüssel = Name der Einheit. */
+  focusByUnit: Record<string, VolumeMuscle[]>
   restrictions: Restriction[]
   split?: Split
+  trainingGoal?: TrainingGoal
+  preference?: Preference
+  favorites?: string[]
+  excluded?: string[]
+  maxSets?: number
+  setSeconds?: number
+  restCompound?: number
+  restIsolation?: number
+  mastered?: Lift[]
+  variants?: 'gleich' | 'ab'
+  volumeZones?: Partial<Record<VolumeMuscle, Zone>>
+  /** Getauschte Übungen und eigene Satzzahlen aus der Zusammenfassung. */
+  exerciseSwaps?: Record<string, string>
+  setOverrides?: Record<string, number>
   cardio: boolean
   cardioMinutes: number
   diet: Diet
@@ -63,10 +104,12 @@ export const DEFAULT_ANSWERS: StartAnswers = {
   tempo: 'normal',
   macroStyle: 'ausgewogen',
   experience: 'einsteiger',
+  scheduleMode: 'fixed',
   trainingDays: [0, 2, 4],
+  rotation: { on: 1, off: 1, start: new Date().toISOString().slice(0, 10) },
   location: 'studio',
   durationMin: 60,
-  focus: [],
+  focusByUnit: {},
   restrictions: [],
   cardio: false,
   cardioMinutes: 60,
@@ -87,9 +130,9 @@ export function ageFromBirthDate(birthDate: string, today: string): number {
 }
 
 /** Aktivitätsstufe aus Alltag (bzw. Schritten) und Zahl der Trainingstage. */
-export function activityLevelFor(a: Pick<StartAnswers, 'activityMode' | 'alltag' | 'steps' | 'trainingDays'>): string {
+export function activityLevelFor(a: Pick<StartAnswers, 'activityMode' | 'alltag' | 'steps' | 'trainingDays'> & Partial<Pick<StartAnswers, 'scheduleMode' | 'rotation'>>): string {
   const base = a.activityMode === 'schritte' ? { wenig: 0, mittel: 1, viel: 2 }[a.steps] : { buero: 0, beine: 1, schwer: 2 }[a.alltag]
-  const days = a.trainingDays.length
+  const days = a.scheduleMode === 'rotation' && a.rotation ? Math.round(sessionsPerWeek({ scheduleMode: 'rotation', trainingDays: a.trainingDays, rotation: a.rotation })) : a.trainingDays.length
   const training = days <= 1 ? 0 : days <= 3 ? 1 : days <= 5 ? 2 : 3
   const index = Math.min(ACTIVITY_LEVELS.length - 1, Math.max(0, Math.round((base + training) * 0.8)))
   return ACTIVITY_LEVELS[index].label
@@ -192,244 +235,6 @@ export function computeTargets(a: StartAnswers, today: string): StartTargets {
     weeklyRateKg: weeklyRateKg(a.goal, a.tempo, a.weightKg),
     waterMl: waterGoalFor({ weightKg: a.weightKg }, undefined, supplementNamesFor(a).some(isCreatine)),
   }
-}
-
-/* ------------------------------------------------------------------------------------------
- * Trainingsplan
- * ---------------------------------------------------------------------------------------- */
-
-type Slot =
-  | 'squat'
-  | 'hinge'
-  | 'lunge'
-  | 'hamstring'
-  | 'glute'
-  | 'calves'
-  | 'hpush'
-  | 'incline'
-  | 'vpush'
-  | 'lateral'
-  | 'rear'
-  | 'vpull'
-  | 'hpull'
-  | 'biceps'
-  | 'triceps'
-  | 'core'
-
-type Candidate = { name: string; home: boolean; avoid?: Restriction[] }
-
-// Je Bewegungsmuster die Übungen in Vorzugsreihenfolge - Studio-Varianten zuerst.
-const SLOT_EXERCISES: Record<Slot, Candidate[]> = {
-  squat: [
-    { name: 'Kniebeuge', home: false, avoid: ['knie', 'ruecken'] },
-    { name: 'Beinpresse', home: false, avoid: ['knie'] },
-    { name: 'Goblet Squat', home: true, avoid: ['knie'] },
-    { name: 'Hip Thrust', home: true },
-    { name: 'Glute Bridge', home: true },
-  ],
-  hinge: [
-    { name: 'Rumänisches Kreuzheben', home: true, avoid: ['ruecken'] },
-    { name: 'Hip Thrust', home: true },
-    { name: 'Glute Bridge', home: true },
-  ],
-  lunge: [
-    { name: 'Bulgarian Split Squat', home: true, avoid: ['knie'] },
-    { name: 'Ausfallschritte', home: true, avoid: ['knie'] },
-    { name: 'Beinstrecker', home: false, avoid: ['knie'] },
-    { name: 'Glute Bridge', home: true },
-  ],
-  hamstring: [
-    { name: 'Beinbeuger', home: false },
-    { name: 'Rumänisches Kreuzheben', home: true, avoid: ['ruecken'] },
-    { name: 'Glute Bridge', home: true },
-  ],
-  glute: [
-    { name: 'Hip Thrust', home: true },
-    { name: 'Glute Bridge', home: true },
-  ],
-  calves: [{ name: 'Wadenheben (stehend)', home: true }],
-  hpush: [
-    { name: 'Bankdrücken', home: false, avoid: ['schulter'] },
-    { name: 'Kurzhantel-Bankdrücken', home: true },
-    { name: 'Liegestütze', home: true, avoid: ['handgelenk'] },
-    { name: 'Butterfly (Maschine)', home: false },
-  ],
-  incline: [
-    { name: 'Schrägbankdrücken', home: false, avoid: ['schulter'] },
-    { name: 'Kurzhantel-Fliegende', home: true },
-    { name: 'Butterfly (Maschine)', home: false },
-    { name: 'Liegestütze', home: true, avoid: ['handgelenk'] },
-  ],
-  vpush: [
-    { name: 'Schulterdrücken (Kurzhantel)', home: true, avoid: ['schulter'] },
-    { name: 'Pike Push-ups', home: true, avoid: ['schulter', 'handgelenk'] },
-    { name: 'Seitheben', home: true },
-  ],
-  lateral: [{ name: 'Seitheben', home: true }],
-  rear: [
-    { name: 'Face Pulls', home: false },
-    { name: 'Reverse Butterfly', home: true },
-  ],
-  vpull: [
-    { name: 'Latzug', home: false },
-    { name: 'Klimmzüge', home: false, avoid: ['schulter', 'ellbogen'] },
-    { name: 'Kurzhantelrudern (einarmig)', home: true },
-  ],
-  hpull: [
-    { name: 'Kabelrudern (sitzend)', home: false },
-    { name: 'Langhantelrudern', home: false, avoid: ['ruecken'] },
-    { name: 'Kurzhantelrudern (einarmig)', home: true },
-  ],
-  biceps: [
-    { name: 'Bizepscurls (Langhantel)', home: false, avoid: ['handgelenk'] },
-    { name: 'Bizepscurls (Kurzhantel)', home: true },
-    { name: 'Hammercurls', home: true },
-  ],
-  triceps: [
-    { name: 'Trizepsdrücken (Kabel)', home: false },
-    { name: 'French Press', home: true, avoid: ['ellbogen', 'handgelenk'] },
-    { name: 'Enges Bankdrücken', home: false, avoid: ['ellbogen', 'schulter'] },
-  ],
-  core: [
-    { name: 'Plank', home: true },
-    { name: 'Cable Crunch', home: false, avoid: ['ruecken'] },
-    { name: 'Crunches', home: true },
-    { name: 'Beinheben (hängend)', home: false },
-  ],
-}
-
-const DAY_TEMPLATES: Record<string, Slot[]> = {
-  'Ganzkörper A': ['squat', 'hpush', 'hpull', 'hinge', 'vpush', 'core', 'biceps', 'triceps'],
-  'Ganzkörper B': ['hinge', 'vpull', 'incline', 'lunge', 'lateral', 'core', 'triceps', 'biceps'],
-  'Ganzkörper C': ['lunge', 'hpush', 'vpull', 'glute', 'rear', 'core', 'calves', 'biceps'],
-  'Oberkörper A': ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'biceps', 'triceps', 'rear'],
-  'Unterkörper A': ['squat', 'hinge', 'lunge', 'hamstring', 'calves', 'core', 'glute'],
-  'Oberkörper B': ['incline', 'vpull', 'hpull', 'lateral', 'rear', 'triceps', 'biceps', 'vpush'],
-  'Unterkörper B': ['hinge', 'glute', 'lunge', 'squat', 'calves', 'core', 'hamstring'],
-  'Push Fullbody': ['squat', 'hpush', 'vpush', 'lunge', 'lateral', 'triceps', 'core', 'calves'],
-  'Pull Fullbody': ['hinge', 'vpull', 'hpull', 'hamstring', 'rear', 'biceps', 'glute', 'core'],
-  Torso: ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'rear', 'incline', 'core'],
-  Limbs: ['squat', 'hinge', 'biceps', 'triceps', 'lunge', 'hamstring', 'calves', 'biceps'],
-  'Brust & Rücken': ['hpush', 'vpull', 'incline', 'hpull', 'incline', 'core', 'rear'],
-  'Schultern & Arme': ['vpush', 'biceps', 'triceps', 'lateral', 'biceps', 'triceps', 'rear'],
-  Brust: ['hpush', 'incline', 'incline', 'hpush', 'core'],
-  Rücken: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'core'],
-  Schultern: ['vpush', 'lateral', 'rear', 'vpush', 'core'],
-  Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps'],
-  Push: ['hpush', 'vpush', 'incline', 'lateral', 'triceps', 'core', 'triceps'],
-  Pull: ['vpull', 'hpull', 'rear', 'biceps', 'hinge', 'core', 'biceps'],
-  Beine: ['squat', 'hinge', 'lunge', 'hamstring', 'glute', 'calves', 'core'],
-}
-
-const FOCUS_SLOTS: Record<Focus, Slot[]> = {
-  Brust: ['hpush', 'incline'],
-  Rücken: ['vpull', 'hpull'],
-  Beine: ['squat', 'lunge', 'hamstring'],
-  Po: ['glute', 'hinge'],
-  Schultern: ['vpush', 'lateral', 'rear'],
-  Arme: ['biceps', 'triceps'],
-  Bauch: ['core'],
-}
-
-export const SPLIT_LABELS: Record<Split, string> = {
-  ganzkoerper: 'Ganzkörper',
-  okuk: 'Oberkörper / Unterkörper',
-  pushpullfb: 'Push Fullbody / Pull Fullbody',
-  torsolimbs: 'Torso / Limbs',
-  ppl: 'Push / Pull / Beine',
-  pplokuk: 'Push / Pull / Beine + Ober-/Unterkörper',
-  arnold: 'Arnold-Split (Brust & Rücken / Schultern & Arme / Beine)',
-  bro: 'Bro-Split (Brust / Rücken / Beine / Schultern / Arme)',
-}
-
-/** Plan-Tage je Split - wiederholen sich reihum, wenn mehr Trainingstage geplant sind. */
-function splitDays(split: Split, dayCount: number): string[] {
-  switch (split) {
-    case 'ganzkoerper':
-      return ['Ganzkörper A', 'Ganzkörper B', 'Ganzkörper C'].slice(0, Math.min(3, Math.max(2, dayCount)))
-    case 'okuk':
-      return dayCount >= 4 ? ['Oberkörper A', 'Unterkörper A', 'Oberkörper B', 'Unterkörper B'] : ['Oberkörper A', 'Unterkörper A']
-    case 'pushpullfb':
-      return ['Push Fullbody', 'Pull Fullbody']
-    case 'torsolimbs':
-      return ['Torso', 'Limbs']
-    case 'ppl':
-      return ['Push', 'Pull', 'Beine']
-    case 'pplokuk':
-      return ['Push', 'Pull', 'Beine', 'Oberkörper A', 'Unterkörper A']
-    case 'arnold':
-      return ['Brust & Rücken', 'Schultern & Arme', 'Beine']
-    case 'bro':
-      return ['Brust', 'Rücken', 'Beine', 'Schultern', 'Arme']
-  }
-}
-
-/** Passende Splits je Zahl der Trainingstage - der erste ist der Standard-Vorschlag. */
-export function splitsFor(days: number): Split[] {
-  if (days <= 2) return ['ganzkoerper', 'pushpullfb', 'torsolimbs', 'okuk']
-  if (days === 3) return ['ganzkoerper', 'pushpullfb', 'ppl', 'arnold']
-  if (days === 4) return ['okuk', 'pushpullfb', 'torsolimbs', 'ganzkoerper']
-  if (days === 5) return ['pushpullfb', 'ppl', 'pplokuk', 'bro', 'okuk']
-  return ['ppl', 'arnold', 'pushpullfb', 'pplokuk']
-}
-
-/** Vorschlag je nach Trainingstagen und Erfahrung - Einsteiger bekommen die einfacheren Splits. */
-export function suggestedSplit(days: number, experience: Experience): Split {
-  if (experience === 'einsteiger') return days >= 4 ? 'okuk' : 'ganzkoerper'
-  return splitsFor(days)[0]
-}
-
-export interface PlanDay {
-  name: string
-  exercises: { name: string; sets: number; reps: string }[]
-}
-
-const EXERCISES_PER_DURATION: Record<StartAnswers['durationMin'], number> = { 30: 4, 45: 5, 60: 6, 90: 8 }
-
-export function buildTrainingPlan(a: StartAnswers): PlanDay[] {
-  const split = a.split ?? suggestedSplit(a.trainingDays.length, a.experience)
-  const dayCount = Math.max(1, a.trainingDays.length)
-  const names = splitDays(split, dayCount)
-  const count = EXERCISES_PER_DURATION[a.durationMin]
-  const focusSlots = new Set(a.focus.flatMap((f) => FOCUS_SLOTS[f]))
-
-  // Cardio verteilt auf die Trainingstage, mindestens 10 Minuten je Einheit.
-  const cardioPerDay = a.cardio ? Math.max(10, Math.round(a.cardioMinutes / dayCount / 5) * 5) : 0
-  const cardioName =
-    a.location === 'zuhause'
-      ? a.restrictions.includes('knie')
-        ? 'Radfahren (Ergometer)'
-        : 'Seilspringen'
-      : a.restrictions.includes('knie')
-        ? 'Radfahren (Ergometer)'
-        : 'Crosstrainer'
-
-  return names.map((name) => {
-    let slots = DAY_TEMPLATES[name]
-    // Schwerpunkte: ein Schwerpunkt-Muster, das hinter die Grenze fiele, rückt nach vorn.
-    const inside = slots.slice(0, count)
-    const extra = slots.slice(count).find((s) => focusSlots.has(s) && !inside.includes(s))
-    if (extra) {
-      const replaceAt = [...inside].reverse().findIndex((s) => !focusSlots.has(s))
-      if (replaceAt !== -1) inside[inside.length - 1 - replaceAt] = extra
-    }
-    slots = inside
-
-    const used = new Set<string>()
-    const exercises: PlanDay['exercises'] = []
-    slots.forEach((slot, i) => {
-      const pick = SLOT_EXERCISES[slot].find(
-        (c) => (a.location !== 'zuhause' || c.home) && !(c.avoid ?? []).some((r) => a.restrictions.includes(r)) && !used.has(c.name),
-      )
-      if (!pick) return
-      used.add(pick.name)
-      const base = a.experience === 'einsteiger' ? 3 : a.experience === 'erfahren' && i < 3 ? 4 : i < 2 && a.experience === 'fortgeschritten' ? 4 : 3
-      const sets = Math.min(5, base + (focusSlots.has(slot) ? 1 : 0))
-      exercises.push({ name: pick.name, sets, reps: pick.name === 'Plank' ? '30–60 s' : '8-12' })
-    })
-    if (cardioPerDay) exercises.push({ name: cardioName, sets: 1, reps: `${cardioPerDay} min` })
-    return { name, exercises }
-  })
 }
 
 /* ------------------------------------------------------------------------------------------
@@ -623,10 +428,13 @@ export function supplementInfo(name: string, a: Parameters<typeof recommendSuppl
 }
 
 /** Empfehlungen aus den Antworten - mit kurzem Grund. Namen wie in der Supplement-Datenbank. */
-export function recommendSupplements(a: Pick<StartAnswers, 'trainingDays' | 'diet' | 'allergens' | 'gender' | 'weightKg' | 'macroStyle'>): { name: string; reason: string }[] {
+export function recommendSupplements(
+  a: Pick<StartAnswers, 'trainingDays' | 'diet' | 'allergens' | 'gender' | 'weightKg' | 'macroStyle'> & Partial<Pick<StartAnswers, 'scheduleMode' | 'rotation'>>,
+): { name: string; reason: string }[] {
   const out: { name: string; reason: string }[] = []
+  const perWeek = a.scheduleMode === 'rotation' && a.rotation ? sessionsPerWeek({ scheduleMode: 'rotation', trainingDays: a.trainingDays, rotation: a.rotation }) : a.trainingDays.length
   const plantBased = a.diet === 'vegan' || a.diet === 'vegetarisch'
-  if (a.trainingDays.length >= 2) out.push({ name: 'Kreatin Monohydrat', reason: 'Mehr Kraft und Leistung bei regelmäßigem Training' })
+  if (perWeek >= 2) out.push({ name: 'Kreatin Monohydrat', reason: 'Mehr Kraft und Leistung bei regelmäßigem Training' })
   if (a.diet !== 'vegan' && !a.allergens.includes('laktose')) {
     const protein = Math.round(a.weightKg * macroFactors(a.macroStyle).proteinPerKg)
     out.push({ name: 'Whey Protein', reason: `Macht ${protein} g Protein am Tag leichter erreichbar` })
@@ -634,7 +442,7 @@ export function recommendSupplements(a: Pick<StartAnswers, 'trainingDays' | 'die
   out.push({ name: 'Vitamin D3', reason: 'In unseren Breiten oft zu wenig – vor allem Oktober bis März' })
   if (plantBased || a.allergens.includes('fisch')) out.push({ name: 'Omega-3 Algenöl (vegan)', reason: 'Omega-3 ohne Fisch' })
   else if (a.diet === 'alles') out.push({ name: 'Omega-3 Fischöl', reason: 'Wenn du seltener als 2× pro Woche fetten Fisch isst' })
-  if (a.trainingDays.length >= 4) out.push({ name: 'Magnesium', reason: 'Bei viel Training für Muskeln und Schlaf' })
+  if (perWeek >= 4) out.push({ name: 'Magnesium', reason: 'Bei viel Training für Muskeln und Schlaf' })
   if (a.diet === 'vegan') out.push({ name: 'Vitamin B-Komplex', reason: 'Vitamin B12 fehlt in veganer Ernährung' })
   if (plantBased && a.gender === 'Weiblich') out.push({ name: 'Eisen', reason: 'Eisen aus Pflanzen wird schlechter aufgenommen – vorher Blutwerte prüfen' })
   return out

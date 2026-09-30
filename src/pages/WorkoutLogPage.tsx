@@ -20,6 +20,10 @@ import { autoStartRestTimer } from '../lib/restTimer'
 import { celebrateOnce, haptic } from '../lib/feedback'
 import StrengthChart from '../components/StrengthChart'
 import MuscleHeatmap from '../components/MuscleHeatmap'
+import VolumeBars from '../components/VolumeBars'
+import { DEFAULT_ANSWERS, type StartAnswers } from '../lib/startPlan'
+import { VOLUME_MUSCLES, volumeFromRecords, weeklyTargetsFor } from '../lib/trainingPlan'
+import type { MuscleSetRecord } from '../lib/muscles'
 import { useMuscleRecords } from '../lib/useMuscleRecords'
 import { todaysFocus } from '../lib/muscles'
 import WorkoutTimer from '../components/WorkoutTimer'
@@ -45,12 +49,18 @@ async function createSetsFromPlanExercise(
   const repsNum = Number.parseInt(pe.reps, 10)
   const planReps = Number.isFinite(repsNum) ? repsNum : undefined
   const setsToCreate = Math.max(1, pe.sets)
+  // Aufwärmsätze aus dem Plan zuerst - sie zählen nicht ins Volumen.
+  const warmups = Math.max(0, pe.warmupSets ?? 0)
+  for (let i = 0; i < warmups; i++) {
+    await db.workoutSets.add({ id: crypto.randomUUID(), workoutLogExerciseId: logExerciseId, setNumber: i + 1, reps: planReps, warmup: true })
+  }
+  const working = (lastSets ?? []).filter((x) => !x.warmup)
   for (let i = 0; i < setsToCreate; i++) {
-    const lastSet = lastSets?.[i]
+    const lastSet = working[i]
     await db.workoutSets.add({
       id: crypto.randomUUID(),
       workoutLogExerciseId: logExerciseId,
-      setNumber: i + 1,
+      setNumber: warmups + i + 1,
       reps: lastSet?.reps ?? planReps,
       weightKg: lastSet?.weightKg ?? pe.targetWeightKg,
     })
@@ -64,6 +74,17 @@ async function createSetsFromPlanExercise(
 async function ensureStarted(log: WorkoutLog): Promise<void> {
   if (log.startedAt || log.completedAt) return
   await db.workoutLogs.update(log.id, { startedAt: new Date().toISOString() })
+}
+
+/** Erledigte Arbeitssätze der letzten 7 Tage je Muskel - mit Ziel, wenn es „Dein Start“-Antworten gibt. */
+function volumeRows(records: MuscleSetRecord[], athlete: Athlete) {
+  const v = volumeFromRecords(records)
+  const targets = athlete.startAnswers ? weeklyTargetsFor({ ...DEFAULT_ANSWERS, ...(athlete.startAnswers as Partial<StartAnswers>) }) : undefined
+  return VOLUME_MUSCLES.filter((m) => v.get(m)! > 0 || (targets?.get(m) ?? 0) > 0).map((m) => ({
+    muscle: m,
+    value: Math.round(v.get(m)! * 2) / 2,
+    target: targets?.get(m),
+  }))
 }
 
 export default function WorkoutLogPage() {
@@ -137,9 +158,9 @@ export default function WorkoutLogPage() {
   }, [currentLog, setsTotal, setsDone, selectedDate])
 
   /** Satz abgehakt: kurz vibrieren und - außer nach dem letzten Satz - die Pause starten. */
-  function handleSetCompleted() {
+  function handleSetCompleted(restSeconds?: number) {
     haptic('tap')
-    if (setsDone + 1 < setsTotal) autoStartRestTimer()
+    if (setsDone + 1 < setsTotal) autoStartRestTimer(restSeconds)
   }
   // Aufwärmsätze zählen nicht ins Volumen.
   const volumeKg = (daySets ?? []).reduce((sum, s) => sum + (!s.warmup && s.reps !== undefined && s.weightKg !== undefined ? s.reps * s.weightKg : 0), 0)
@@ -388,6 +409,12 @@ export default function WorkoutLogPage() {
         emptyText="Noch keine Trainingseinheiten aufgezeichnet."
       />}
 
+      {showCard('volumen') && muscleRecords && muscleRecords.length > 0 && (
+        <CollapsibleCard title="Wochenvolumen" storageKey="volume-log" summary="Sätze je Muskel · 7 Tage">
+          <VolumeBars rows={volumeRows(muscleRecords, athlete)} />
+        </CollapsibleCard>
+      )}
+
       {showCard('heatmap') && muscleRecords && (
         <CollapsibleCard
           title="Muskel-Heatmap"
@@ -424,7 +451,8 @@ function WorkoutExerciseRow({
   onDelete,
 }: {
   handle: ReactNode
-  onSetCompleted: () => void
+  /** Mit der Pause aus dem Plan (falls die Übung dort eine hat). */
+  onSetCompleted: (restSeconds?: number) => void
   rowId: string
   exerciseId: string
   exerciseName?: string
@@ -574,7 +602,7 @@ function WorkoutExerciseRow({
                       onClick={() => {
                         if (longPressed.current) return
                         void db.workoutSets.update(set.id, { done: !set.done })
-                        if (!set.done) onSetCompleted()
+                        if (!set.done) onSetCompleted(planExercise?.restSeconds ? (set.warmup ? 60 : planExercise.restSeconds) : undefined)
                       }}
                       aria-label={`${set.warmup ? 'Aufwärmsatz' : 'Satz'} ${set.setNumber} als ${set.done ? 'offen' : 'erledigt'} markieren (lange drücken: Aufwärmsatz)`}
                       className={`flex h-8 w-8 select-none items-center justify-center rounded-full border text-xs font-semibold tabular-nums transition active:scale-90 ${

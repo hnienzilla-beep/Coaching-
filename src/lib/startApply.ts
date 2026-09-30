@@ -3,7 +3,7 @@ import { createAthlete, todayIso, upsertDailyEntry } from '../db/queries'
 import { byName, nameKey } from './names'
 import { setPrefs, type Prefs, type TabKey } from './prefs'
 import { applyTheme, type Theme } from './theme'
-import { buildMealPlans, buildTrainingPlan, computeTargets, supplementNamesFor, type StartAnswers } from './startPlan'
+import { buildMealPlans, buildTrainingWeek, computeTargets, supplementNamesFor, type StartAnswers } from './startPlan'
 import type { Athlete, MealType } from '../models/types'
 
 /** App-Einstellungen aus dem letzten Abschnitt von „Dein Start“. */
@@ -76,7 +76,11 @@ function athleteFields(a: StartAnswers, t: ReturnType<typeof computeTargets>) {
     fatPerKg: t.fatPerKg,
     targetWeightKg: t.targetWeightKg,
     targetDate: t.targetDate,
-    trainingDays: [...a.trainingDays].sort((x, y) => x - y),
+    trainingDays: a.scheduleMode === 'rotation' ? [] : [...a.trainingDays].sort((x, y) => x - y),
+    schedule:
+      a.scheduleMode === 'rotation'
+        ? ({ mode: 'rotation', ...a.rotation } as const)
+        : ({ mode: 'fixed', dayPlans: buildTrainingWeek(a).schedule.map((x) => x.unit) } as const),
     startAnswers: a,
   }
 }
@@ -103,7 +107,7 @@ async function applyPlansAndPrefs(athleteId: string, a: StartAnswers, macros: { 
 }
 
 async function replaceTrainingPlans(athleteId: string, a: StartAnswers): Promise<void> {
-  const days = buildTrainingPlan(a)
+  const days = buildTrainingWeek(a).days
   await ensureExerciseSeed()
   await db.transaction('rw', db.trainingPlans, db.trainingPlanExercises, db.exercises, async () => {
     const old = await db.trainingPlans.where('athleteId').equals(athleteId).toArray()
@@ -120,7 +124,17 @@ async function replaceTrainingPlans(athleteId: string, a: StartAnswers): Promise
           await db.exercises.add(ex)
           exercises.set(nameKey(e.name), ex)
         }
-        await db.trainingPlanExercises.add({ id: crypto.randomUUID(), planId, exerciseId: ex.id, order: j, sets: e.sets, reps: e.reps })
+        await db.trainingPlanExercises.add({
+          id: crypto.randomUUID(),
+          planId,
+          exerciseId: ex.id,
+          order: j,
+          sets: e.sets,
+          reps: e.reps,
+          ...(e.restSeconds ? { restSeconds: e.restSeconds } : {}),
+          ...(e.warmupSets ? { warmupSets: e.warmupSets } : {}),
+          ...(e.note ? { notes: e.note } : {}),
+        })
       }
     }
   })

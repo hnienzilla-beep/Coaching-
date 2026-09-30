@@ -52,6 +52,7 @@ export const NUTRITION_CARDS: { id: NutritionCard; label: string; hint: string }
 export const TRAINING_CARDS: { id: TrainingCard; label: string; hint: string }[] = [
   { id: 'timer', label: 'Pausen-Timer', hint: 'Zeile über den Übungen' },
   { id: 'heatmap', label: 'Muskel-Heatmap', hint: 'Figur der letzten 7 Tage' },
+  { id: 'volumen', label: 'Wochenvolumen', hint: 'Sätze je Muskel im Vergleich zu MV/MEV/MAV' },
   { id: 'kraft', label: 'Kraft-Diagramm', hint: 'Gewichtsverlauf je Übung' },
   { id: 'notizen', label: 'Notizen zum Training', hint: 'Freitext und Beenden' },
   { id: 'verlauf', label: 'Verlauf', hint: 'Frühere Einheiten' },
