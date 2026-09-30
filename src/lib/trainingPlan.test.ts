@@ -7,17 +7,15 @@ const pro = (patch: Partial<StartAnswers> = {}) => a({ experience: 'erfahren', g
 
 describe('Wochenvolumen nach Tabelle', () => {
   it('Ziel bestimmt die Zone', () => {
-    expect(weeklyTarget('Brust', a({ goal: 'abnehmen', experience: 'fortgeschritten' }), false)).toBe(LANDMARKS.Brust.mev)
-    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'fortgeschritten' }), false)).toBe(16)
-    expect(weeklyTarget('Brust', a({ goal: 'recomp', experience: 'fortgeschritten' }), false)).toBe(11)
+    expect(weeklyTarget('Brust', a({ goal: 'abnehmen', experience: 'fortgeschritten' }))).toBe(LANDMARKS.Brust.mev)
+    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(16)
+    expect(weeklyTarget('Brust', a({ goal: 'recomp', experience: 'fortgeschritten' }))).toBe(11)
   })
-  it('Einsteiger bleiben unten, Schwerpunkt = Mitte MAV + 2, nie über MRV', () => {
-    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'einsteiger' }), false)).toBe(12)
-    expect(weeklyTarget('Rücken', pro(), true)).toBe(20)
-    expect(weeklyTarget('Vord. Schulter', pro(), true)).toBeLessThan(LANDMARKS['Vord. Schulter'].mrv)
+  it('Einsteiger bleiben unten', () => {
+    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'einsteiger' }))).toBe(12)
   })
   it('Profi-Zone je Muskel', () => {
-    expect(weeklyTarget('Bizeps', pro({ volumeZones: { Bizeps: 'MV' } }), false)).toBe(5)
+    expect(weeklyTarget('Bizeps', pro({ volumeZones: { Bizeps: 'MV' } }))).toBe(5)
   })
 })
 
@@ -193,5 +191,20 @@ describe('Zwei Schwerpunkte je Einheit', () => {
     const [push, pull] = week.days
     expect(push.exercises.slice(0, 2).map((e) => [e.muscle, e.focus])).toEqual([['Brust', true], ['Quadrizeps', true]])
     expect(pull.exercises.slice(0, 2).map((e) => [e.muscle, e.focus])).toEqual([['Rücken', true], ['Bizeps', true]])
+  })
+})
+
+describe('Volumen je Einheit verteilt, Fokus nur an seinem Tag', () => {
+  it('ohne Fokus gleich viele Sätze je Einheit, mit Fokus nur der Fokus-Tag mehr', () => {
+    const base = { experience: 'fortgeschritten' as const, goal: 'aufbauen' as const, split: 'pushpullfb' as const, trainingDays: [0, 1, 3, 4], durationMin: 90 as const, variants: 'gleich' as const }
+    const plain = buildTrainingWeek(a(base))
+    const ab = buildTrainingWeek(a({ ...base, split: 'okuk' }))
+    // OK A und OK B trainieren die Brust gleich stark
+    const chest = (d: (typeof ab.days)[number]) => d.exercises.filter((e) => e.muscle === 'Brust').reduce((n, e) => n + e.sets, 0)
+    expect(chest(ab.days[0])).toBe(chest(ab.days[2]))
+    const focus = buildTrainingWeek(a({ ...base, split: 'okuk', focusByUnit: { 'Oberkörper A': ['Brust'] } }))
+    expect(chest(focus.days[0])).toBeGreaterThan(chest(ab.days[0]))
+    expect(chest(focus.days[2])).toBe(chest(ab.days[2]))
+    expect(plain.days.length).toBe(2)
   })
 })
