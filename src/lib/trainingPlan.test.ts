@@ -117,5 +117,14 @@ describe('Übungsauswahl', () => {
   it('Basic-Studio ohne Maschinen', () => {
     const names = buildTrainingWeek(pro({ location: 'basic' })).days.flatMap((d) => d.exercises.map((e) => e.name))
     expect(names.some((n) => /Maschine|Beinpresse|Beinbeuger$|Beinstrecker/.test(n))).toBe(false)
+  })})
+
+describe('Hybrid-Splits', () => {
+  it('5 Tage: Push FB, Pull FB, Push, Pull, Beine und weitere', () => {
+    expect(splitOptions(a({ trainingDays: [0, 1, 2, 3, 4] }))).toEqual(expect.arrayContaining(['fbppl', 'okukarme', 'torsolimbsfb', 'fbokuk']))
+    const week = buildTrainingWeek(pro({ trainingDays: [0, 1, 2, 3, 4], split: 'fbppl' }))
+    expect(week.days.map((d) => d.name)).toEqual(['Push Fullbody', 'Pull Fullbody', 'Push', 'Pull', 'Beine'])
+    expect(week.schedule.map((x) => x.unit)).toEqual([0, 1, 2, 3, 4])
+    for (const d of week.days) expect(d.workSets).toBeLessThanOrEqual(20)
   })
 })
