@@ -9,7 +9,7 @@ import type { Muscle } from './muscles'
 
 export type Experience = 'einsteiger' | 'fortgeschritten' | 'erfahren'
 export type Location = 'studio' | 'basic' | 'zuhause' | 'beides'
-export type Split = 'ganzkoerper' | 'okuk' | 'pushpullfb' | 'torsolimbs' | 'ppl' | 'pplokuk' | 'arnold' | 'bro'
+export type Split = 'ganzkoerper' | 'okuk' | 'pushpullfb' | 'torsolimbs' | 'ppl' | 'pplokuk' | 'fbppl' | 'okukarme' | 'torsolimbsfb' | 'fbokuk' | 'arnold' | 'bro'
 export type Restriction = 'knie' | 'schulter' | 'ruecken' | 'handgelenk' | 'ellbogen'
 export type TrainingGoal = 'kraft' | 'aufbau' | 'fitness'
 export type Preference = 'frei' | 'gemischt' | 'maschinen'
@@ -356,6 +356,10 @@ export const SPLIT_LABELS: Record<Split, string> = {
   torsolimbs: 'Torso / Limbs',
   ppl: 'Push / Pull / Beine',
   pplokuk: 'Push / Pull / Beine + Ober-/Unterkörper',
+  fbppl: 'Push Fullbody / Pull Fullbody + Push / Pull / Beine',
+  okukarme: 'Ober-/Unterkörper ×2 + Schultern & Arme',
+  torsolimbsfb: 'Torso / Limbs + Ganzkörper',
+  fbokuk: 'Push Fullbody / Pull Fullbody + Ober-/Unterkörper',
   arnold: 'Arnold-Split (Brust & Rücken / Schultern & Arme / Beine)',
   bro: 'Bro-Split (Brust / Rücken / Beine / Schultern / Arme)',
 }
@@ -375,6 +379,14 @@ export function splitDays(split: Split, dayCount: number): string[] {
       return ['Push', 'Pull', 'Beine']
     case 'pplokuk':
       return ['Push', 'Pull', 'Beine', 'Oberkörper A', 'Unterkörper A']
+    case 'fbppl':
+      return ['Push Fullbody', 'Pull Fullbody', 'Push', 'Pull', 'Beine']
+    case 'okukarme':
+      return ['Oberkörper A', 'Unterkörper A', 'Oberkörper B', 'Unterkörper B', 'Schultern & Arme']
+    case 'torsolimbsfb':
+      return ['Torso', 'Limbs', 'Ganzkörper A']
+    case 'fbokuk':
+      return ['Push Fullbody', 'Pull Fullbody', 'Oberkörper A', 'Unterkörper A']
     case 'arnold':
       return ['Brust & Rücken', 'Schultern & Arme', 'Beine']
     case 'bro':
@@ -386,9 +398,9 @@ export function splitDays(split: Split, dayCount: number): string[] {
 export function splitsFor(days: number): Split[] {
   if (days <= 2) return ['ganzkoerper', 'pushpullfb', 'torsolimbs', 'okuk']
   if (days === 3) return ['ganzkoerper', 'pushpullfb', 'ppl', 'arnold']
-  if (days === 4) return ['okuk', 'pushpullfb', 'torsolimbs', 'ganzkoerper']
-  if (days === 5) return ['pushpullfb', 'ppl', 'pplokuk', 'bro', 'okuk']
-  return ['ppl', 'arnold', 'pushpullfb', 'pplokuk']
+  if (days === 4) return ['okuk', 'pushpullfb', 'torsolimbs', 'fbokuk', 'ganzkoerper']
+  if (days === 5) return ['pushpullfb', 'fbppl', 'ppl', 'pplokuk', 'okukarme', 'torsolimbsfb', 'fbokuk', 'bro', 'okuk']
+  return ['ppl', 'arnold', 'pushpullfb', 'pplokuk', 'fbppl', 'okukarme']
 }
 
 /** Vorschlag je nach Trainingstagen und Erfahrung - Einsteiger bekommen die einfacheren Splits. */
@@ -411,8 +423,9 @@ export function splitOptions(a: ScheduleInput): Split[] {
   const on = a.rotation.on
   if (on <= 1) return ['ganzkoerper', 'pushpullfb', 'okuk', 'torsolimbs']
   if (on === 2) return ['okuk', 'pushpullfb', 'torsolimbs', 'ganzkoerper']
-  if (on === 3) return ['ppl', 'arnold', 'pushpullfb', 'okuk']
-  return ['okuk', 'ppl', 'pushpullfb', 'torsolimbs']
+  if (on === 3) return ['ppl', 'arnold', 'pushpullfb', 'torsolimbsfb', 'okuk']
+  if (on === 4) return ['okuk', 'fbokuk', 'ppl', 'pushpullfb', 'torsolimbs']
+  return ['fbppl', 'pplokuk', 'okukarme', 'okuk', 'ppl', 'pushpullfb']
 }
 
 export function suggestedSplitFor(a: ScheduleInput & Pick<StartAnswers, 'experience'>): Split {
