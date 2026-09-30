@@ -158,3 +158,15 @@ describe('RDLs treffen auch den Po', () => {
     expect(v.get('Beinbeuger')).toBe(1)
   })
 })
+
+describe('Push/Pull Fullbody decken ihre Beine ab', () => {
+  it('Push: Waden, Quads, Adduktoren - Pull: Beinbeuger, Bauch - auch beim Abnehmen und mit 30 min', () => {
+    for (const goal of ['abnehmen', 'aufbauen'] as const)
+      for (const durationMin of [30, 60] as const) {
+        const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal, durationMin, split: 'pushpullfb', trainingDays: [0, 1, 3, 4] }))
+        const muscles = (i: number) => new Set(week.days[i].exercises.map((e) => e.muscle))
+        for (const m of ['Waden', 'Quadrizeps', 'Adduktoren'] as const) expect(muscles(0).has(m), `${goal} ${durationMin} ${m}`).toBe(true)
+        for (const m of ['Beinbeuger', 'Bauch'] as const) expect(muscles(1).has(m), `${goal} ${durationMin} ${m}`).toBe(true)
+      }
+  })
+})
