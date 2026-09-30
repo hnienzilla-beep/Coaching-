@@ -182,6 +182,7 @@ export interface Exercise {
   favorite?: boolean
   imageDataUrl?: string // herunterskaliertes Übungsbild als Base64-Data-URL
   primaryMuscle?: Muscle // Hauptmuskel für die Heatmap; ohne wird er aus dem Namen erkannt
+  secondaryMuscles?: Muscle[] // mitarbeitende Muskeln (zählen im Wochenvolumen halb)
   weightStepKg?: number // Sprung der ± Knöpfe beim Gewicht; ohne wird er gelernt bzw. geraten
 }
 
@@ -190,6 +191,7 @@ export interface TrainingPlan {
   athleteId: string
   phaseName: string
   order: number
+  timesPerWeek?: number // wie oft pro Woche - ohne: aus Trainingstagen bzw. Rhythmus
 }
 
 export interface TrainingPlanExercise {

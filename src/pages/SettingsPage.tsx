@@ -548,6 +548,9 @@ function TrainingSection({ athlete }: { athlete: Athlete }) {
       <Group title="Satz-Eingabe">
         <Toggle label="RPE-Spalte" hint="Gefühlte Anstrengung je Satz" on={prefs.showRpe} onChange={(v) => setPref('showRpe', v)} />
       </Group>
+      <Group title="Muskeln" footer="Das Wochenvolumen (MV/MEV/MAV/MRV) steht immer im Trainingsplan.">
+        <Toggle label="Muskel-Heatmap" hint="Figur im Log und im Plan" on={prefs.showHeatmap} onChange={(v) => setPref('showHeatmap', v)} />
+      </Group>
       <Group title="Karten im Log">
         {TRAINING_CARDS.map((c) => (
           <Toggle key={c.id} label={c.label} hint={c.hint} on={!prefs.trainingHidden.includes(c.id)} onChange={(on) => toggleInList('trainingHidden', c.id, !on)} />
