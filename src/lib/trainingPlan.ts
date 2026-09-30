@@ -854,6 +854,13 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const extras: { slot: Slot; muscle: VolumeMuscle }[][] = units.map(() => [])
   let drafts = units.map((u, i) => buildUnit(u, extras[i]))
   let share = allot(drafts)
+  const allowedIn = (u: number) =>
+    new Set<VolumeMuscle>([
+      ...DAY_TEMPLATES[units[u].base].map((sl) => candidates(sl, a, s)[0]?.p).filter((m): m is VolumeMuscle => !!m),
+      ...focusOf(units[u]),
+      'Bauch',
+      'Waden',
+    ])
   // Wochenziel einhalten: Reichen die Tage eines Muskels nicht (je Training höchstens 4 bzw. 8
   // Sätze), kommt er zusätzlich an die Tage mit dem meisten Platz.
   {
@@ -865,9 +872,11 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const trains = (u: number) => drafts[u].some((d) => d.entry.p === m) || extras[u].some((x) => x.muscle === m)
       let capacity = units.reduce((n, _, u) => n + (trains(u) ? freq[u] * maxSetsPerSession(m) : 0), 0)
       if (need <= capacity + 0.5) continue
+      // Nur an Tage, die laut Split für den Muskel gedacht sind (Brust nie an Pull, Beine nie an
+      // Push) - Bauch und Waden passen überall hin.
       const free = units
         .map((_, u) => u)
-        .filter((u) => freq[u] > 0 && !trains(u))
+        .filter((u) => freq[u] > 0 && !trains(u) && allowedIn(u).has(m))
         .sort((x, y) => drafts[x].reduce((n, d) => n + d.sets, 0) - drafts[y].reduce((n, d) => n + d.sets, 0))
       for (const u of free) {
         if (need <= capacity + 0.5) break
