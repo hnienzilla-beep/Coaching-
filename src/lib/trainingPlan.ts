@@ -51,9 +51,9 @@ export const LANDMARKS: Record<VolumeMuscle, Landmarks> = {
   Brust: { mv: 8, mev: 10, mavLo: 12, mavHi: 20, mrv: 22 },
   Rücken: { mv: 8, mev: 10, mavLo: 14, mavHi: 22, mrv: 25 },
   Trapez: { mv: 0, mev: 0, mavLo: 10, mavHi: 16, mrv: 26 },
-  // Die Tabelle nennt beide zusammen - gleiche Werte je Kopf.
-  'Seitl. Schulter': { mv: 0, mev: 8, mavLo: 16, mavHi: 22, mrv: 26 },
-  'Hint. Schulter': { mv: 0, mev: 8, mavLo: 16, mavHi: 22, mrv: 26 },
+  // Die Tabelle nennt beide zusammen (MEV 8, MAV 16–22, MRV 26) - getrennt je Kopf die Hälfte.
+  'Seitl. Schulter': { mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 },
+  'Hint. Schulter': { mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 },
   'Vord. Schulter': { mv: 0, mev: 0, mavLo: 6, mavHi: 8, mrv: 12 },
   Bizeps: { mv: 5, mev: 8, mavLo: 14, mavHi: 20, mrv: 26 },
   Trizeps: { mv: 4, mev: 6, mavLo: 10, mavHi: 14, mrv: 18 },

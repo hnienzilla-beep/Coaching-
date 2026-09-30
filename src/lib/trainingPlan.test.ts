@@ -239,3 +239,11 @@ describe('Obergrenze je Muskel und Training', () => {
       }
   })
 })
+
+describe('Schulterköpfe getrennt mit halben Werten', () => {
+  it('Seitl./Hint. Schulter: MAV 8-11', () => {
+    expect(LANDMARKS['Seitl. Schulter']).toEqual({ mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 })
+    expect(LANDMARKS['Hint. Schulter']).toEqual({ mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 })
+    expect(weeklyTarget('Seitl. Schulter', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(10)
+  })
+})
