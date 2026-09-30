@@ -101,6 +101,8 @@ export interface CatalogExercise {
   name: string
   slot: Slot
   p: VolumeMuscle
+  /** Zweiter Hauptmuskel - zählt voll (z.B. Po bei RDLs). */
+  p2?: VolumeMuscle
   s?: VolumeMuscle[]
   eq: Equipment[]
   kind: Kind
@@ -115,7 +117,7 @@ const ex = (
   p: VolumeMuscle,
   eq: Equipment[],
   kind: Kind,
-  more: Partial<Pick<CatalogExercise, 's' | 'tech' | 'avoid' | 'timed'>> = {},
+  more: Partial<Pick<CatalogExercise, 'p2' | 's' | 'tech' | 'avoid' | 'timed'>> = {},
 ): CatalogExercise => ({ name, slot, p, eq, kind, ...more })
 
 // Je Bewegungsmuster in Vorzugsreihenfolge („Gemischt“). Frei/Maschinen sortiert um.
@@ -132,12 +134,12 @@ export const CATALOG: CatalogExercise[] = [
   ex('squat', 'Hip Thrust', 'Po', ['lh', 'bank'], 'compound', { s: ['Beinbeuger'] }),
   ex('squat', 'Glute Bridge', 'Po', ['kg'], 'compound', { s: ['Beinbeuger'] }),
   // Hüftstreckung
-  ex('hinge', 'Rumänisches Kreuzheben', 'Beinbeuger', ['lh'], 'compound', { s: ['Po', 'Rücken'], tech: 'kreuzheben', avoid: ['ruecken'] }),
+  ex('hinge', 'Rumänisches Kreuzheben', 'Beinbeuger', ['lh'], 'compound', { p2: 'Po', s: ['Rücken'], tech: 'kreuzheben', avoid: ['ruecken'] }),
   ex('hinge', 'Kreuzheben', 'Rücken', ['lh'], 'compound', { s: ['Po', 'Beinbeuger', 'Trapez'], tech: 'kreuzheben', avoid: ['ruecken'] }),
-  ex('hinge', 'Rumänisches Kreuzheben (Kurzhantel)', 'Beinbeuger', ['kh'], 'compound', { s: ['Po'], avoid: ['ruecken'] }),
+  ex('hinge', 'Rumänisches Kreuzheben (Kurzhantel)', 'Beinbeuger', ['kh'], 'compound', { p2: 'Po', avoid: ['ruecken'] }),
   ex('hinge', '45°-Hyperextension', 'Po', ['maschine'], 'compound', { s: ['Beinbeuger'] }),
-  ex('hinge', 'Good Morning', 'Beinbeuger', ['lh'], 'compound', { s: ['Po'], tech: 'kreuzheben', avoid: ['ruecken'] }),
-  ex('hinge', 'Einbeiniges Kreuzheben', 'Beinbeuger', ['kh'], 'compound', { s: ['Po'] }),
+  ex('hinge', 'Good Morning', 'Beinbeuger', ['lh'], 'compound', { p2: 'Po', s: ['Rücken'], tech: 'kreuzheben', avoid: ['ruecken'] }),
+  ex('hinge', 'Einbeiniges Kreuzheben', 'Beinbeuger', ['kh'], 'compound', { p2: 'Po' }),
   ex('hinge', 'Hip Thrust', 'Po', ['lh', 'bank'], 'compound', { s: ['Beinbeuger'] }),
   ex('hinge', 'Glute Bridge', 'Po', ['kg'], 'compound', { s: ['Beinbeuger'] }),
   // Ausfallschritt / Quadrizeps
@@ -151,7 +153,7 @@ export const CATALOG: CatalogExercise[] = [
   // Beinbeuger
   ex('hamstring', 'Beinbeuger', 'Beinbeuger', ['maschine'], 'isolation'),
   ex('hamstring', 'Beinbeuger (sitzend)', 'Beinbeuger', ['maschine'], 'isolation'),
-  ex('hamstring', 'Rumänisches Kreuzheben (Kurzhantel)', 'Beinbeuger', ['kh'], 'compound', { s: ['Po'], avoid: ['ruecken'] }),
+  ex('hamstring', 'Rumänisches Kreuzheben (Kurzhantel)', 'Beinbeuger', ['kh'], 'compound', { p2: 'Po', avoid: ['ruecken'] }),
   ex('hamstring', 'Nordic Curls', 'Beinbeuger', ['kg'], 'isolation', { avoid: ['knie'] }),
   ex('hamstring', 'Beinbeuger mit Band', 'Beinbeuger', ['band'], 'isolation'),
   ex('hamstring', 'Glute Bridge', 'Po', ['kg'], 'compound', { s: ['Beinbeuger'] }),
@@ -575,8 +577,8 @@ export function zoneOf(muscle: VolumeMuscle, sets: number): 'unter MV' | 'MV' | 
 }
 
 /** Anteil eines Satzes für einen Muskel: Hauptmuskel 1, mitarbeitende Muskeln 0,5. */
-export function muscleShare(e: Pick<CatalogExercise, 'p' | 's'>, muscle: VolumeMuscle): number {
-  if (e.p === muscle) return 1
+export function muscleShare(e: Pick<CatalogExercise, 'p' | 'p2' | 's'>, muscle: VolumeMuscle): number {
+  if (e.p === muscle || e.p2 === muscle) return 1
   return e.s?.includes(muscle) ? 0.5 : 0
 }
 
@@ -958,9 +960,10 @@ const FROM_HEATMAP: Partial<Record<Muscle, VolumeMuscle>> = {
  * Sätze je Muskel aus erledigten Arbeitssätzen: Übungen aus dem Katalog mit mitarbeitenden
  * Muskeln (halb), andere über ihren Hauptmuskel.
  */
-export function volumeFromRecords(records: { exercise: string; muscle: Muscle }[]): Map<VolumeMuscle, number> {
+export function volumeFromRecords(records: { exercise: string; muscle: Muscle; secondary?: boolean }[]): Map<VolumeMuscle, number> {
   const v = new Map<VolumeMuscle, number>(VOLUME_MUSCLES.map((m) => [m, 0]))
-  for (const r of records) {
+  // Zusatz-Einträge (zweiter Hauptmuskel) zählen hier nicht - der Katalog kennt die Anteile selbst.
+  for (const r of records.filter((x) => !x.secondary)) {
     const c = catalogExercise(r.exercise)
     if (c) {
       for (const m of VOLUME_MUSCLES) {
