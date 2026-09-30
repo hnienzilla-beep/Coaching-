@@ -66,15 +66,18 @@ export const LANDMARKS: Record<VolumeMuscle, Landmarks> = {
 }
 
 /** Muskeln mit MEV 0 bekommen nur als Schwerpunkt eigene Übungen - sonst reicht das indirekte Volumen. */
-const INDIRECT_ONLY: VolumeMuscle[] = ['Trapez', 'Vord. Schulter', 'Adduktoren']
+const INDIRECT_ONLY: VolumeMuscle[] = ['Vord. Schulter', 'Adduktoren']
 const BIG_MUSCLES: VolumeMuscle[] = ['Quadrizeps', 'Beinbeuger', 'Rücken', 'Po']
 
 /**
- * Höchstens so viele Sätze je Muskel und Training (ohne Fokus-Bonus): große Muskeln 8, kleine 4.
- * Mehr bringt in einer Einheit kaum etwas - der Rest der Woche verteilt sich auf andere Tage.
+ * Höchstens so viele Sätze je Muskel und Training (ohne Fokus-Bonus): große Muskeln 8, Arme,
+ * Waden, Bauch und Trapez 6, Schultern und Adduktoren 4. Der Rest der Woche verteilt sich auf
+ * andere Tage.
  */
 export function maxSetsPerSession(m: VolumeMuscle): number {
-  return ['Brust', 'Rücken', 'Quadrizeps', 'Beinbeuger', 'Po'].includes(m) ? 8 : 4
+  if (['Brust', 'Rücken', 'Quadrizeps', 'Beinbeuger', 'Po'].includes(m)) return 8
+  if (['Bizeps', 'Trizeps', 'Waden', 'Bauch', 'Trapez'].includes(m)) return 6
+  return 4
 }
 
 /* ------------------------------------------------------------------------------------------
@@ -103,6 +106,7 @@ type Slot =
   | 'adductor'
   | 'fly'
   | 'legext'
+  | 'rowwide'
 
 /** lh Langhantel, kh Kurzhanteln, kg Körpergewicht, stange Klimmzugstange/Dipbarren. */
 type Equipment = 'lh' | 'kh' | 'kg' | 'band' | 'stange' | 'bank' | 'kabel' | 'maschine'
@@ -243,6 +247,14 @@ export const CATALOG: CatalogExercise[] = [
   ex('hpull', 'Umgekehrtes Rudern', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
   ex('hpull', 'Rudern mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
   // Nacken / Trapez: Rudervarianten mit breitem Griff zuerst (mittlerer Trapez), dann Shrugs (oberer)
+  ex('rowwide', 'T-Bar', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Hint. Schulter'], avoid: ['ruecken'] }),
+  ex('rowwide', 'Kabelrudern (breit, zur Brust)', 'Trapez', ['kabel'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('rowwide', 'Rudern breit (Maschine)', 'Trapez', ['maschine'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('rowwide', 'Langhantelrudern (breiter Obergriff)', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Hint. Schulter'], avoid: ['ruecken'] }),
+  ex('rowwide', 'Seal Row', 'Trapez', ['lh', 'bank'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('rowwide', 'Brustgestütztes Kurzhantelrudern (breit)', 'Trapez', ['kh', 'bank'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('rowwide', 'Kabelrudern hoch (zum Gesicht)', 'Trapez', ['kabel'], 'isolation', { s: ['Hint. Schulter'] }),
+  ex('rowwide', 'Rudern breit mit Band', 'Trapez', ['band'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
   ex('shrug', 'T-Bar', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Hint. Schulter'], avoid: ['ruecken'] }),
   ex('shrug', 'Kabelrudern (breit, zur Brust)', 'Trapez', ['kabel'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
   ex('shrug', 'Rudern breit (Maschine)', 'Trapez', ['maschine'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
@@ -337,29 +349,33 @@ export const LOCATION_LABELS: Record<'studio' | 'basic' | 'zuhause', { label: st
  * Splits und Einheiten
  * ---------------------------------------------------------------------------------------- */
 
+// Reihenfolge = Priorität: Reicht Zeit oder Satzgrenze nicht, fällt zuerst die hinterste Übung
+// weg. „hpull“ = Rudern eng, „rowwide“ = Rudern breit (Trapez).
 const DAY_TEMPLATES: Record<string, Slot[]> = {
-  'Ganzkörper A': ['squat', 'hpush', 'hpull', 'hinge', 'vpush', 'core', 'biceps', 'triceps'],
-  'Ganzkörper B': ['hinge', 'vpull', 'incline', 'lunge', 'lateral', 'core', 'triceps', 'biceps'],
-  'Ganzkörper C': ['lunge', 'hpush', 'vpull', 'glute', 'rear', 'core', 'calves', 'biceps'],
-  'Oberkörper A': ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'biceps', 'triceps', 'rear'],
-  'Unterkörper A': ['squat', 'hinge', 'lunge', 'hamstring', 'calves', 'core', 'glute'],
-  'Oberkörper B': ['incline', 'vpull', 'hpull', 'lateral', 'rear', 'triceps', 'biceps', 'vpush'],
-  'Unterkörper B': ['hinge', 'glute', 'lunge', 'squat', 'calves', 'core', 'hamstring'],
-  // Nach der eigenen Vorlage: Brust zuerst, Beine am Ende.
+  // Ganzkörper: Beine, Brust, Rücken, Beinbeuger, Schulter, Arme, Waden/Bauch - B und C mit anderen Varianten
+  'Ganzkörper A': ['squat', 'hpush', 'vpull', 'hamstring', 'lateral', 'biceps', 'triceps', 'calves', 'core'],
+  'Ganzkörper B': ['squat', 'incline', 'hpull', 'hinge', 'lateral', 'biceps', 'triceps', 'calves', 'core'],
+  'Ganzkörper C': ['squat', 'hpush', 'vpull', 'hamstring', 'rear', 'biceps', 'triceps', 'calves', 'core'],
+  'Oberkörper A': ['incline', 'vpull', 'hpush', 'hpull', 'lateral', 'rear', 'biceps', 'triceps'],
+  'Oberkörper B': ['incline', 'vpull', 'hpush', 'hpull', 'lateral', 'rear', 'biceps', 'triceps'],
+  // Unterkörper A mit Quad-Fokus, B mit Beinbeuger-Fokus
+  'Unterkörper A': ['squat', 'legext', 'hamstring', 'calves', 'core'],
+  'Unterkörper B': ['hinge', 'hamstring', 'squat', 'legext', 'calves'],
+  // Eigene Vorlagen
   'Push Fullbody': ['incline', 'hpush', 'fly', 'lateral', 'triceps', 'vpush', 'calves', 'adductor', 'squat', 'legext'],
-  'Pull Fullbody': ['vpull', 'hpull', 'biceps', 'hpull', 'vpull', 'rear', 'biceps', 'hamstring', 'core'],
-  Torso: ['hpush', 'hpull', 'vpush', 'vpull', 'lateral', 'rear', 'incline', 'core'],
-  Limbs: ['squat', 'hinge', 'biceps', 'triceps', 'lunge', 'hamstring', 'calves', 'biceps'],
-  'Brust & Rücken': ['hpush', 'vpull', 'incline', 'hpull', 'incline', 'core', 'rear'],
-  'Schultern & Arme': ['vpush', 'biceps', 'triceps', 'lateral', 'biceps', 'triceps', 'rear'],
-  Brust: ['hpush', 'incline', 'incline', 'hpush', 'core'],
-  Rücken: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'core'],
-  Schultern: ['vpush', 'lateral', 'rear', 'vpush', 'core'],
-  Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps'],
-  Push: ['hpush', 'incline', 'fly', 'vpush', 'lateral', 'lateral', 'triceps', 'triceps', 'core'],
+  'Pull Fullbody': ['vpull', 'hpull', 'rowwide', 'rear', 'biceps', 'biceps', 'hamstring', 'core'],
+  Torso: ['incline', 'vpull', 'hpush', 'hpull', 'fly', 'rowwide', 'rear', 'core'],
+  Limbs: ['squat', 'legext', 'hamstring', 'lateral', 'biceps', 'triceps', 'calves', 'biceps'],
+  'Brust & Rücken': ['incline', 'vpull', 'hpush', 'hpull', 'fly', 'rowwide', 'core'],
+  'Schultern & Arme': ['lateral', 'vpush', 'rear', 'biceps', 'triceps', 'biceps', 'triceps', 'lateral'],
+  Brust: ['incline', 'hpush', 'fly', 'fly', 'core'],
+  Rücken: ['vpull', 'hpull', 'rowwide', 'vpull', 'rear'],
+  Schultern: ['lateral', 'vpush', 'rear', 'lateral', 'rear'],
+  Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps'],
+  Push: ['incline', 'hpush', 'fly', 'lateral', 'triceps', 'vpush'],
   // Pull ohne Hüftstreckung (kein Rumänisches Kreuzheben) - die gehört an den Beine-Tag.
-  Pull: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'rear', 'biceps', 'biceps', 'core'],
-  Beine: ['squat', 'legext', 'hinge', 'hamstring', 'glute', 'adductor', 'calves', 'calves', 'core'],
+  Pull: ['vpull', 'hpull', 'rowwide', 'rear', 'biceps', 'biceps'],
+  Beine: ['squat', 'legext', 'hamstring', 'hinge', 'calves', 'core'],
 }
 
 /** Muskeln, die eine Einheit immer trainiert - ihre erste Übung wird nie gestrichen. */
@@ -769,7 +785,10 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const cands = candidates(slot, a, s).filter((c) => !used.has(c.name))
       if (cands.length === 0) continue
       const swap = a.exerciseSwaps?.[key]
-      const variantPick = u.variant === 1 && cands.length > 1 ? cands[1] : cands[0]
+      // A/B-Varianten und Vorlagen „… B“/„… C“ nehmen die nächste Alternative.
+      const byName = legSlots.has(slot) ? 0 : ['Oberkörper B', 'Ganzkörper B'].includes(u.base) ? 1 : u.base === 'Ganzkörper C' ? 2 : 0
+      const vi = u.variant === 1 && !legSlots.has(slot) ? 1 : byName
+      const variantPick = cands[Math.min(vi, cands.length - 1)]
       const pick = (swap && cands.find((c) => c.name === swap)) || variantPick
       used.add(pick.name)
       // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin.
@@ -824,12 +843,9 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     const w = unitsWithOf(drafts)
     const share = new Map<VolumeMuscle, number>()
     for (const m of VOLUME_MUSCLES) {
-      if (INDIRECT_ONLY.includes(m)) {
-        share.set(m, 0)
-        continue
-      }
-      let n = Math.round(Math.max(0, target.get(m)! - (indirect.get(m) ?? 0)) / Math.max(0.5, w.get(m) ?? 1))
-      if (n === 1) n = 2
+      let n = INDIRECT_ONLY.includes(m) ? 0 : Math.round(Math.max(0, target.get(m)! - (indirect.get(m) ?? 0)) / Math.max(0.5, w.get(m) ?? 1))
+      // Jede Übung der Vorlage ist Struktur: mindestens 2 Sätze - gestrichen wird nur nach Priorität.
+      if ((w.get(m) ?? 0) > 0) n = Math.max(2, n)
       share.set(m, Math.min(maxSetsPerSession(m), n))
     }
     return share
@@ -851,9 +867,6 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     return share
   }
 
-  const extras: { slot: Slot; muscle: VolumeMuscle }[][] = units.map(() => [])
-  let drafts = units.map((u, i) => buildUnit(u, extras[i]))
-  let share = allot(drafts)
   const allowedIn = (u: number) =>
     new Set<VolumeMuscle>([
       ...DAY_TEMPLATES[units[u].base].map((sl) => candidates(sl, a, s)[0]?.p).filter((m): m is VolumeMuscle => !!m),
@@ -861,162 +874,196 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       'Bauch',
       'Waden',
     ])
-  // Wochenziel einhalten: Reichen die Tage eines Muskels nicht (je Training höchstens 4 bzw. 8
-  // Sätze), kommt er zusätzlich an die Tage mit dem meisten Platz.
-  {
-    const ind = indirectOf(drafts)
-    let spread = false
-    for (const m of VOLUME_MUSCLES) {
-      if (INDIRECT_ONLY.includes(m)) continue
-      const need = target.get(m)! - (ind.get(m) ?? 0)
-      const trains = (u: number) => drafts[u].some((d) => d.entry.p === m) || extras[u].some((x) => x.muscle === m)
-      let capacity = units.reduce((n, _, u) => n + (trains(u) ? freq[u] * maxSetsPerSession(m) : 0), 0)
-      if (need <= capacity + 0.5) continue
-      // Nur an Tage, die laut Split für den Muskel gedacht sind (Brust nie an Pull, Beine nie an
-      // Push) - Bauch und Waden passen überall hin.
-      const free = units
-        .map((_, u) => u)
-        .filter((u) => freq[u] > 0 && !trains(u) && allowedIn(u).has(m))
-        .sort((x, y) => drafts[x].reduce((n, d) => n + d.sets, 0) - drafts[y].reduce((n, d) => n + d.sets, 0))
-      for (const u of free) {
-        if (need <= capacity + 0.5) break
-        extras[u].push({ slot: FOCUS_SLOT[m], muscle: m })
-        capacity += freq[u] * maxSetsPerSession(m)
-        spread = true
+  type Extras = { slot: Slot; muscle: VolumeMuscle }[][]
+  // Ein Durchgang der Planung mit festen Zusatz-Übungen (`extras`).
+  const plan = (extras: Extras) => {
+    let drafts = units.map((u, i) => buildUnit(u, extras[i]))
+    let share = allot(drafts)
+    // Wochenziel einhalten: Reichen die Tage eines Muskels nicht (je Training höchstens 4 bzw. 8
+    // Sätze), kommt er zusätzlich an die Tage mit dem meisten Platz.
+    {
+      const ind = indirectOf(drafts)
+      let spread = false
+      for (const m of VOLUME_MUSCLES) {
+        if (INDIRECT_ONLY.includes(m)) continue
+        const need = target.get(m)! - (ind.get(m) ?? 0)
+        const trains = (u: number) => drafts[u].some((d) => d.entry.p === m) || extras[u].some((x) => x.muscle === m)
+        let capacity = units.reduce((n, _, u) => n + (trains(u) ? freq[u] * maxSetsPerSession(m) : 0), 0)
+        if (need <= capacity + 0.5) continue
+        // Nur an Tage, die laut Split für den Muskel gedacht sind (Brust nie an Pull, Beine nie an
+        // Push) - Bauch und Waden passen überall hin.
+        const free = units
+          .map((_, u) => u)
+          .filter((u) => freq[u] > 0 && !trains(u) && allowedIn(u).has(m))
+          .sort((x, y) => drafts[x].reduce((n, d) => n + d.sets, 0) - drafts[y].reduce((n, d) => n + d.sets, 0))
+        for (const u of free) {
+          if (need <= capacity + 0.5) break
+          extras[u].push({ slot: FOCUS_SLOT[m], muscle: m })
+          capacity += freq[u] * maxSetsPerSession(m)
+          spread = true
+        }
+      }
+      if (spread) {
+        drafts = units.map((u, i) => buildUnit(u, extras[i]))
+        share = allot(drafts)
       }
     }
-    if (spread) {
+    // Passt der Anteil (bzw. am Fokus-Tag Anteil + 1) nicht in die Übungen der Einheit (max. 4 je
+    // Übung), bekommt sie eine zweite Übung für den Muskel.
+    let added = false
+    for (const m of VOLUME_MUSCLES) {
+      drafts.forEach((list, u) => {
+        const n = list.filter((d) => d.entry.p === m).length
+        if (freq[u] <= 0 || n === 0 || unitTotal(m, u, share) <= 4 * n) return
+        const slot = EXTRA_SLOT[m]?.find((sl) => candidates(sl, a, s).some((c) => c.p === m && !list.some((d) => d.entry.name === c.name)))
+        if (!slot) return
+        extras[u].push({ slot, muscle: m })
+        added = true
+      })
+    }
+    if (added) {
       drafts = units.map((u, i) => buildUnit(u, extras[i]))
       share = allot(drafts)
     }
-  }
-  // Passt der Anteil (bzw. am Fokus-Tag Anteil + 1) nicht in die Übungen der Einheit (max. 4 je
-  // Übung), bekommt sie eine zweite Übung für den Muskel.
-  let added = false
-  for (const m of VOLUME_MUSCLES) {
-    drafts.forEach((list, u) => {
-      const n = list.filter((d) => d.entry.p === m).length
-      if (freq[u] <= 0 || n === 0 || unitTotal(m, u, share) <= 4 * n) return
-      const slot = EXTRA_SLOT[m]?.find((sl) => candidates(sl, a, s).some((c) => c.p === m && !list.some((d) => d.entry.name === c.name)))
-      if (!slot) return
-      extras[u].push({ slot, muscle: m })
-      added = true
-    })
-  }
-  if (added) {
-    drafts = units.map((u, i) => buildUnit(u, extras[i]))
-    share = allot(drafts)
-  }
 
-  // Gleich viel an jedem Tag heißt: nicht mehr, als die knappste Einheit fassen kann (4 je Übung,
-  // am Fokus-Tag einer weniger für den Bonus-Satz).
-  const capOf = (m: VolumeMuscle) => {
-    let cap = maxSetsPerSession(m)
-    drafts.forEach((list, u) => {
-      const n = list.filter((d) => d.entry.p === m).length
-      if (freq[u] > 0 && n > 0) cap = Math.min(cap, 4 * n - (focusIn(u).has(m) ? 1 : 0))
-    })
-    return cap
-  }
-  for (const m of VOLUME_MUSCLES) if (capOf(m) < (share.get(m) ?? 0)) share.set(m, capOf(m))
-  drafts.forEach((l, i) => distribute(l, i, share))
-
-  // Ziel inkl. Schwerpunkt: je Fokus-Tag ein Satz mehr.
-  const bonus = new Map<VolumeMuscle, number>()
-  units.forEach((_, u) => {
-    for (const m of focusIn(u)) bonus.set(m, (bonus.get(m) ?? 0) + freq[u])
-  })
-  const goal = (m: VolumeMuscle) => target.get(m)! + (bonus.get(m) ?? 0)
-
-  // 3. Grenzen je Einheit (Satzgrenze, Zeit). Ist eine Einheit zu voll, sinkt der Anteil eines
-  // Muskels - für ALLE Einheiten, damit die Verteilung gleich bleibt. Erst Muskeln, die dort nicht
-  // Fokus sind, am besten versorgte zuerst; erst Sätze abbauen, dann Übungen streichen.
-  const cardioMin = cardioMinutesPerSession(a)
-  const budget = a.durationMin * 60
-  const setsIn = (list: Draft[]) => list.reduce((n, d) => n + d.sets, 0)
-  const over = (list: Draft[]) => setsIn(list) > s.maxSets || (setsIn(list) > 0 && sessionSeconds(list, s, cardioMin) > budget)
-  const lowered = (m: VolumeMuscle) => {
-    const n = (share.get(m) ?? 0) - 1
-    return n === 1 ? 0 : Math.max(0, n)
-  }
-  let guard = 0
-  for (let u = drafts.findIndex(over); u !== -1 && guard++ < 300; u = drafts.findIndex(over)) {
-    const list = drafts[u]
-    const v = volumeOf(drafts, freq)
-    const w = unitsWithOf(drafts)
-    const fu = focusIn(u)
-    // Was ein kleinerer Anteil in dieser Einheit bringt (Sätze weniger, Übung gestrichen?).
-    const effect = (m: VolumeMuscle) => {
-      const own = list.filter((d) => d.entry.p === m)
-      const before = own.map((d) => d.sets)
-      const trial = new Map(share).set(m, lowered(m))
-      const copy = own.map((d) => ({ ...d }))
-      const probe = list.map((d) => copy[own.indexOf(d)] ?? { ...d })
-      distribute(probe, u, trial)
-      const after = own.map((d) => probe[list.indexOf(d)].sets)
-      const saved = before.reduce((x, y) => x + y, 0) - after.reduce((x, y) => x + y, 0)
-      const drops = before.filter((b, i) => b > 0 && after[i] === 0).length
-      const dropsTemplate = own.filter((d, i) => before[i] > 0 && after[i] === 0 && !d.extra).length
-      return { saved, drops, dropsTemplate }
+    // Gleich viel an jedem Tag heißt: nicht mehr, als die knappste Einheit fassen kann (4 je Übung,
+    // am Fokus-Tag einer weniger für den Bonus-Satz).
+    const capOf = (m: VolumeMuscle) => {
+      let cap = maxSetsPerSession(m)
+      drafts.forEach((list, u) => {
+        const n = list.filter((d) => d.entry.p === m).length
+        if (freq[u] > 0 && n > 0) cap = Math.min(cap, 4 * n - (focusIn(u).has(m) ? 1 : 0))
+      })
+      return cap
     }
-    const cands = [...new Set(list.filter((d) => d.sets > 0).map((d) => d.entry.p))]
-      .filter((m) => (share.get(m) ?? 0) > 0)
-      .map((m) => ({ m, e: effect(m), ratio: v.get(m)! / Math.max(1, goal(m)), aboveMv: v.get(m)! - (w.get(m) ?? 0) >= LANDMARKS[m].mv }))
-      .filter((c) => c.e.saved > 0)
-    const pick = (ok: (c: (typeof cands)[number]) => boolean) =>
-      cands.filter(ok).sort((x, y) => y.ratio - x.ratio)[0]
-    const victim =
-      pick((c) => !fu.has(c.m) && c.e.drops === 0 && c.aboveMv) ??
-      pick((c) => !fu.has(c.m) && c.e.drops === 0) ??
-      pick((c) => !fu.has(c.m) && c.e.dropsTemplate === 0) ??
-      pick((c) => !fu.has(c.m) && c.aboveMv) ??
-      pick((c) => !fu.has(c.m)) ??
-      pick(() => true)
-    if (!victim) break
-    share.set(victim.m, lowered(victim.m))
+    for (const m of VOLUME_MUSCLES) if (capOf(m) < (share.get(m) ?? 0)) share.set(m, capOf(m))
     drafts.forEach((l, i) => distribute(l, i, share))
+
+    // Ziel inkl. Schwerpunkt: je Fokus-Tag ein Satz mehr.
+    const bonus = new Map<VolumeMuscle, number>()
+    units.forEach((_, u) => {
+      for (const m of focusIn(u)) bonus.set(m, (bonus.get(m) ?? 0) + freq[u])
+    })
+    const goal = (m: VolumeMuscle) => target.get(m)! + (bonus.get(m) ?? 0)
+
+    // 3. Grenzen je Einheit (Satzgrenze, Zeit). Ist eine Einheit zu voll, sinkt der Anteil eines
+    // Muskels - für ALLE Einheiten, damit die Verteilung gleich bleibt. Erst Muskeln, die dort nicht
+    // Fokus sind, am besten versorgte zuerst; erst Sätze abbauen, dann Übungen streichen.
+    const cardioMin = cardioMinutesPerSession(a)
+    const budget = a.durationMin * 60
+    const setsIn = (list: Draft[]) => list.reduce((n, d) => n + d.sets, 0)
+    const over = (list: Draft[]) => setsIn(list) > s.maxSets || (setsIn(list) > 0 && sessionSeconds(list, s, cardioMin) > budget)
+    const lowered = (m: VolumeMuscle) => {
+      const n = (share.get(m) ?? 0) - 1
+      return n === 1 ? 0 : Math.max(0, n)
+    }
+    let guard = 0
+    for (let u = drafts.findIndex(over); u !== -1 && guard++ < 300; u = drafts.findIndex(over)) {
+      const list = drafts[u]
+      const v = volumeOf(drafts, freq)
+      const w = unitsWithOf(drafts)
+      const fu = focusIn(u)
+      // Was ein kleinerer Anteil in dieser Einheit bringt (Sätze weniger, Übung gestrichen?).
+      const effect = (m: VolumeMuscle) => {
+        const own = list.filter((d) => d.entry.p === m)
+        const before = own.map((d) => d.sets)
+        const trial = new Map(share).set(m, lowered(m))
+        const copy = own.map((d) => ({ ...d }))
+        const probe = list.map((d) => copy[own.indexOf(d)] ?? { ...d })
+        distribute(probe, u, trial)
+        const after = own.map((d) => probe[list.indexOf(d)].sets)
+        const saved = before.reduce((x, y) => x + y, 0) - after.reduce((x, y) => x + y, 0)
+        const drops = before.filter((b, i) => b > 0 && after[i] === 0).length
+        const dropsTemplate = own.filter((d, i) => before[i] > 0 && after[i] === 0 && !d.extra).length
+        return { saved, drops, dropsTemplate }
+      }
+      const cands = [...new Set(list.filter((d) => d.sets > 0).map((d) => d.entry.p))]
+        .filter((m) => (share.get(m) ?? 0) > 0)
+        .map((m) => ({ m, e: effect(m), ratio: v.get(m)! / Math.max(1, goal(m)), aboveMv: v.get(m)! - (w.get(m) ?? 0) >= LANDMARKS[m].mv }))
+        .filter((c) => c.e.saved > 0)
+      // Nach Priorität: zuerst der Muskel mit der hintersten Übung der Einheit - erst bei Muskeln
+      // über ihrem Ziel, dann bei allen; Fokus-Muskeln zuletzt.
+      const lastPos = (m: VolumeMuscle) => list.reduce((pos, d, i) => (d.entry.p === m && d.sets > 0 ? i : pos), -1)
+      const pick = (ok: (c: (typeof cands)[number]) => boolean) =>
+        cands.filter(ok).sort((x, y) => lastPos(y.m) - lastPos(x.m) || y.ratio - x.ratio)[0]
+      // Erst Sätze abbauen, ohne Übungen zu streichen; danach Übungen nach Priorität streichen.
+      const victim =
+        pick((c) => !fu.has(c.m) && c.e.drops === 0 && c.ratio > 1) ??
+        pick((c) => !fu.has(c.m) && c.e.drops === 0) ??
+        pick((c) => c.e.drops === 0) ??
+        pick((c) => !fu.has(c.m) && c.ratio > 1) ??
+        pick((c) => !fu.has(c.m)) ??
+        pick(() => true)
+      if (!victim) break
+      share.set(victim.m, lowered(victim.m))
+      drafts.forEach((l, i) => distribute(l, i, share))
+    }
+
+    // Auffüllen: Muskeln unter ihrem Wert bekommen wieder mehr, solange an ALLEN ihren Tagen Platz
+    // ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
+    const fits = () => drafts.every((l) => !over(l))
+    const fillTo = (ceil: (m: VolumeMuscle) => number, withIndirect: boolean) => {
+      for (let round = 0; round < 80; round++) {
+        const v = volumeOf(drafts, freq)
+        const gaps = VOLUME_MUSCLES.filter(
+          (m) => (withIndirect || !INDIRECT_ONLY.includes(m)) && v.get(m)! + 0.5 < ceil(m) && (share.get(m) ?? 0) < capOf(m),
+        ).sort((x, y) => v.get(x)! / Math.max(1, ceil(x)) - v.get(y)! / Math.max(1, ceil(y)))
+        let grown = false
+        for (const m of gaps) {
+          const before = share.get(m) ?? 0
+          const next = before === 0 ? 2 : before + 1
+          if (next > capOf(m)) continue
+          share.set(m, next)
+          drafts.forEach((l, i) => distribute(l, i, share))
+          const gained = volumeOf(drafts, freq).get(m)! > v.get(m)!
+          if (fits() && gained) {
+            grown = true
+            break
+          }
+          share.set(m, before)
+          drafts.forEach((l, i) => distribute(l, i, share))
+        }
+        if (!grown) break
+      }
+    }
+    // 1. Erst jedes Wochenziel.
+    fillTo(goal, false)
+    // 2. Dann freie Zeit in den Einheiten nutzen: mehr Sätze für die Übungen der Vorlage bis zur
+    // Obergrenze des Ziel-Bereichs - beim Aufbau bis zur Mitte des MAV, bei Recomp bis zur
+    // MAV-Untergrenze, sonst zwischen MEV und MAV. Nie über MRV; Trapez, vordere Schulter und
+    // Adduktoren bleiben indirekt (außer als Fokus/Pflicht).
+    const ceiling = (m: VolumeMuscle) => {
+      const l = LANDMARKS[m]
+      const zone = s.zones[m]
+      const top = zone === 'MV' ? l.mev : zone === 'MEV' ? l.mavLo : zone === 'MAV' ? l.mavHi : a.goal === 'aufbauen' ? Math.round((l.mavLo + l.mavHi) / 2) : a.goal === 'recomp' ? l.mavLo : Math.round((l.mev + l.mavLo) / 2)
+      return Math.max(goal(m), Math.min(l.mrv - 1, top))
+    }
+    fillTo(ceiling, true)
+    return { drafts, goal, cardioMin, over }
   }
 
-  // Auffüllen: Muskeln unter ihrem Wert bekommen wieder mehr, solange an ALLEN ihren Tagen Platz
-  // ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
-  const fits = () => drafts.every((l) => !over(l))
-  const fillTo = (ceil: (m: VolumeMuscle) => number, withIndirect: boolean) => {
-    for (let round = 0; round < 80; round++) {
-      const v = volumeOf(drafts, freq)
-      const gaps = VOLUME_MUSCLES.filter(
-        (m) => (withIndirect || !INDIRECT_ONLY.includes(m)) && v.get(m)! + 0.5 < ceil(m) && (share.get(m) ?? 0) < capOf(m),
-      ).sort((x, y) => v.get(x)! / Math.max(1, ceil(x)) - v.get(y)! / Math.max(1, ceil(y)))
-      let grown = false
-      for (const m of gaps) {
-        const before = share.get(m) ?? 0
-        const next = before === 0 ? 2 : before + 1
-        if (next > capOf(m)) continue
-        share.set(m, next)
-        drafts.forEach((l, i) => distribute(l, i, share))
-        const gained = volumeOf(drafts, freq).get(m)! > v.get(m)!
-        if (fits() && gained) {
-          grown = true
-          break
-        }
-        share.set(m, before)
-        drafts.forEach((l, i) => distribute(l, i, share))
-      }
-      if (!grown) break
+  // Nach dem Kürzen: Muskeln unter dem Wochenziel kommen zusätzlich an passende Tage, die noch
+  // Platz haben (z.B. Bauch an Push, wenn der Beine-Tag voll ist) - dann neu planen.
+  const extras: Extras = units.map(() => [])
+  let result = plan(extras)
+  for (let pass = 0; pass < 3; pass++) {
+    const v = volumeOf(result.drafts, freq)
+    let added = false
+    for (const m of VOLUME_MUSCLES) {
+      if (INDIRECT_ONLY.includes(m) || v.get(m)! + 0.5 >= result.goal(m)) continue
+      units.forEach((_, u) => {
+        const list = result.drafts[u]
+        const sets = list.reduce((n, d) => n + d.sets, 0)
+        if (freq[u] <= 0 || !allowedIn(u).has(m) || list.some((d) => d.entry.p === m && d.sets > 0) || extras[u].some((x) => x.muscle === m)) return
+        if (sets + 2 > s.maxSets) return
+        extras[u].push({ slot: FOCUS_SLOT[m], muscle: m })
+        added = true
+      })
     }
+    if (!added) break
+    result = plan(extras)
   }
-  // 1. Erst jedes Wochenziel.
-  fillTo(goal, false)
-  // 2. Dann freie Zeit in den Einheiten nutzen: mehr Sätze für die Übungen der Vorlage bis zur
-  // Obergrenze des Ziel-Bereichs - beim Aufbau bis zur Mitte des MAV, bei Recomp bis zur
-  // MAV-Untergrenze, sonst zwischen MEV und MAV. Nie über MRV; Trapez, vordere Schulter und
-  // Adduktoren bleiben indirekt (außer als Fokus/Pflicht).
-  const ceiling = (m: VolumeMuscle) => {
-    const l = LANDMARKS[m]
-    const zone = s.zones[m]
-    const top = zone === 'MV' ? l.mev : zone === 'MEV' ? l.mavLo : zone === 'MAV' ? l.mavHi : a.goal === 'aufbauen' ? Math.round((l.mavLo + l.mavHi) / 2) : a.goal === 'recomp' ? l.mavLo : Math.round((l.mev + l.mavLo) / 2)
-    return Math.max(goal(m), Math.min(l.mrv - 1, top))
-  }
-  fillTo(ceiling, false)
+  const { drafts, goal, cardioMin } = result
 
   // 4. Eigene Satzzahlen aus der Zusammenfassung.
   for (const list of drafts)
