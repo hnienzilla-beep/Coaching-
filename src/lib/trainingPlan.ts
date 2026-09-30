@@ -378,6 +378,8 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   Beine: ['squat', 'legext', 'hamstring', 'hinge', 'calves', 'core'],
 }
 
+const LEG_SLOTS: Slot[] = ['squat', 'legext', 'lunge', 'hamstring', 'hinge', 'glute', 'calves', 'adductor']
+
 /** Muskeln, die eine Einheit immer trainiert - ihre erste Übung wird nie gestrichen. */
 const REQUIRED: Record<string, VolumeMuscle[]> = {
   'Push Fullbody': ['Waden', 'Quadrizeps', 'Adduktoren'],
@@ -872,7 +874,8 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       ...DAY_TEMPLATES[units[u].base].map((sl) => candidates(sl, a, s)[0]?.p).filter((m): m is VolumeMuscle => !!m),
       ...focusOf(units[u]),
       'Bauch',
-      'Waden',
+      // Waden nur an Tagen mit Beinen (nie an Push oder Pull).
+      ...(DAY_TEMPLATES[units[u].base].some((sl) => LEG_SLOTS.includes(sl)) ? (['Waden'] as const) : []),
     ])
   type Extras = { slot: Slot; muscle: VolumeMuscle }[][]
   // Ein Durchgang der Planung mit festen Zusatz-Übungen (`extras`).
@@ -891,7 +894,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
         let capacity = units.reduce((n, _, u) => n + (trains(u) ? freq[u] * maxSetsPerSession(m) : 0), 0)
         if (need <= capacity + 0.5) continue
         // Nur an Tage, die laut Split für den Muskel gedacht sind (Brust nie an Pull, Beine nie an
-        // Push) - Bauch und Waden passen überall hin.
+        // Push) - Bauch passt überall hin, Waden nur an Tage mit Beinen.
         const free = units
           .map((_, u) => u)
           .filter((u) => freq[u] > 0 && !trains(u) && allowedIn(u).has(m))
