@@ -227,7 +227,7 @@ describe('Gleiches Volumen an allen Tagen eines Muskels', () => {
 })
 
 describe('Obergrenze je Muskel und Training', () => {
-  it('kleine Muskeln höchstens 4, große 8 - am Fokus-Tag +1', () => {
+  it('Obergrenze je Muskel und Training - am Fokus-Tag +1', () => {
     for (const split of ['fbppl', 'okuk', 'ppl', 'pushpullfb', 'ganzkoerper', 'bro', 'arnold'] as const)
       for (const days of [[0, 3], [0, 2, 4], [0, 1, 3, 4], [0, 1, 2, 3, 4]]) {
         const week = buildTrainingWeek(a({ experience: 'erfahren', goal: 'aufbauen', split, trainingDays: days, durationMin: 90, maxSets: 25, focusByUnit: { 'Push Fullbody': ['Seitl. Schulter'] } }))
@@ -300,5 +300,29 @@ describe('Split-Struktur bleibt erhalten', () => {
         expect(pull.exercises.some((e) => e.muscle === 'Bizeps'), `${days.length} ${goal} Pull Bizeps`).toBe(true)
         expect(pull.exercises.some((e) => e.muscle === 'Rücken'), `${days.length} ${goal} Pull Rücken`).toBe(true)
       }
+  })
+})
+
+describe('Struktur der Einheiten nach Vorgabe', () => {
+  const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split: 'ppl', trainingDays: [0, 1, 2, 3, 4, 5], durationMin: 60 }))
+  const day = (n: string) => week.days.find((d) => d.name === n)!.exercises.map((e) => e.muscle)
+  it('Push: Brust schräg, Brust flach, Fliegende, Seitheben, Trizeps, Schulterdrücken', () => {
+    expect(day('Push').slice(0, 6)).toEqual(['Brust', 'Brust', 'Brust', 'Seitl. Schulter', 'Trizeps', 'Vord. Schulter'])
+  })
+  it('Pull: Latzug, Rudern eng, Rudern breit, Reverse Fly, Bizeps, Hammercurls', () => {
+    expect(day('Pull').slice(0, 3)).toEqual(['Rücken', 'Rücken', 'Trapez'])
+    const names = week.days.find((d) => d.name === 'Pull')!.exercises.map((e) => e.name)
+    expect(names.indexOf('Reverse kablefly (einarmig)')).toBeLessThan(names.indexOf('Preacher Curls (kurzhantel)'))
+    expect(names).toEqual(expect.arrayContaining(['Latzug', 'Hammercurls']))
+  })
+  it('Beine: Kniebeuge-Übung, Beinstrecker, Beinbeuger, RDL, Waden', () => {
+    const names = week.days.find((d) => d.name === 'Beine')!.exercises.map((e) => e.name)
+    expect(names.slice(0, 4)).toEqual(['Beinpresse', 'Beinstrecker', 'Beinbeuger', 'Rumänisches Kreuzheben'])
+  })
+  it('Kürzen nach Priorität: erst Sätze auf 2, dann hintere Übungen', () => {
+    for (const split of ['ppl', 'okuk', 'pushpullfb', 'ganzkoerper', 'torsolimbs', 'arnold', 'bro'] as const) {
+      const w = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays: [0, 2, 4], durationMin: 45 }))
+      for (const d of w.days) expect(d.exercises.filter((e) => !e.cardio).length, `${split} ${d.name}`).toBeGreaterThanOrEqual(4)
+    }
   })
 })
