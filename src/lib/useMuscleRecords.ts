@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { addDays, todayIso } from '../db/queries'
-import { primaryMuscle, type MuscleSetRecord } from './muscles'
+import { primaryMuscle, setRecords, type MuscleSetRecord } from './muscles'
 
 /** Erledigte Sätze der letzten 7 Tage, je Satz mit Hauptmuskel, Datum und Übung. */
 export function useMuscleRecords(athleteId: string): MuscleSetRecord[] | undefined {
@@ -20,7 +20,7 @@ export function useMuscleRecords(athleteId: string): MuscleSetRecord[] | undefin
       const ex = le ? exercises.get(le.exerciseId) : undefined
       const muscle = ex ? primaryMuscle(ex) : undefined
       if (!le || !ex || !muscle) continue
-      records.push({ muscle, date: dateByLog.get(le.workoutLogId)!, reps: s.reps, weightKg: s.weightKg, exercise: ex.name })
+      records.push(...setRecords({ date: dateByLog.get(le.workoutLogId)!, reps: s.reps, weightKg: s.weightKg, exercise: ex.name }, muscle))
     }
     return records
   }, [athleteId])

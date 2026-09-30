@@ -98,7 +98,21 @@ export function muscleHeat(sets: number, target: number): { level: number; glow:
   return { level: Math.max(0, Math.min(1, sets / Math.max(1, target))), glow: sets > target }
 }
 
-export type MuscleSetRecord = { muscle: Muscle; date: string; reps?: number; weightKg?: number; exercise: string }
+/** `secondary`: Zusatz-Eintrag für einen zweiten Hauptmuskel (z.B. Po bei RDLs). */
+export type MuscleSetRecord = { muscle: Muscle; date: string; reps?: number; weightKg?: number; exercise: string; secondary?: boolean }
+
+// Übungen, die neben dem Hauptmuskel einen zweiten voll treffen.
+const CO_RULES: [RegExp, Muscle][] = [[/rumänisch|romanian|\brdl|good morning|einbeiniges kreuzheben|single.?leg deadlift/i, 'Po']]
+
+/** Zweite Hauptmuskeln einer Übung (für Heatmap und Richtwerte) - ohne den Hauptmuskel selbst. */
+export function coMuscles(name: string, primary?: Muscle): Muscle[] {
+  return CO_RULES.filter(([re, m]) => re.test(name) && m !== primary).map(([, m]) => m)
+}
+
+/** Ein Satz als Einträge: Hauptmuskel plus ggf. zweite Hauptmuskeln. */
+export function setRecords(base: Omit<MuscleSetRecord, 'muscle' | 'secondary'>, primary: Muscle): MuscleSetRecord[] {
+  return [{ ...base, muscle: primary }, ...coMuscles(base.exercise, primary).map((muscle) => ({ ...base, muscle, secondary: true }))]
+}
 
 /**
  * "Heute dran": Muskeln unter ihrem Wochen-Richtwert, die mindestens 48 h Pause hatten -

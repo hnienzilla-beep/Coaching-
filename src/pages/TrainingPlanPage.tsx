@@ -6,7 +6,7 @@ import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { SortableItem } from '../components/Sortable'
 import { HeatmapFigure } from '../components/MuscleHeatmap'
-import { primaryMuscle, type MuscleSetRecord } from '../lib/muscles'
+import { primaryMuscle, setRecords, type MuscleSetRecord } from '../lib/muscles'
 import { todayIso } from '../db/queries'
 import { db, exportTrainingPlan, importTrainingPlan } from '../db/db'
 import { savePhaseOrder } from '../db/queries'
@@ -147,13 +147,9 @@ export default function TrainingPlanPage() {
     const muscle = ex ? primaryMuscle(ex) : undefined
     if (!ex || !muscle) return []
     const reps = Number.parseInt(row.reps, 10)
-    return Array.from({ length: Math.max(0, row.sets) }, () => ({
-      muscle,
-      date: todayIso(),
-      reps: Number.isFinite(reps) ? reps : undefined,
-      weightKg: row.targetWeightKg,
-      exercise: ex.name,
-    }))
+    return Array.from({ length: Math.max(0, row.sets) }, () =>
+      setRecords({ date: todayIso(), reps: Number.isFinite(reps) ? reps : undefined, weightKg: row.targetWeightKg, exercise: ex.name }, muscle),
+    ).flat()
   })
 
   return (
