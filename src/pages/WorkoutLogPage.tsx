@@ -20,10 +20,6 @@ import { autoStartRestTimer } from '../lib/restTimer'
 import { celebrateOnce, haptic } from '../lib/feedback'
 import StrengthChart from '../components/StrengthChart'
 import MuscleHeatmap from '../components/MuscleHeatmap'
-import VolumeBars from '../components/VolumeBars'
-import { DEFAULT_ANSWERS, type StartAnswers } from '../lib/startPlan'
-import { VOLUME_MUSCLES, volumeFromRecords, weeklyTargetsFor } from '../lib/trainingPlan'
-import type { MuscleSetRecord } from '../lib/muscles'
 import { useMuscleRecords } from '../lib/useMuscleRecords'
 import { todaysFocus } from '../lib/muscles'
 import WorkoutTimer from '../components/WorkoutTimer'
@@ -74,17 +70,6 @@ async function createSetsFromPlanExercise(
 async function ensureStarted(log: WorkoutLog): Promise<void> {
   if (log.startedAt || log.completedAt) return
   await db.workoutLogs.update(log.id, { startedAt: new Date().toISOString() })
-}
-
-/** Erledigte Arbeitssätze der letzten 7 Tage je Muskel - mit Ziel, wenn es „Dein Start“-Antworten gibt. */
-function volumeRows(records: MuscleSetRecord[], athlete: Athlete) {
-  const v = volumeFromRecords(records)
-  const targets = athlete.startAnswers ? weeklyTargetsFor({ ...DEFAULT_ANSWERS, ...(athlete.startAnswers as Partial<StartAnswers>) }) : undefined
-  return VOLUME_MUSCLES.filter((m) => v.get(m)! > 0 || (targets?.get(m) ?? 0) > 0).map((m) => ({
-    muscle: m,
-    value: Math.round(v.get(m)! * 2) / 2,
-    target: targets?.get(m),
-  }))
 }
 
 export default function WorkoutLogPage() {
@@ -409,13 +394,7 @@ export default function WorkoutLogPage() {
         emptyText="Noch keine Trainingseinheiten aufgezeichnet."
       />}
 
-      {showCard('volumen') && muscleRecords && muscleRecords.length > 0 && (
-        <CollapsibleCard title="Wochenvolumen" storageKey="volume-log" summary="Sätze je Muskel · 7 Tage">
-          <VolumeBars rows={volumeRows(muscleRecords, athlete)} />
-        </CollapsibleCard>
-      )}
-
-      {showCard('heatmap') && muscleRecords && (
+      {prefs.showHeatmap && muscleRecords && (
         <CollapsibleCard
           title="Muskel-Heatmap"
           storageKey="heatmap-log"

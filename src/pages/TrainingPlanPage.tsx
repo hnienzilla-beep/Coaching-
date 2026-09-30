@@ -15,6 +15,9 @@ import { estimateWorkoutDurationMinutes, nextOrder } from '../lib/calculator'
 import type { Athlete, Exercise, TrainingPlanExercise } from '../models/types'
 import { Button, DecimalInput, Field, Input, ListRow, StatBadge } from '../components/ui'
 import CollapsibleCard from '../components/CollapsibleCard'
+import PlanVolumeCard from '../components/PlanVolumeCard'
+import { MUSCLE_ORDER, exerciseShares, planFrequencies } from '../lib/planVolume'
+import { usePrefs } from '../lib/prefs'
 import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import Sheet from '../components/Sheet'
@@ -32,6 +35,7 @@ function prescription(row: TrainingPlanExercise): string {
 export default function TrainingPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
   const coachMode = useCoachMode()
+  const prefs = usePrefs()
   const plans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
@@ -152,8 +156,23 @@ export default function TrainingPlanPage() {
     ).flat()
   })
 
+  // Volumen dieses Tages (ein Durchgang) - Hauptmuskel 1, mitarbeitende Muskeln ½.
+  const dayVolume = new Map<string, number>()
+  for (const row of filledRows) {
+    const ex = exerciseMap.get(row.exerciseId)
+    if (!ex) continue
+    for (const [m, share] of exerciseShares(ex)) dayVolume.set(m, (dayVolume.get(m) ?? 0) + row.sets * share)
+  }
+  const dayVolumeText = MUSCLE_ORDER.filter((m) => (dayVolume.get(m) ?? 0) > 0)
+    .map((m) => `${m} ${(dayVolume.get(m) ?? 0).toLocaleString('de-DE', { maximumFractionDigits: 1 })}`)
+    .join(' · ')
+  const autoTimes = activePlan && plans ? (planFrequencies({ ...athlete, schedule: athlete.schedule }, plans.map((p) => ({ ...p, timesPerWeek: undefined }))).get(activePlan.id) ?? 1) : 1
+  const times = activePlan?.timesPerWeek ?? autoTimes
+
   return (
     <div className="flex flex-col gap-4">
+      <PlanVolumeCard athlete={athlete} />
+
       <PlanPhaseHeader
         title="Trainingsplan"
         phases={(plans ?? []).map((p) => ({
@@ -206,6 +225,43 @@ export default function TrainingPlanPage() {
       )}
 
       {activePlan && (
+        <div className="flex flex-col gap-1 px-1 text-xs text-muted">
+          {dayVolumeText && <p>{dayVolumeText}</p>}
+          <div className="flex items-center gap-2">
+            <span>× pro Woche</span>
+            <div className="flex items-center rounded-lg bg-surface-2">
+              <button
+                type="button"
+                aria-label="Seltener pro Woche"
+                disabled={times <= 0}
+                onClick={() => void db.trainingPlans.update(activePlan.id, { timesPerWeek: Math.max(0, Math.round((times - 1) * 2) / 2) })}
+                className="px-2.5 py-1 text-fg disabled:opacity-30"
+              >
+                −
+              </button>
+              <span className="w-8 text-center font-semibold tabular-nums text-fg">{times.toLocaleString('de-DE', { maximumFractionDigits: 1 })}</span>
+              <button
+                type="button"
+                aria-label="Öfter pro Woche"
+                disabled={times >= 7}
+                onClick={() => void db.trainingPlans.update(activePlan.id, { timesPerWeek: Math.min(7, Math.round((times + 1) * 2) / 2) })}
+                className="px-2.5 py-1 text-fg disabled:opacity-30"
+              >
+                +
+              </button>
+            </div>
+            {activePlan.timesPerWeek !== undefined ? (
+              <button type="button" onClick={() => void db.trainingPlans.update(activePlan.id, { timesPerWeek: undefined })} className="text-accent">
+                Automatisch
+              </button>
+            ) : (
+              <span>aus deinen Trainingstagen</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activePlan && (
         <div className="flex flex-col gap-1.5">
           {allRows.length === 0 && (
             <p className="px-1 py-2 text-center text-sm text-muted">
@@ -245,7 +301,7 @@ export default function TrainingPlanPage() {
         </div>
       )}
 
-      {activePlan && filledRows.length > 0 && (
+      {prefs.showHeatmap && activePlan && filledRows.length > 0 && (
         <CollapsibleCard title="Muskeln dieses Tages" storageKey="heatmap-plan" summary={`${planRecords.length} Sätze`}>
           <HeatmapFigure athlete={athlete} records={planRecords} mode="plan" />
         </CollapsibleCard>

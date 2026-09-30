@@ -12,7 +12,7 @@ export type HintKey = 'weight' | 'protein' | 'kcal' | 'water'
 export type TrackingValue = 'bodyFat' | 'measures' | 'extraMeasures' | 'sleep' | 'steps'
 export type TrackingCard = 'wochenvergleich' | 'diagramm' | 'verlauf' | 'export'
 export type NutritionCard = 'wasser' | 'tetris' | 'details' | 'verlauf'
-export type TrainingCard = 'timer' | 'heatmap' | 'volumen' | 'kraft' | 'notizen' | 'verlauf'
+export type TrainingCard = 'timer' | 'kraft' | 'notizen' | 'verlauf'
 export type MealSlot = { slot: string; name: string; enabled: boolean }
 
 export interface Prefs {
@@ -35,6 +35,8 @@ export interface Prefs {
   gramStep: number
   kcalTolerance: number
   showRpe: boolean
+  /** Muskel-Heatmap im Log und im Plan - standardmäßig aus, das Wochenvolumen im Plan ersetzt sie. */
+  showHeatmap: boolean
   trainingHidden: TrainingCard[]
   weightUnit: 'kg' | 'lbs'
   lengthUnit: 'cm' | 'in'
@@ -77,6 +79,7 @@ export const DEFAULT_PREFS: Prefs = {
   gramStep: 10,
   kcalTolerance: 100,
   showRpe: true,
+  showHeatmap: false,
   trainingHidden: [],
   weightUnit: 'kg',
   lengthUnit: 'cm',
