@@ -571,7 +571,6 @@ export function settingsFor(a: StartAnswers): PlanSettings {
  * Wochenvolumen
  * ---------------------------------------------------------------------------------------- */
 
-const midMav = (l: Landmarks) => Math.round((l.mavLo + l.mavHi) / 2)
 
 /** Grund-Ziel (Sätze pro Woche) je Muskel - aus Ziel, Erfahrung und (Profi) eigener Zone. */
 export function weeklyTarget(muscle: VolumeMuscle, a: StartAnswers): number {
@@ -579,8 +578,9 @@ export function weeklyTarget(muscle: VolumeMuscle, a: StartAnswers): number {
   const s = settingsFor(a)
   const beginner = a.experience === 'einsteiger'
   const zone = s.zones[muscle]
-  if (zone) return zone === 'MV' ? l.mv : zone === 'MEV' ? l.mev : midMav(l)
-  const byGoal = a.goal === 'aufbauen' ? midMav(l) : a.goal === 'recomp' ? Math.round((l.mev + l.mavLo) / 2) : l.mev
+  if (zone) return zone === 'MV' ? l.mv : zone === 'MEV' ? l.mev : l.mavLo
+  // Aufbauen: sicher im MAV (Untergrenze) - so ist das Ziel mit 3–5 Trainings auch erreichbar.
+  const byGoal = a.goal === 'aufbauen' ? l.mavLo : a.goal === 'recomp' ? Math.round((l.mev + l.mavLo) / 2) : l.mev
   if (!beginner) return byGoal
   return Math.min(byGoal, a.goal === 'aufbauen' ? l.mavLo : l.mev)
 }
@@ -854,6 +854,33 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const extras: { slot: Slot; muscle: VolumeMuscle }[][] = units.map(() => [])
   let drafts = units.map((u, i) => buildUnit(u, extras[i]))
   let share = allot(drafts)
+  // Wochenziel einhalten: Reichen die Tage eines Muskels nicht (je Training höchstens 4 bzw. 8
+  // Sätze), kommt er zusätzlich an die Tage mit dem meisten Platz.
+  {
+    const ind = indirectOf(drafts)
+    let spread = false
+    for (const m of VOLUME_MUSCLES) {
+      if (INDIRECT_ONLY.includes(m)) continue
+      const need = target.get(m)! - (ind.get(m) ?? 0)
+      const trains = (u: number) => drafts[u].some((d) => d.entry.p === m) || extras[u].some((x) => x.muscle === m)
+      let capacity = units.reduce((n, _, u) => n + (trains(u) ? freq[u] * maxSetsPerSession(m) : 0), 0)
+      if (need <= capacity + 0.5) continue
+      const free = units
+        .map((_, u) => u)
+        .filter((u) => freq[u] > 0 && !trains(u))
+        .sort((x, y) => drafts[x].reduce((n, d) => n + d.sets, 0) - drafts[y].reduce((n, d) => n + d.sets, 0))
+      for (const u of free) {
+        if (need <= capacity + 0.5) break
+        extras[u].push({ slot: FOCUS_SLOT[m], muscle: m })
+        capacity += freq[u] * maxSetsPerSession(m)
+        spread = true
+      }
+    }
+    if (spread) {
+      drafts = units.map((u, i) => buildUnit(u, extras[i]))
+      share = allot(drafts)
+    }
+  }
   // Passt der Anteil (bzw. am Fokus-Tag Anteil + 1) nicht in die Übungen der Einheit (max. 4 je
   // Übung), bekommt sie eine zweite Übung für den Muskel.
   let added = false
@@ -874,14 +901,15 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
 
   // Gleich viel an jedem Tag heißt: nicht mehr, als die knappste Einheit fassen kann (4 je Übung,
   // am Fokus-Tag einer weniger für den Bonus-Satz).
-  for (const m of VOLUME_MUSCLES) {
-    let cap = Infinity
+  const capOf = (m: VolumeMuscle) => {
+    let cap = maxSetsPerSession(m)
     drafts.forEach((list, u) => {
       const n = list.filter((d) => d.entry.p === m).length
       if (freq[u] > 0 && n > 0) cap = Math.min(cap, 4 * n - (focusIn(u).has(m) ? 1 : 0))
     })
-    if (cap < (share.get(m) ?? 0)) share.set(m, cap)
+    return cap
   }
+  for (const m of VOLUME_MUSCLES) if (capOf(m) < (share.get(m) ?? 0)) share.set(m, capOf(m))
   drafts.forEach((l, i) => distribute(l, i, share))
 
   // Ziel inkl. Schwerpunkt: je Fokus-Tag ein Satz mehr.
@@ -940,6 +968,31 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     drafts.forEach((l, i) => distribute(l, i, share))
   }
 
+  // Auffüllen: Muskeln unter ihrem Wochenziel bekommen wieder mehr, solange an ALLEN ihren Tagen
+  // Platz ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
+  const fits = () => drafts.every((l) => !over(l))
+  for (let round = 0; round < 60; round++) {
+    const v = volumeOf(drafts, freq)
+    const gaps = VOLUME_MUSCLES.filter((m) => !INDIRECT_ONLY.includes(m) && v.get(m)! + 0.5 < goal(m) && (share.get(m) ?? 0) < capOf(m))
+      .sort((x, y) => v.get(x)! / Math.max(1, goal(x)) - v.get(y)! / Math.max(1, goal(y)))
+    let grown = false
+    for (const m of gaps) {
+      const before = share.get(m) ?? 0
+      const next = before === 0 ? 2 : before + 1
+      if (next > capOf(m)) continue
+      share.set(m, next)
+      drafts.forEach((l, i) => distribute(l, i, share))
+      const gained = volumeOf(drafts, freq).get(m)! > v.get(m)!
+      if (fits() && gained) {
+        grown = true
+        break
+      }
+      share.set(m, before)
+      drafts.forEach((l, i) => distribute(l, i, share))
+    }
+    if (!grown) break
+  }
+
   // 4. Eigene Satzzahlen aus der Zusammenfassung.
   for (const list of drafts)
     for (const d of list) {
@@ -976,7 +1029,14 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const v = volumeOf(drafts, freq)
   const volume = VOLUME_MUSCLES.map((m) => ({ muscle: m, planned: Math.round(v.get(m)! * 2) / 2, target: Math.round(goal(m)) }))
   const schedule = fixed ? [...a.trainingDays].sort((x, y) => x - y).map((weekday, i) => ({ weekday, unit: dayIdx[i] })) : []
-  const warnings = [...recoveryWarnings(a, drafts, units, schedule), ...limitWarnings(days)]
+  // Wochenziel nicht erreicht (z.B. Satzgrenze oder Zeit zu knapp): sagen, wie viel fehlt.
+  const missing = volume.filter((x) => !INDIRECT_ONLY.includes(x.muscle) && x.planned + 0.5 < x.target)
+  const missWarnings = missing.length
+    ? [
+        `Unter dem Wochenziel: ${missing.map((x) => `${x.muscle} ${x.planned}/${x.target}`).join(', ')} – mehr Trainingstage, mehr Zeit oder eine höhere Satzgrenze helfen.`,
+      ]
+    : []
+  const warnings = [...missWarnings, ...recoveryWarnings(a, drafts, units, schedule), ...limitWarnings(days)]
   return { days, frequency: freq, volume, warnings, schedule }
 }
 

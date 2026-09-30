@@ -8,7 +8,7 @@ const pro = (patch: Partial<StartAnswers> = {}) => a({ experience: 'erfahren', g
 describe('Wochenvolumen nach Tabelle', () => {
   it('Ziel bestimmt die Zone', () => {
     expect(weeklyTarget('Brust', a({ goal: 'abnehmen', experience: 'fortgeschritten' }))).toBe(LANDMARKS.Brust.mev)
-    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(16)
+    expect(weeklyTarget('Brust', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(12)
     expect(weeklyTarget('Brust', a({ goal: 'recomp', experience: 'fortgeschritten' }))).toBe(11)
   })
   it('Einsteiger bleiben unten', () => {
@@ -132,7 +132,7 @@ describe('Hybrid-Splits', () => {
     const pull = week.days[1].exercises.map((e) => e.name)
     expect(push.slice(0, 3)).toEqual(['Schrägbankdrücken (Smith Maschine)', 'Bankdrücken (Kurzhantel)', 'Butterfly (Maschine)'])
     expect(push).toEqual(expect.arrayContaining(['Beinpresse', 'Beinstrecker', 'Seitheben']))
-    expect(pull).toEqual(expect.arrayContaining(['Latzug', 'Rudern (Maschine) (einarmig)', 'T-Bar', 'Front Latpulldown', 'Preacher Curls (kurzhantel)']))
+    expect(pull).toEqual(expect.arrayContaining(['Latzug', 'Rudern (Maschine) (einarmig)', 'T-Bar', 'Preacher Curls (kurzhantel)']))
   })
   it('Trapez: Rudervarianten inkl. T-Bar', () => {
     const week = buildTrainingWeek(pro({ split: 'okuk', trainingDays: [0, 1, 3, 4], focusByUnit: { 'Oberkörper A': ['Trapez'] } }))
@@ -244,7 +244,7 @@ describe('Schulterköpfe getrennt mit halben Werten', () => {
   it('Seitl./Hint. Schulter: MAV 8-11', () => {
     expect(LANDMARKS['Seitl. Schulter']).toEqual({ mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 })
     expect(LANDMARKS['Hint. Schulter']).toEqual({ mv: 0, mev: 4, mavLo: 8, mavHi: 11, mrv: 13 })
-    expect(weeklyTarget('Seitl. Schulter', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(10)
+    expect(weeklyTarget('Seitl. Schulter', a({ goal: 'aufbauen', experience: 'fortgeschritten' }))).toBe(8)
   })
 })
 
@@ -270,5 +270,18 @@ describe('Pull ohne RDL', () => {
       const pull = week.days.find((d) => d.name === 'Pull')!
       expect(pull.exercises.map((e) => e.name).some((n) => /Kreuzheben|Good Morning/.test(n)), split).toBe(false)
     }
+  })
+})
+
+describe('Wochenziel wird eingehalten, wenn der Plan Platz hat', () => {
+  it('PPL 6 Tage: alle Muskeln (außer indirekten) mindestens am Ziel', () => {
+    for (const goal of ['aufbauen', 'recomp', 'abnehmen'] as const) {
+      const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal, split: 'ppl', trainingDays: [0, 1, 2, 3, 4, 5], durationMin: 90 }))
+      for (const v of week.volume) if (!['Trapez', 'Vord. Schulter', 'Adduktoren'].includes(v.muscle)) expect(v.planned + 0.5, `${goal} ${v.muscle}`).toBeGreaterThanOrEqual(v.target)
+    }
+  })
+  it('zu wenig Platz: Hinweis, wie viel fehlt', () => {
+    const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split: 'ganzkoerper', trainingDays: [0, 2, 4], durationMin: 60 }))
+    expect(week.warnings.some((w) => w.startsWith('Unter dem Wochenziel'))).toBe(true)
   })
 })
