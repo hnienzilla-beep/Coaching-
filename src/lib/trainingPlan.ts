@@ -25,7 +25,8 @@ export const VOLUME_MUSCLES = [
   'Brust',
   'Rücken',
   'Trapez',
-  'Seitl./hint. Schulter',
+  'Seitl. Schulter',
+  'Hint. Schulter',
   'Vord. Schulter',
   'Bizeps',
   'Trizeps',
@@ -50,7 +51,9 @@ export const LANDMARKS: Record<VolumeMuscle, Landmarks> = {
   Brust: { mv: 8, mev: 10, mavLo: 12, mavHi: 20, mrv: 22 },
   Rücken: { mv: 8, mev: 10, mavLo: 14, mavHi: 22, mrv: 25 },
   Trapez: { mv: 0, mev: 0, mavLo: 10, mavHi: 16, mrv: 26 },
-  'Seitl./hint. Schulter': { mv: 0, mev: 8, mavLo: 16, mavHi: 22, mrv: 26 },
+  // Die Tabelle nennt beide zusammen - gleiche Werte je Kopf.
+  'Seitl. Schulter': { mv: 0, mev: 8, mavLo: 16, mavHi: 22, mrv: 26 },
+  'Hint. Schulter': { mv: 0, mev: 8, mavLo: 16, mavHi: 22, mrv: 26 },
   'Vord. Schulter': { mv: 0, mev: 0, mavLo: 6, mavHi: 8, mrv: 12 },
   Bizeps: { mv: 5, mev: 8, mavLo: 14, mavHi: 20, mrv: 26 },
   Trizeps: { mv: 4, mev: 6, mavLo: 10, mavHi: 14, mrv: 18 },
@@ -189,57 +192,57 @@ export const CATALOG: CatalogExercise[] = [
   ex('incline', 'Liegestütze (Füße erhöht)', 'Brust', ['kg'], 'compound', { s: ['Vord. Schulter', 'Trizeps'], avoid: ['handgelenk'] }),
   ex('incline', 'Fliegende mit Band', 'Brust', ['band'], 'isolation'),
   // Drücken vertikal
-  ex('vpush', 'Schulterdrücken', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
-  ex('vpush', 'Schulterdrücken (Kurzhantel)', 'Vord. Schulter', ['kh'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
-  ex('vpush', 'Schulterdrücken (Langhantel)', 'Vord. Schulter', ['lh'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], tech: 'schulterdruecken', avoid: ['schulter', 'ruecken'] }),
-  ex('vpush', 'Schulterpresse (Maschine)', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
-  ex('vpush', 'Arnold Press', 'Vord. Schulter', ['kh'], 'compound', { s: ['Trizeps', 'Seitl./hint. Schulter'], avoid: ['schulter'] }),
+  ex('vpush', 'Schulterdrücken', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl. Schulter'], avoid: ['schulter'] }),
+  ex('vpush', 'Schulterdrücken (Kurzhantel)', 'Vord. Schulter', ['kh'], 'compound', { s: ['Trizeps', 'Seitl. Schulter'], avoid: ['schulter'] }),
+  ex('vpush', 'Schulterdrücken (Langhantel)', 'Vord. Schulter', ['lh'], 'compound', { s: ['Trizeps', 'Seitl. Schulter'], tech: 'schulterdruecken', avoid: ['schulter', 'ruecken'] }),
+  ex('vpush', 'Schulterpresse (Maschine)', 'Vord. Schulter', ['maschine'], 'compound', { s: ['Trizeps', 'Seitl. Schulter'], avoid: ['schulter'] }),
+  ex('vpush', 'Arnold Press', 'Vord. Schulter', ['kh'], 'compound', { s: ['Trizeps', 'Seitl. Schulter'], avoid: ['schulter'] }),
   ex('vpush', 'Landmine Press', 'Vord. Schulter', ['lh'], 'compound', { s: ['Trizeps', 'Brust'] }),
   ex('vpush', 'Pike Push-ups', 'Vord. Schulter', ['kg'], 'compound', { s: ['Trizeps'], avoid: ['schulter', 'handgelenk'] }),
-  ex('vpush', 'Seitheben', 'Seitl./hint. Schulter', ['kh'], 'small'),
+  ex('vpush', 'Seitheben', 'Seitl. Schulter', ['kh'], 'small'),
   // Vordere Schulter isoliert (nur als Schwerpunkt)
   ex('frontraise', 'Frontheben (Kurzhantel)', 'Vord. Schulter', ['kh'], 'small'),
   ex('frontraise', 'Frontheben am Kabel', 'Vord. Schulter', ['kabel'], 'small'),
   ex('frontraise', 'Frontheben mit Band', 'Vord. Schulter', ['band'], 'small'),
   // Seitliche Schulter
-  ex('lateral', 'Seitheben', 'Seitl./hint. Schulter', ['kh'], 'small'),
-  ex('lateral', 'Seitheben am Kabel', 'Seitl./hint. Schulter', ['kabel'], 'small'),
-  ex('lateral', 'Seitheben (Maschine)', 'Seitl./hint. Schulter', ['maschine'], 'small'),
-  ex('lateral', 'Seitheben mit Band', 'Seitl./hint. Schulter', ['band'], 'small'),
-  ex('lateral', 'Aufrechtes Rudern', 'Seitl./hint. Schulter', ['lh'], 'isolation', { s: ['Trapez'], avoid: ['schulter'] }),
+  ex('lateral', 'Seitheben', 'Seitl. Schulter', ['kh'], 'small'),
+  ex('lateral', 'Seitheben am Kabel', 'Seitl. Schulter', ['kabel'], 'small'),
+  ex('lateral', 'Seitheben (Maschine)', 'Seitl. Schulter', ['maschine'], 'small'),
+  ex('lateral', 'Seitheben mit Band', 'Seitl. Schulter', ['band'], 'small'),
+  ex('lateral', 'Aufrechtes Rudern', 'Seitl. Schulter', ['lh'], 'isolation', { s: ['Trapez'], avoid: ['schulter'] }),
   // Hintere Schulter
-  ex('rear', 'Reverse kablefly (einarmig)', 'Seitl./hint. Schulter', ['kabel'], 'small'),
-  ex('rear', 'Face Pulls', 'Seitl./hint. Schulter', ['kabel'], 'small', { s: ['Trapez'] }),
-  ex('rear', 'Reverse Butterfly', 'Seitl./hint. Schulter', ['maschine'], 'small'),
-  ex('rear', 'Vorgebeugtes Seitheben', 'Seitl./hint. Schulter', ['kh'], 'small'),
-  ex('rear', 'Face Pulls mit Band', 'Seitl./hint. Schulter', ['band'], 'small'),
+  ex('rear', 'Reverse kablefly (einarmig)', 'Hint. Schulter', ['kabel'], 'small'),
+  ex('rear', 'Face Pulls', 'Hint. Schulter', ['kabel'], 'small', { s: ['Trapez'] }),
+  ex('rear', 'Reverse Butterfly', 'Hint. Schulter', ['maschine'], 'small'),
+  ex('rear', 'Vorgebeugtes Seitheben', 'Hint. Schulter', ['kh'], 'small'),
+  ex('rear', 'Face Pulls mit Band', 'Hint. Schulter', ['band'], 'small'),
   // Ziehen vertikal
-  ex('vpull', 'Latzug', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
-  ex('vpull', 'Front Latpulldown', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
-  ex('vpull', 'Klimmzüge', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'], tech: 'klimmzuege', avoid: ['schulter', 'ellbogen'] }),
+  ex('vpull', 'Latzug', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
+  ex('vpull', 'Front Latpulldown', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
+  ex('vpull', 'Klimmzüge', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Hint. Schulter'], tech: 'klimmzuege', avoid: ['schulter', 'ellbogen'] }),
   ex('vpull', 'Latzug (eng)', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps'] }),
   ex('vpull', 'Klimmzüge (assistiert)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps'], avoid: ['ellbogen'] }),
   ex('vpull', 'Überzüge am Kabel', 'Rücken', ['kabel'], 'isolation'),
-  ex('vpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
+  ex('vpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
   ex('vpull', 'Latziehen mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
   // Ziehen horizontal
-  ex('hpull', 'Rudern (Maschine) (einarmig)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
-  ex('hpull', 'T-Bar', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Trapez', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
-  ex('hpull', 'Kabelrudern (sitzend)', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'] }),
-  ex('hpull', 'Langhantelrudern', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'], avoid: ['ruecken'] }),
-  ex('hpull', 'Brustgestütztes Rudern (Maschine)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter', 'Trapez'] }),
-  ex('hpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
-  ex('hpull', 'Umgekehrtes Rudern', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Seitl./hint. Schulter'] }),
+  ex('hpull', 'Rudern (Maschine) (einarmig)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
+  ex('hpull', 'T-Bar', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Trapez', 'Hint. Schulter'], avoid: ['ruecken'] }),
+  ex('hpull', 'Kabelrudern (sitzend)', 'Rücken', ['kabel'], 'compound', { s: ['Bizeps', 'Hint. Schulter', 'Trapez'] }),
+  ex('hpull', 'Langhantelrudern', 'Rücken', ['lh'], 'compound', { s: ['Bizeps', 'Hint. Schulter', 'Trapez'], avoid: ['ruecken'] }),
+  ex('hpull', 'Brustgestütztes Rudern (Maschine)', 'Rücken', ['maschine'], 'compound', { s: ['Bizeps', 'Hint. Schulter', 'Trapez'] }),
+  ex('hpull', 'Kurzhantelrudern (einarmig)', 'Rücken', ['kh'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
+  ex('hpull', 'Umgekehrtes Rudern', 'Rücken', ['stange'], 'compound', { s: ['Bizeps', 'Hint. Schulter'] }),
   ex('hpull', 'Rudern mit Band', 'Rücken', ['band'], 'compound', { s: ['Bizeps'] }),
   // Nacken / Trapez: Rudervarianten mit breitem Griff zuerst (mittlerer Trapez), dann Shrugs (oberer)
-  ex('shrug', 'T-Bar', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
-  ex('shrug', 'Kabelrudern (breit, zur Brust)', 'Trapez', ['kabel'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
-  ex('shrug', 'Rudern breit (Maschine)', 'Trapez', ['maschine'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
-  ex('shrug', 'Langhantelrudern (breiter Obergriff)', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'], avoid: ['ruecken'] }),
-  ex('shrug', 'Seal Row', 'Trapez', ['lh', 'bank'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
-  ex('shrug', 'Brustgestütztes Kurzhantelrudern (breit)', 'Trapez', ['kh', 'bank'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
-  ex('shrug', 'Kabelrudern hoch (zum Gesicht)', 'Trapez', ['kabel'], 'isolation', { s: ['Seitl./hint. Schulter'] }),
-  ex('shrug', 'Rudern breit mit Band', 'Trapez', ['band'], 'compound', { s: ['Rücken', 'Seitl./hint. Schulter'] }),
+  ex('shrug', 'T-Bar', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Hint. Schulter'], avoid: ['ruecken'] }),
+  ex('shrug', 'Kabelrudern (breit, zur Brust)', 'Trapez', ['kabel'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('shrug', 'Rudern breit (Maschine)', 'Trapez', ['maschine'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('shrug', 'Langhantelrudern (breiter Obergriff)', 'Trapez', ['lh'], 'compound', { s: ['Rücken', 'Hint. Schulter'], avoid: ['ruecken'] }),
+  ex('shrug', 'Seal Row', 'Trapez', ['lh', 'bank'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('shrug', 'Brustgestütztes Kurzhantelrudern (breit)', 'Trapez', ['kh', 'bank'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
+  ex('shrug', 'Kabelrudern hoch (zum Gesicht)', 'Trapez', ['kabel'], 'isolation', { s: ['Hint. Schulter'] }),
+  ex('shrug', 'Rudern breit mit Band', 'Trapez', ['band'], 'compound', { s: ['Rücken', 'Hint. Schulter'] }),
   ex('shrug', 'Shrugs (Kurzhantel)', 'Trapez', ['kh'], 'small'),
   ex('shrug', 'Shrugs (Langhantel)', 'Trapez', ['lh'], 'small'),
   ex('shrug', 'Shrugs (Maschine)', 'Trapez', ['maschine'], 'small'),
@@ -361,7 +364,8 @@ const FOCUS_SLOT: Record<VolumeMuscle, Slot> = {
   Brust: 'hpush',
   Rücken: 'hpull',
   Trapez: 'shrug',
-  'Seitl./hint. Schulter': 'lateral',
+  'Seitl. Schulter': 'lateral',
+  'Hint. Schulter': 'rear',
   'Vord. Schulter': 'frontraise',
   Bizeps: 'biceps',
   Trizeps: 'triceps',
@@ -380,7 +384,8 @@ const EXTRA_SLOT: Partial<Record<VolumeMuscle, Slot[]>> = {
   Trapez: ['shrug'],
   Quadrizeps: ['lunge', 'squat', 'legext'],
   Beinbeuger: ['hamstring', 'hinge'],
-  'Seitl./hint. Schulter': ['lateral', 'rear'],
+  'Seitl. Schulter': ['lateral'],
+  'Hint. Schulter': ['rear'],
   Bizeps: ['biceps'],
   Trizeps: ['triceps'],
   Waden: ['calves'],
@@ -626,7 +631,7 @@ export interface TrainingWeek {
   schedule: { weekday: number; unit: number }[]
 }
 
-type Draft = { entry: CatalogExercise; slot: Slot; key: string; sets: number; focus: boolean; required?: boolean; note?: string; alternatives: string[] }
+type Draft = { entry: CatalogExercise; slot: Slot; key: string; sets: number; focus: boolean; required?: boolean; extra?: boolean; note?: string; alternatives: string[] }
 
 function usable(c: CatalogExercise, a: StartAnswers, s: PlanSettings): boolean {
   return (
@@ -713,7 +718,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const fixed = a.scheduleMode !== 'rotation'
   const dayIdx = fixed ? dayUnitIndexes(a, units.length) : []
   const freq = units.map((_, u) => (fixed ? dayIdx.filter((x) => x === u).length : perWeek / units.length))
-  const focusOf = (u: Unit) => (a.focusByUnit?.[u.key] ?? []).slice(0, 2)
+  const focusOf = (u: Unit) => (a.focusByUnit?.[u.key] ?? []).filter((m) => m in LANDMARKS).slice(0, 2)
   const allFocus = new Set(units.flatMap((u) => (freq[units.indexOf(u)] > 0 ? focusOf(u) : [])))
   const target = new Map(VOLUME_MUSCLES.map((m) => [m, weeklyTarget(m, a, allFocus.has(m))]))
 
@@ -722,15 +727,21 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     const focus = focusOf(u)
     const slots = [...DAY_TEMPLATES[u.base]]
     const mainMuscle = (sl: Slot) => candidates(sl, a, s)[0]?.p
+    const extraAt = new Set<number>()
     for (const x of extra) {
       const last = slots.map(mainMuscle).lastIndexOf(x.muscle)
-      slots.splice(last === -1 ? slots.length : last + 1, 0, x.slot)
+      const at = last === -1 ? slots.length : last + 1
+      slots.splice(at, 0, x.slot)
+      // Spätere Positionen verschieben sich mit.
+      const shifted = [...extraAt].map((i) => (i >= at ? i + 1 : i))
+      extraAt.clear()
+      for (const i of [...shifted, at]) extraAt.add(i)
     }
     for (const m of focus) if (!slots.some((sl) => mainMuscle(sl) === m)) slots.push(FOCUS_SLOT[m])
     const used = new Set<string>()
     const seen = new Map<Slot, number>()
     const list: Draft[] = []
-    for (const slot of slots) {
+    for (const [si, slot] of slots.entries()) {
       const n = seen.get(slot) ?? 0
       seen.set(slot, n + 1)
       const key = `${u.key}|${slot}|${n}`
@@ -742,7 +753,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       used.add(pick.name)
       // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin.
       const required = (REQUIRED[u.base] ?? []).includes(pick.p) && !list.some((d) => d.required && d.entry.p === pick.p)
-      list.push({ entry: pick, slot, key, sets: 0, focus: false, required, alternatives: cands.map((c) => c.name), note: undefined })
+      list.push({ entry: pick, slot, key, sets: 0, focus: false, required, extra: extraAt.has(si), alternatives: cands.map((c) => c.name), note: undefined })
     }
     // Schwerpunkte: erste passende Übung je Muskel nach vorn (in der gewählten Reihenfolge).
     const front: Draft[] = []
@@ -827,15 +838,24 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       const v = volumeOf(drafts, freq)
       // Erst Sätze abbauen (Übungen mit mehr als 2 Sätzen), erst danach ganze Übungen streichen -
       // so bleibt die Übungsauswahl der Vorlage erhalten.
-      const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false) =>
+      const pickFrom = (onlyAboveMv: boolean, allowFocus: boolean, reduceOnly = false, extrasOnly = false) =>
         list
+          .filter((d) => !extrasOnly || d.extra)
           // Schwerpunkt-Muskeln bleiben auch an anderen Tagen möglichst unangetastet.
-          .filter((d) => d.sets > (reduceOnly || d.required ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
+          // Schwerpunkt- und Pflicht-Übungen werden nur gekürzt, nie gestrichen.
+          .filter((d) => d.sets > (reduceOnly || d.required || d.focus ? 2 : 0) && (allowFocus || (!d.focus && !allFocus.has(d.entry.p))))
           .filter((d) => !onlyAboveMv || v.get(d.entry.p)! - freq[u] * (d.sets === 2 ? 2 : 1) >= LANDMARKS[d.entry.p].mv)
           // Am besten versorgte Muskeln zuerst (Ist / Ziel), bei Gleichstand die spätere Übung.
           .map((d, i) => ({ d, i, surplus: v.get(d.entry.p)! / Math.max(1, target.get(d.entry.p)!) }))
           .sort((x, y) => y.surplus - x.surplus || y.i - x.i)[0]?.d
-      const victim = pickFrom(true, false, true) ?? pickFrom(false, false, true) ?? pickFrom(true, false) ?? pickFrom(false, false) ?? pickFrom(false, true)
+      // Reihenfolge: Sätze abbauen → ergänzte Übungen streichen → Vorlagen-Übungen streichen.
+      const victim =
+        pickFrom(true, false, true) ??
+        pickFrom(false, false, true) ??
+        pickFrom(false, false, false, true) ??
+        pickFrom(true, false) ??
+        pickFrom(false, false) ??
+        pickFrom(false, true)
       if (!victim) break
       victim.sets = victim.sets <= 2 ? 0 : victim.sets - 1
     }
@@ -950,8 +970,8 @@ function limitWarnings(days: PlanDay[]): string[] {
 const FROM_HEATMAP: Partial<Record<Muscle, VolumeMuscle>> = {
   Brust: 'Brust',
   'Vordere Schulter': 'Vord. Schulter',
-  'Seitliche Schulter': 'Seitl./hint. Schulter',
-  'Hintere Schulter': 'Seitl./hint. Schulter',
+  'Seitliche Schulter': 'Seitl. Schulter',
+  'Hintere Schulter': 'Hint. Schulter',
   Bizeps: 'Bizeps',
   Trizeps: 'Trizeps',
   Bauch: 'Bauch',
