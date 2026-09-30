@@ -12,7 +12,7 @@ export type HintKey = 'weight' | 'protein' | 'kcal' | 'water'
 export type TrackingValue = 'bodyFat' | 'measures' | 'extraMeasures' | 'sleep' | 'steps'
 export type TrackingCard = 'wochenvergleich' | 'diagramm' | 'verlauf' | 'export'
 export type NutritionCard = 'wasser' | 'tetris' | 'details' | 'verlauf'
-export type TrainingCard = 'timer' | 'heatmap' | 'kraft' | 'notizen' | 'verlauf'
+export type TrainingCard = 'timer' | 'heatmap' | 'volumen' | 'kraft' | 'notizen' | 'verlauf'
 export type MealSlot = { slot: string; name: string; enabled: boolean }
 
 export interface Prefs {

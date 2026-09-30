@@ -21,6 +21,8 @@
 export interface RestTimerState {
   /** Gewählte Pausenlänge in Sekunden (bleibt über Pausen hinweg erhalten). */
   duration: number
+  /** Länge der laufenden Pause - kann aus dem Plan kommen und von `duration` abweichen. */
+  length: number
   /** Zeitstempel des Pausenendes, `null` wenn gerade keine Pause läuft. */
   endTime: number | null
   /** Verbleibende Sekunden, `0` wenn keine Pause läuft. */
@@ -86,6 +88,7 @@ function remainingFor(endTime: number | null): number {
 const restored = readStorage()
 let state: RestTimerState = {
   duration: restored.duration,
+  length: restored.duration,
   endTime: restored.endTime,
   remaining: remainingFor(restored.endTime),
   finishedAt: null,
@@ -111,6 +114,7 @@ function setState(patch: Partial<RestTimerState>): void {
   const next = { ...state, ...patch }
   if (
     next.duration === state.duration &&
+    next.length === state.length &&
     next.endTime === state.endTime &&
     next.remaining === state.remaining &&
     next.finishedAt === state.finishedAt &&
@@ -226,7 +230,15 @@ export function startRestTimer(seconds: number = state.duration): void {
   // Muss in der Nutzergeste passieren, sonst bleibt der Ton auf iOS aus.
   unlockAudio()
   pendingSignalAt = null
-  setState({ duration: seconds, endTime: Date.now() + seconds * 1000, remaining: seconds, finishedAt: null })
+  setState({ duration: seconds, length: seconds, endTime: Date.now() + seconds * 1000, remaining: seconds, finishedAt: null })
+  ensureTicker()
+}
+
+/** Pause mit eigener Länge (z.B. aus dem Trainingsplan) - die Standard-Pause bleibt, wie sie ist. */
+function startPlannedRest(seconds: number): void {
+  unlockAudio()
+  pendingSignalAt = null
+  setState({ length: seconds, endTime: Date.now() + seconds * 1000, remaining: seconds, finishedAt: null })
   ensureTicker()
 }
 
@@ -239,8 +251,11 @@ export function setAutoRest(auto: boolean): void {
 }
 
 /** Nach einem abgehakten Satz: Pause starten, wenn die Automatik an ist. */
-export function autoStartRestTimer(): void {
-  if (state.auto) startRestTimer(state.duration)
+/** Nach einem abgehakten Satz: Pause aus dem Plan, sonst die Standard-Pause. */
+export function autoStartRestTimer(plannedSeconds?: number): void {
+  if (!state.auto) return
+  if (plannedSeconds && plannedSeconds > 0) startPlannedRest(plannedSeconds)
+  else startRestTimer(state.duration)
 }
 
 export function cancelRestTimer(): void {

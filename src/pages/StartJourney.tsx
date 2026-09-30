@@ -9,21 +9,30 @@ import { getPrefs, type TabKey } from '../lib/prefs'
 import { createFromStart, updateFromStart, type StartAppChoices } from '../lib/startApply'
 import {
   DEFAULT_ANSWERS,
+  LIFT_LABELS,
+  LOCATION_LABELS,
   SPLIT_LABELS,
+  VOLUME_MUSCLES,
+  buildTrainingWeek,
+  catalogByMuscle,
+  effectiveSplit,
+  planUnits,
   recommendSupplements,
-  splitsFor,
+  sessionsPerWeek,
+  splitOptions,
+  suggestedSplitFor,
   supplementNamesFor,
   supplementInfo,
   START_SUPPLEMENTS,
   buildMealPlans,
-  buildTrainingPlan,
   computeTargets,
   suggestTargetWeight,
-  suggestedSplit,
   targetWarning,
+  tier,
   type Allergen,
-  type Focus,
+  type Lift,
   type Restriction,
+  type TrainingWeek,
   type StartAnswers,
 } from '../lib/startPlan'
 import { getStoredTheme } from '../lib/theme'
@@ -31,6 +40,7 @@ import { isCreatine } from '../lib/water'
 import type { Athlete } from '../models/types'
 import ColorWheel from '../components/ColorWheel'
 import { DecimalInput, Input } from '../components/ui'
+import VolumeBars from '../components/VolumeBars'
 
 /*
  * „Dein Start“ - der Einstieg für einen neuen Athleten: kurze Abschnitte mit wenigen Fragen,
@@ -50,15 +60,15 @@ const STEPS: Step[] = [
   { section: 'Dein Ziel', title: 'Was willst du erreichen?' },
   { section: 'Dein Ziel', title: 'Dein Zielgewicht' },
   { section: 'Training', title: 'Dein Training' },
-  { section: 'Training', title: 'Dauer & Schwerpunkte' },
+  { section: 'Training', title: 'Zeit & Übungen' },
   { section: 'Training', title: 'Dein Plan-Aufbau' },
+  { section: 'Training', title: 'Deine Schwerpunkte' },
   { section: 'Ernährung', title: 'Deine Ernährung' },
   { section: 'App', title: 'Deine App' },
   { section: 'Fertig', title: 'Dein Plan steht' },
 ]
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
-const FOCUS: Focus[] = ['Brust', 'Rücken', 'Beine', 'Po', 'Schultern', 'Arme', 'Bauch']
 const RESTRICTIONS: { id: Restriction; label: string }[] = [
   { id: 'knie', label: 'Knie' },
   { id: 'schulter', label: 'Schulter' },
@@ -203,7 +213,10 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
   const weightGoal = a.goal === 'abnehmen' || a.goal === 'aufbauen'
   const suggestion = suggestTargetWeight(a)
   const warning = weightGoal ? targetWarning(a, a.targetWeightKg ?? suggestion) : undefined
-  const plan = useMemo(() => buildTrainingPlan(a), [a])
+  const week = useMemo(() => buildTrainingWeek(a), [a])
+  const units = useMemo(() => planUnits(a), [a])
+  const t = tier(a.experience)
+  const [customRhythm, setCustomRhythm] = useState(false)
   const recommended = recommendSupplements(a)
   const meals = useMemo(() => (foods ? buildMealPlans(a, targets.result, foods) : []), [a, targets, foods])
 
@@ -389,7 +402,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       </Question>
     </Block>,
     <Block key="6">
-      <Question label="Wie lange trainierst du schon?">
+      <Question label="Wie lange trainierst du schon?" info="Danach richtet sich, wie viele Fragen ich dir zum Training stelle – Einsteiger bekommen nur das Nötigste.">
         <Chips
           options={[
             { value: 'einsteiger', label: 'Einsteiger' },
@@ -400,66 +413,237 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           onChange={(experience) => set({ experience, split: undefined })}
         />
       </Question>
-      <Question label="An welchen Tagen trainierst du?" info="Die Tage bestimmen den Plan-Aufbau. An anderen Tagen zeigt das Dashboard einen Ruhetag.">
-        <div className="grid grid-cols-7 gap-1">
-          {WEEKDAYS.map((d, i) => {
-            const on = a.trainingDays.includes(i)
-            return (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={on}
-                onClick={() => set({ trainingDays: on ? a.trainingDays.filter((x) => x !== i) : [...a.trainingDays, i].sort(), split: undefined })}
-                className={`rounded-xl py-2.5 text-sm font-semibold transition active:scale-95 ${on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`}
-              >
-                {d}
-              </button>
-            )
-          })}
-        </div>
-      </Question>
-      <Question label="Wo trainierst du?">
+      <Question label="Wie planst du deine Trainingstage?" info="Feste Tage: z.B. immer Mo/Mi/Fr. Rotierend: ein Rhythmus unabhängig vom Wochentag, z.B. jeden zweiten Tag.">
         <Chips
           options={[
-            { value: 'studio', label: 'Studio' },
-            { value: 'zuhause', label: 'Zuhause' },
-            { value: 'beides', label: 'Beides' },
+            { value: 'fixed', label: 'Feste Wochentage' },
+            { value: 'rotation', label: 'Rotierend' },
           ]}
-          value={a.location}
+          value={a.scheduleMode}
+          onChange={(scheduleMode) => set({ scheduleMode, split: undefined, dayUnits: undefined })}
+        />
+      </Question>
+      {a.scheduleMode === 'fixed' ? (
+        <Question label="An welchen Tagen trainierst du?" info="An den anderen Tagen zeigt das Dashboard einen Ruhetag.">
+          <div className="grid grid-cols-7 gap-1">
+            {WEEKDAYS.map((d, i) => {
+              const on = a.trainingDays.includes(i)
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => set({ trainingDays: on ? a.trainingDays.filter((x) => x !== i) : [...a.trainingDays, i].sort((x, y) => x - y), split: undefined, dayUnits: undefined })}
+                  className={`rounded-xl py-2.5 text-sm font-semibold transition active:scale-95 ${on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`}
+                >
+                  {d}
+                </button>
+              )
+            })}
+          </div>
+        </Question>
+      ) : (
+        <>
+          <Question label="Dein Rhythmus" info="Trainingstage an, Pausentage aus – dann beginnt es von vorn. Verpasst du eine Einheit, rückt sie einfach nach.">
+            <Chips
+              options={[
+                { value: '1/1', label: '1 an / 1 aus' },
+                { value: '2/1', label: '2 an / 1 aus' },
+                { value: '3/1', label: '3 an / 1 aus' },
+                { value: 'eigen', label: 'Eigener' },
+              ]}
+              value={['1/1', '2/1', '3/1'].includes(`${a.rotation.on}/${a.rotation.off}`) && !customRhythm ? `${a.rotation.on}/${a.rotation.off}` : 'eigen'}
+              onChange={(v) => {
+                setCustomRhythm(v === 'eigen')
+                if (v !== 'eigen') {
+                  const [on, off] = v.split('/').map(Number)
+                  set({ rotation: { ...a.rotation, on, off }, split: undefined })
+                }
+              }}
+            />
+            {(customRhythm || !['1/1', '2/1', '3/1'].includes(`${a.rotation.on}/${a.rotation.off}`)) && (
+              <div className="flex flex-wrap gap-3">
+                <Stepper label="Tage an" value={a.rotation.on} min={1} max={6} onChange={(on) => set({ rotation: { ...a.rotation, on }, split: undefined })} />
+                <Stepper label="Tage aus" value={a.rotation.off} min={1} max={3} onChange={(off) => set({ rotation: { ...a.rotation, off }, split: undefined })} />
+              </div>
+            )}
+            <p className="text-xs text-muted">≈ {fmtNum(sessionsPerWeek(a))} Einheiten pro Woche</p>
+          </Question>
+          <Question label="Ab wann?">
+            <Input type="date" value={a.rotation.start} onChange={(e) => e.target.value && set({ rotation: { ...a.rotation, start: e.target.value } })} />
+          </Question>
+        </>
+      )}
+      <Question label="Wo trainierst du?">
+        <Options
+          options={(['studio', 'basic', 'zuhause'] as const).map((l) => ({ value: l, label: LOCATION_LABELS[l].label, hint: LOCATION_LABELS[l].hint }))}
+          value={a.location === 'beides' ? 'studio' : a.location}
           onChange={(location) => set({ location })}
         />
-        {a.location === 'zuhause' && <p className="text-xs text-muted">Zuhause plane ich mit Kurzhanteln und Körpergewicht.</p>}
       </Question>
     </Block>,
     <Block key="7">
-      <Question label="Zeit pro Training">
-        <Chips options={([30, 45, 60, 90] as const).map((m) => ({ value: m, label: `${m} min` }))} value={a.durationMin} onChange={(durationMin) => set({ durationMin })} />
+      <Question label="Zeit pro Training" info="Ich rechne mit etwa 45 s pro Satz plus Pause (Grundübungen länger, Isolation kürzer), Aufwärmsätzen und Cardio – und plane so viele Sätze, wie hineinpassen.">
+        <Chips options={([30, 45, 60, 75, 90] as const).map((m) => ({ value: m, label: `${m} min` }))} value={a.durationMin} onChange={(durationMin) => set({ durationMin })} />
       </Question>
-      <Question label="Schwerpunkte (bis zu 3, optional)" info="Diese Muskeln bekommen mehr Sätze.">
-        <MultiChips options={FOCUS.map((f) => ({ value: f, label: f }))} value={a.focus} max={3} onChange={(focus) => set({ focus })} />
-      </Question>
+      {t >= 2 && (
+        <Question label="Trainingsziel" info="Bestimmt Wiederholungen und Pausen: Kraft 4–6 Wdh., Muskelaufbau 6–10 (Grundübungen) bzw. 10–15, Fitness mehr Wiederholungen.">
+          <Chips
+            options={[
+              { value: 'kraft', label: 'Kraft' },
+              { value: 'aufbau', label: 'Muskelaufbau' },
+              { value: 'fitness', label: 'Fitness' },
+            ]}
+            value={a.trainingGoal ?? 'aufbau'}
+            onChange={(trainingGoal) => set({ trainingGoal })}
+          />
+        </Question>
+      )}
+      {t >= 2 && (
+        <Question label="Übungsvorliebe">
+          <Chips
+            options={[
+              { value: 'frei', label: 'Freie Gewichte' },
+              { value: 'gemischt', label: 'Gemischt' },
+              { value: 'maschinen', label: 'Maschinen' },
+            ]}
+            value={a.preference ?? 'gemischt'}
+            onChange={(preference) => set({ preference })}
+          />
+        </Question>
+      )}
       <Question label="Beschwerden? (optional)" info="Übungen, die diese Stellen belasten, ersetze ich durch schonendere.">
         <MultiChips options={RESTRICTIONS.map((r) => ({ value: r.id, label: r.label }))} value={a.restrictions} onChange={(restrictions) => set({ restrictions })} />
       </Question>
+      {t >= 3 && (
+        <>
+          <Question label="Welche Grundübungen beherrschst du sicher?" info="Nicht gewählte ersetze ich durch sicherere Varianten (z.B. Beinpresse statt Kniebeuge).">
+            <MultiChips
+              options={(Object.keys(LIFT_LABELS) as Lift[]).map((l) => ({ value: l, label: LIFT_LABELS[l] }))}
+              value={a.mastered ?? (Object.keys(LIFT_LABELS) as Lift[])}
+              onChange={(mastered) => set({ mastered })}
+            />
+          </Question>
+          <Question label="Maximal Sätze pro Training" info="Nur Arbeitssätze – Aufwärmen und Cardio zählen nicht.">
+            <Stepper label="Sätze" value={a.maxSets ?? 20} min={12} max={25} onChange={(maxSets) => set({ maxSets })} />
+          </Question>
+          <Question label="Dauer eines Satzes">
+            <Chips options={[30, 45, 60].map((v) => ({ value: v, label: `${v} s` }))} value={a.setSeconds ?? 45} onChange={(setSeconds) => set({ setSeconds })} />
+          </Question>
+          <Question label="Pause – Grundübungen">
+            <Chips options={[90, 120, 150, 180, 240].map((v) => ({ value: v, label: fmtRest(v) }))} value={a.restCompound ?? (a.trainingGoal === 'kraft' ? 180 : 150)} onChange={(restCompound) => set({ restCompound })} />
+          </Question>
+          <Question label="Pause – Isolationsübungen">
+            <Chips options={[45, 60, 75, 90, 120].map((v) => ({ value: v, label: fmtRest(v) }))} value={a.restIsolation ?? (a.trainingGoal === 'kraft' ? 90 : 75)} onChange={(restIsolation) => set({ restIsolation })} />
+          </Question>
+        </>
+      )}
     </Block>,
     <Block key="8">
-      <Question label="Plan-Aufbau" info="Vorschlag passend zu deinen Tagen und deiner Erfahrung – du kannst ihn ändern.">
+      <Question label="Plan-Aufbau" info="Vorschlag passend zu deinen Tagen bzw. deinem Rhythmus und deiner Erfahrung – du kannst ihn ändern.">
         <Options
-          options={splitsFor(a.trainingDays.length).map((s) => ({
-            value: s,
-            label: SPLIT_LABELS[s],
-            hint: s === suggestedSplit(a.trainingDays.length, a.experience) ? 'Empfohlen für dich' : undefined,
+          options={splitOptions(a).map((sp) => ({
+            value: sp,
+            label: SPLIT_LABELS[sp],
+            hint: sp === suggestedSplitFor(a) ? 'Empfohlen für dich' : undefined,
           }))}
-          value={a.split && splitsFor(a.trainingDays.length).includes(a.split) ? a.split : suggestedSplit(a.trainingDays.length, a.experience)}
-          onChange={(split) => set({ split })}
+          value={effectiveSplit(a)}
+          onChange={(split) => set({ split, dayUnits: undefined })}
         />
       </Question>
-      <Question label="Cardio einplanen?">
+      {t >= 3 && (
+        <Question label="Gleiche Einheit mehrmals pro Woche" info="A/B-Varianten: die zweite Einheit bekommt andere Übungen für dieselben Muskeln. Gleiche Übungen machen Fortschritte leichter messbar.">
+          <Chips
+            options={[
+              { value: 'gleich', label: 'Gleiche Übungen' },
+              { value: 'ab', label: 'A/B-Varianten' },
+            ]}
+            value={a.variants ?? 'gleich'}
+            onChange={(variants) => set({ variants, dayUnits: undefined })}
+          />
+        </Question>
+      )}
+      <Question label="Cardio einplanen?" info="Kommt ans Ende der Einheit und wird von der Trainingszeit abgezogen.">
         <Chips options={[{ value: 'ja', label: 'Ja' }, { value: 'nein', label: 'Nein' }]} value={a.cardio ? 'ja' : 'nein'} onChange={(v) => set({ cardio: v === 'ja' })} />
         {a.cardio && (
           <Chips options={[30, 60, 90, 120, 150].map((m) => ({ value: m, label: `${m} min/Wo.` }))} value={a.cardioMinutes} onChange={(cardioMinutes) => set({ cardioMinutes })} />
         )}
       </Question>
+    </Block>,
+    <Block key="8b">
+      <p className="text-sm text-muted">Bis zu zwei Muskeln je Trainingstag – sie kommen an den Anfang der Einheit und bekommen mehr Sätze.</p>
+      {units.map((u) => (
+        <Question key={u.key} label={u.key}>
+          <MultiChips
+            options={VOLUME_MUSCLES.map((m) => ({ value: m, label: m }))}
+            value={a.focusByUnit[u.key] ?? []}
+            max={2}
+            onChange={(list) => set({ focusByUnit: { ...a.focusByUnit, [u.key]: list } })}
+          />
+        </Question>
+      ))}
+      {t >= 2 && (
+        <Question label="Lieblingsübungen & Ausschlüsse (optional)" info="Einmal tippen: ★ Favorit – wird bevorzugt. Nochmal: ✕ ausgeschlossen – ich nehme eine Alternative. Nochmal: neutral.">
+          <div className="flex flex-col gap-1.5">
+            {catalogByMuscle().map((g) => (
+              <details key={g.muscle} className="rounded-xl bg-surface-2 px-3 py-2">
+                <summary className="cursor-pointer text-sm text-fg">
+                  {g.muscle}
+                  {countMarks(g.names, a) && <span className="ml-1.5 text-xs text-muted">{countMarks(g.names, a)}</span>}
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {g.names.map((n) => {
+                    const fav = a.favorites?.includes(n)
+                    const ex = a.excluded?.includes(n)
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => set(cycleMark(n, a))}
+                        className={`rounded-full px-3 py-1.5 text-xs transition active:scale-95 ${fav ? 'bg-accent font-medium text-accent-fg' : ex ? 'bg-surface text-muted line-through' : 'bg-surface text-fg'}`}
+                      >
+                        {fav ? '★ ' : ex ? '✕ ' : ''}
+                        {n}
+                      </button>
+                    )
+                  })}
+                </div>
+              </details>
+            ))}
+          </div>
+        </Question>
+      )}
+      {t >= 3 && (
+        <Question label="Volumen je Muskel" info="Sätze pro Woche nach MV (Erhalt), MEV (Minimum für Wachstum) und MAV (optimaler Bereich). Auto richtet sich nach deinem Ziel.">
+          <div className="flex flex-col gap-1.5">
+            {VOLUME_MUSCLES.map((m) => (
+              <div key={m} className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm text-fg">{m}</span>
+                <div className="flex gap-1">
+                  {(['auto', 'MV', 'MEV', 'MAV'] as const).map((z) => {
+                    const on = (a.volumeZones?.[m] ?? 'auto') === z
+                    return (
+                      <button
+                        key={z}
+                        type="button"
+                        onClick={() => {
+                          const next = { ...a.volumeZones }
+                          if (z === 'auto') delete next[m]
+                          else next[m] = z
+                          set({ volumeZones: next })
+                        }}
+                        className={`rounded-lg px-2 py-1 text-xs transition active:scale-95 ${on ? 'bg-accent font-medium text-accent-fg' : 'bg-surface-2 text-muted'}`}
+                      >
+                        {z === 'auto' ? 'Auto' : z}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Question>
+      )}
     </Block>,
     <Block key="9">
       <Question label="Ernährungsform">
@@ -545,7 +729,9 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       a={a}
       targets={targets}
       weightGoal={weightGoal}
-      plan={plan}
+      week={week}
+      unitNames={units.map((u) => u.key)}
+      set={set}
       meals={meals}
       onEdit={go}
     />,
@@ -810,14 +996,18 @@ function Summary({
   a,
   targets,
   weightGoal,
-  plan,
+  week,
+  unitNames,
+  set,
   meals,
   onEdit,
 }: {
   a: StartAnswers
   targets: ReturnType<typeof computeTargets>
   weightGoal: boolean
-  plan: ReturnType<typeof buildTrainingPlan>
+  week: TrainingWeek
+  unitNames: string[]
+  set: (patch: Partial<StartAnswers>) => void
   meals: ReturnType<typeof buildMealPlans>
   onEdit: (step: number) => void
 }) {
@@ -861,17 +1051,13 @@ function Summary({
           <p className="text-sm text-fg">{a.goal === 'recomp' ? 'Recomp – Gewicht ungefähr halten' : 'Gewicht halten, fitter werden'}</p>
         )}
       </SummaryCard>
-      <SummaryCard title={`Trainingsplan · ${a.trainingDays.length}× pro Woche`} onEdit={() => onEdit(6)}>
-        <div className="flex flex-col gap-2">
-          {plan.map((d) => (
-            <div key={d.name}>
-              <p className="text-sm font-semibold text-fg">{d.name}</p>
-              <p className="text-xs text-muted">{d.exercises.map((e) => `${e.name} ${e.sets}×${e.reps}`).join(' · ')}</p>
-            </div>
-          ))}
-        </div>
+      <SummaryCard
+        title={`Trainingsplan · ${a.scheduleMode === 'rotation' ? `${a.rotation.on} an / ${a.rotation.off} aus` : `${a.trainingDays.length}× pro Woche`}`}
+        onEdit={() => onEdit(6)}
+      >
+        <TrainingSummary a={a} week={week} unitNames={unitNames} set={set} />
       </SummaryCard>
-      <SummaryCard title="Ernährungsplan" onEdit={() => onEdit(9)}>
+      <SummaryCard title="Ernährungsplan" onEdit={() => onEdit(10)}>
         <p className="text-xs text-muted">
           Abgestimmt auf {fmt(r.targetCalories)} kcal und deine Makros · {DIET_LABELS[a.diet]}
           {a.allergens.length > 0 && ` · ohne ${a.allergens.map((x) => ALLERGENS.find((y) => y.id === x)?.label).join(', ')}`}
@@ -899,7 +1085,7 @@ function Summary({
         ))}
       </SummaryCard>
       {supplementNamesFor(a).length > 0 && (
-        <SummaryCard title="Supplementplan" onEdit={() => onEdit(9)}>
+        <SummaryCard title="Supplementplan" onEdit={() => onEdit(10)}>
           <p className="text-sm text-fg">{supplementNamesFor(a).join(', ')}</p>
           <p className="text-xs text-muted">Mit üblicher Dosis und Einnahmezeit – im Supplementplan änderbar.</p>
         </SummaryCard>
@@ -921,3 +1107,150 @@ function SummaryCard({ title, onEdit, children }: { title: string; onEdit: () =>
     </section>
   )
 }
+
+const fmtNum = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+const fmtRest = (sec: number) => (sec < 60 || sec % 30 ? `${sec} s` : `${fmtNum(sec / 60)} min`)
+
+/** Kurzinfo je Muskelgruppe: wie viele Favoriten/Ausschlüsse gesetzt sind. */
+function countMarks(names: string[], a: StartAnswers): string {
+  const fav = names.filter((n) => a.favorites?.includes(n)).length
+  const ex = names.filter((n) => a.excluded?.includes(n)).length
+  return [fav ? `★ ${fav}` : '', ex ? `✕ ${ex}` : ''].filter(Boolean).join(' · ')
+}
+
+/** Neutral → Favorit → ausgeschlossen → neutral. */
+function cycleMark(name: string, a: StartAnswers): Partial<StartAnswers> {
+  const favorites = a.favorites ?? []
+  const excluded = a.excluded ?? []
+  if (favorites.includes(name)) return { favorites: favorites.filter((n) => n !== name), excluded: [...excluded, name] }
+  if (excluded.includes(name)) return { excluded: excluded.filter((n) => n !== name) }
+  return { favorites: [...favorites, name] }
+}
+
+function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted">{label}</span>
+      <div className="flex items-center rounded-xl bg-surface-2">
+        <button type="button" aria-label={`${label} weniger`} disabled={value <= min} onClick={() => onChange(value - 1)} className="px-3 py-2 text-fg disabled:opacity-30">
+          −
+        </button>
+        <span className="w-7 text-center text-sm font-semibold tabular-nums text-fg">{value}</span>
+        <button type="button" aria-label={`${label} mehr`} disabled={value >= max} onClick={() => onChange(value + 1)} className="px-3 py-2 text-fg disabled:opacity-30">
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Trainingsplan in der Zusammenfassung: Einheiten mit Dauer und Sätzen, Übungen tauschen
+ * und ± Sätze, Einheit je Wochentag, Hinweise und das Wochenvolumen je Muskel.
+ */
+function TrainingSummary({ a, week, unitNames, set }: { a: StartAnswers; week: TrainingWeek; unitNames: string[]; set: (patch: Partial<StartAnswers>) => void }) {
+  const setSets = (key: string, sets: number) => set({ setOverrides: { ...a.setOverrides, [key]: Math.max(1, Math.min(4, sets)) } })
+  const daysOf = (unit: number) => week.schedule.filter((x) => x.unit === unit).map((x) => WEEKDAYS[x.weekday])
+  return (
+    <div className="flex flex-col gap-3">
+      {a.scheduleMode === 'fixed' && week.schedule.length > 0 && unitNames.length > 1 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted">Einheit je Tag</span>
+          <div className="flex flex-wrap gap-1.5">
+            {week.schedule.map((x, i) => (
+              <label key={x.weekday} className="flex items-center gap-1 rounded-lg bg-surface-2 px-2 py-1 text-xs text-fg">
+                <span className="font-semibold">{WEEKDAYS[x.weekday]}</span>
+                <select
+                  value={x.unit}
+                  onChange={(e) => {
+                    const next = week.schedule.map((y) => y.unit)
+                    next[i] = Number(e.target.value)
+                    set({ dayUnits: next })
+                  }}
+                  className="bg-transparent text-xs text-fg outline-none"
+                  aria-label={`Einheit am ${WEEKDAYS[x.weekday]}`}
+                >
+                  {unitNames.map((n, u) => (
+                    <option key={n} value={u}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {week.warnings.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+          {week.warnings.map((w) => (
+            <li key={w} className="flex gap-1.5">
+              <AlertTriangle size={13} className="mt-px shrink-0" /> {w}
+            </li>
+          ))}
+        </ul>
+      )}
+      {week.days.map((d, u) => (
+        <div key={d.name} className="flex flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-fg">{d.name}</p>
+            <span className="shrink-0 text-xs tabular-nums text-muted">
+              ≈ {d.minutes} min · {d.workSets}/{d.maxSets} Sätze
+            </span>
+          </div>
+          {a.scheduleMode === 'fixed' && daysOf(u).length > 0 && <p className="-mt-1 text-[11px] text-muted">{daysOf(u).join(', ')}</p>}
+          {d.exercises.map((e) => (
+            <div key={e.key} className="flex items-center gap-2 rounded-lg bg-surface-2 px-2 py-1.5">
+              <div className="min-w-0 flex-1">
+                {e.alternatives.length > 1 ? (
+                  <select
+                    value={e.name}
+                    onChange={(ev) => set({ exerciseSwaps: { ...a.exerciseSwaps, [e.key]: ev.target.value } })}
+                    className="w-full truncate bg-transparent text-sm text-fg outline-none"
+                    aria-label={`${e.name} tauschen`}
+                  >
+                    {e.alternatives.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="truncate text-sm text-fg">{e.name}</p>
+                )}
+                <p className="truncate text-[11px] text-muted">
+                  {e.cardio ? e.reps : `${e.reps} Wdh. · Pause ${fmtRest(e.restSeconds)}${e.warmupSets ? ` · ${e.warmupSets} Aufwärmsätze` : ''}`}
+                  {e.note ? ` · ${e.note}` : ''}
+                </p>
+              </div>
+              {e.focus && <span className="shrink-0 rounded-full bg-accent/15 px-1.5 py-px text-[10px] font-medium text-accent">Fokus</span>}
+              {!e.cardio && (
+                <div className="flex shrink-0 items-center rounded-lg bg-surface">
+                  <button type="button" aria-label="Satz weniger" disabled={e.sets <= 1} onClick={() => setSets(e.key, e.sets - 1)} className="px-2 py-1 text-fg disabled:opacity-30">
+                    −
+                  </button>
+                  <span className="w-5 text-center text-sm font-semibold tabular-nums text-fg">{e.sets}</span>
+                  <button type="button" aria-label="Satz mehr" disabled={e.sets >= 4} onClick={() => setSets(e.key, e.sets + 1)} className="px-2 py-1 text-fg disabled:opacity-30">
+                    +
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      {(Object.keys(a.setOverrides ?? {}).length > 0 || Object.keys(a.exerciseSwaps ?? {}).length > 0) && (
+        <button type="button" onClick={() => set({ setOverrides: {}, exerciseSwaps: {} })} className="self-start text-xs text-accent">
+          Eigene Änderungen zurücksetzen
+        </button>
+      )}
+      <details className="rounded-lg bg-surface-2 px-2.5 py-1.5">
+        <summary className="cursor-pointer text-sm text-fg">Wochenvolumen je Muskel</summary>
+        <div className="mt-2">
+          <VolumeBars rows={week.volume.map((v) => ({ muscle: v.muscle, value: v.planned, target: v.target }))} />
+        </div>
+      </details>
+    </div>
+  )
+}
+

@@ -454,39 +454,89 @@ function TrainingSection({ athlete }: { athlete: Athlete }) {
   const rest = useSyncExternalStore(subscribeRestTimer, getRestTimer)
   const days = athlete.trainingDays ?? []
   const restDays = WEEKDAYS.filter((_, i) => !days.includes(i))
+  const rotation = athlete.schedule?.mode === 'rotation' ? athlete.schedule : undefined
   function toggleDay(i: number) {
     const next = days.includes(i) ? days.filter((d) => d !== i) : [...days, i].sort((x, y) => x - y)
-    void db.athletes.update(athlete.id, { trainingDays: next })
+    // Andere Tage: die Einheiten laufen wieder reihum.
+    void db.athletes.update(athlete.id, { trainingDays: next, schedule: { mode: 'fixed' } })
   }
+  function setMode(mode: 'fixed' | 'rotation') {
+    if (mode === 'rotation') void db.athletes.update(athlete.id, { schedule: { mode: 'rotation', on: 1, off: 1, start: todayIso() } })
+    else void db.athletes.update(athlete.id, { schedule: { mode: 'fixed' } })
+  }
+  function setRotation(patch: Partial<{ on: number; off: number; start: string }>) {
+    if (rotation) void db.athletes.update(athlete.id, { schedule: { ...rotation, ...patch } })
+  }
+  const step = (label: string, value: number, min: number, max: number, onChange: (v: number) => void) => (
+    <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+      <span className="text-sm text-fg">{label}</span>
+      <div className="flex items-center rounded-xl bg-surface-2">
+        <button type="button" aria-label={`${label} weniger`} disabled={value <= min} onClick={() => onChange(value - 1)} className="px-3 py-1.5 text-fg disabled:opacity-30">
+          −
+        </button>
+        <span className="w-6 text-center text-sm font-semibold tabular-nums text-fg">{value}</span>
+        <button type="button" aria-label={`${label} mehr`} disabled={value >= max} onClick={() => onChange(value + 1)} className="px-3 py-1.5 text-fg disabled:opacity-30">
+          +
+        </button>
+      </div>
+    </div>
+  )
   return (
     <>
-      <Group
-        title="Trainingstage"
-        footer={
-          days.length === 0
-            ? 'Keine Tage gewählt - das Dashboard zeigt dann keinen Ruhetag an.'
-            : `${days.length}× Training pro Woche · Pausentage: ${restDays.length ? restDays.join(', ') : 'keine'}. An Pausentagen zeigt das Dashboard „Heute Ruhetag“.`
-        }
-      >
-        <div className="grid grid-cols-7 gap-1 p-2">
-          {WEEKDAYS.map((d, i) => {
-            const on = days.includes(i)
-            return (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={on}
-                aria-label={`${d}: ${on ? 'Training' : 'Pause'}`}
-                onClick={() => toggleDay(i)}
-                className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-sm font-semibold transition active:scale-95 ${on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`}
-              >
-                {d}
-                <span className="text-[9px] font-medium opacity-80">{on ? 'Training' : 'Pause'}</span>
-              </button>
-            )
-          })}
-        </div>
+      <Group>
+        <Choice
+          label="Trainingstage planen"
+          options={[
+            { value: 'fixed', label: 'Feste Wochentage' },
+            { value: 'rotation', label: 'Rotierend' },
+          ]}
+          value={rotation ? 'rotation' : 'fixed'}
+          onChange={setMode}
+        />
       </Group>
+      {rotation ? (
+        <Group title="Rhythmus" footer="Trainingstage an, Pausentage aus – dann von vorn. Verpasste Einheiten rücken nach. An Pausentagen zeigt das Dashboard „Heute Ruhetag“.">
+          {step('Tage an', rotation.on, 1, 6, (on) => setRotation({ on }))}
+          {step('Tage aus', rotation.off, 1, 3, (off) => setRotation({ off }))}
+          <label className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm text-fg">
+            Ab
+            <input
+              type="date"
+              value={rotation.start}
+              onChange={(e) => e.target.value && setRotation({ start: e.target.value })}
+              className="rounded-lg bg-surface-2 px-2 py-1 text-sm text-fg"
+            />
+          </label>
+        </Group>
+      ) : (
+        <Group
+          title="Trainingstage"
+          footer={
+            days.length === 0
+              ? 'Keine Tage gewählt - das Dashboard zeigt dann keinen Ruhetag an.'
+              : `${days.length}× Training pro Woche · Pausentage: ${restDays.length ? restDays.join(', ') : 'keine'}. An Pausentagen zeigt das Dashboard „Heute Ruhetag“.`
+          }
+        >
+          <div className="grid grid-cols-7 gap-1 p-2">
+            {WEEKDAYS.map((d, i) => {
+              const on = days.includes(i)
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${d}: ${on ? 'Training' : 'Pause'}`}
+                  onClick={() => toggleDay(i)}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl py-2 text-sm font-semibold transition active:scale-95 ${on ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted'}`}
+                >
+                  {d}
+                  <span className="text-[9px] font-medium opacity-80">{on ? 'Training' : 'Pause'}</span>
+                </button>
+              )
+            })}
+          </div>
+        </Group>
+      )}
       <Group title="Pausen-Timer">
         <Choice
           label="Standard-Pause"

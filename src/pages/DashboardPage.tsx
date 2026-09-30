@@ -7,6 +7,7 @@ import { formatUnit, useUnits } from '../lib/units'
 import { nextStep, nextTrainingPlan } from '../lib/nextStep'
 import { waterGoalFor } from '../lib/water'
 import { useTakesCreatine } from '../lib/useCreatine'
+import { isRestDay, plannedUnitFor } from '../lib/schedule'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { Button, Card, CountUp, DecimalInput, Field, Input, ListRow, PageSkeleton, Select } from '../components/ui'
@@ -569,20 +570,23 @@ function TodayTraining({ athlete, onGo }: { athlete: Athlete; onGo: (path: strin
       const sets = await db.workoutSets.where('workoutLogExerciseId').anyOf(rows.map((r) => r.id)).toArray()
       progress = { done: sets.filter((x) => x.done).length, total: sets.length }
     }
-    const next = nextTrainingPlan(plans, withExercises, logs, today)
+    // Feste Tage mit Einheit je Wochentag: die Einheit des Tages - sonst reihum (Rotation:
+    // verpasste Einheiten rücken einfach nach).
+    const plannedOrder = plannedUnitFor(athlete, today)
+    const planned = plannedOrder !== undefined ? [...plans].sort((x, y) => x.order - y.order)[plannedOrder] : undefined
+    const next = planned && withExercises.has(planned.id) ? planned : nextTrainingPlan(plans, withExercises, logs, today)
     const exerciseCount = next ? planExercises.filter((pe) => pe.planId === next.id).length : 0
     const todayPlan = todayLog?.trainingPlanId ? plans.find((p) => p.id === todayLog.trainingPlanId) : undefined
     return { todayLog, progress, next, exerciseCount, todayPlan }
-  }, [athlete.id, today])
+  }, [athlete.id, athlete.schedule, athlete.trainingDays, today])
   if (!data) return null
   const { todayLog, progress, next, exerciseCount, todayPlan } = data
   const started = !!todayLog && (progress?.total ?? 0) > 0
   if (!started && !next) return null
 
   const finished = !!todayLog?.completedAt
-  // Geplante Trainingstage (aus „Dein Start“): an anderen Tagen ist Ruhetag - starten geht trotzdem.
-  const weekday = (new Date().getDay() + 6) % 7
-  const restDay = !started && !!athlete.trainingDays?.length && !athlete.trainingDays.includes(weekday)
+  // Geplante Trainingstage bzw. Rhythmus (aus „Dein Start“): sonst Ruhetag - starten geht trotzdem.
+  const restDay = !started && isRestDay(athlete, today)
   const title = started ? (todayPlan?.phaseName ?? 'Training heute') : restDay ? 'Heute Ruhetag' : next!.phaseName
   const sub = finished
     ? 'Heute abgeschlossen'
