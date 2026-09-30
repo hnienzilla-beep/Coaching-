@@ -186,3 +186,12 @@ describe('Schwerpunkt immer im Plan, Schultern getrennt', () => {
     expect(all.find((e) => /Reverse|Face/.test(e.name))?.muscle).toBe('Hint. Schulter')
   })
 })
+
+describe('Zwei Schwerpunkte je Einheit', () => {
+  it('Push FB und Pull FB je zwei Fokus-Muskeln vorne', () => {
+    const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split: 'pushpullfb', trainingDays: [0, 1, 3, 4], focusByUnit: { 'Push Fullbody': ['Brust', 'Quadrizeps'], 'Pull Fullbody': ['Rücken', 'Bizeps'] } }))
+    const [push, pull] = week.days
+    expect(push.exercises.slice(0, 2).map((e) => [e.muscle, e.focus])).toEqual([['Brust', true], ['Quadrizeps', true]])
+    expect(pull.exercises.slice(0, 2).map((e) => [e.muscle, e.focus])).toEqual([['Rücken', true], ['Bizeps', true]])
+  })
+})

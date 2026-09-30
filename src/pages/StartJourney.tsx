@@ -586,13 +586,14 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
     <Block key="8b">
       <p className="text-sm text-muted">Bis zu zwei Muskeln je Trainingstag – sie kommen an den Anfang der Einheit und bekommen mehr Sätze.</p>
       {units.map((u) => (
-        <Question key={u.key} label={u.key}>
+        <Question key={u.key} label={`${u.key} · ${(a.focusByUnit[u.key] ?? []).length}/2`}>
           <MultiChips
             options={VOLUME_MUSCLES.map((m) => ({ value: m, label: m }))}
             value={a.focusByUnit[u.key] ?? []}
             max={2}
             onChange={(list) => set({ focusByUnit: { ...a.focusByUnit, [u.key]: list } })}
           />
+          {(a.focusByUnit[u.key] ?? []).length >= 2 && <p className="text-xs text-muted">Zwei gewählt – zum Wechseln erst einen abwählen.</p>}
         </Question>
       ))}
       {t >= 2 && (
