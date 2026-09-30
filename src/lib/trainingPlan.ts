@@ -356,10 +356,10 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
   Rücken: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'core'],
   Schultern: ['vpush', 'lateral', 'rear', 'vpush', 'core'],
   Arme: ['biceps', 'triceps', 'biceps', 'triceps', 'biceps', 'triceps'],
-  Push: ['hpush', 'vpush', 'incline', 'lateral', 'triceps', 'core', 'triceps'],
+  Push: ['hpush', 'incline', 'fly', 'vpush', 'lateral', 'lateral', 'triceps', 'triceps', 'core'],
   // Pull ohne Hüftstreckung (kein Rumänisches Kreuzheben) - die gehört an den Beine-Tag.
-  Pull: ['vpull', 'hpull', 'rear', 'biceps', 'hpull', 'core', 'biceps'],
-  Beine: ['squat', 'hinge', 'lunge', 'hamstring', 'glute', 'calves', 'core'],
+  Pull: ['vpull', 'hpull', 'vpull', 'hpull', 'rear', 'rear', 'biceps', 'biceps', 'core'],
+  Beine: ['squat', 'legext', 'hinge', 'hamstring', 'glute', 'adductor', 'calves', 'calves', 'core'],
 }
 
 /** Muskeln, die eine Einheit immer trainiert - ihre erste Übung wird nie gestrichen. */
@@ -977,30 +977,46 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     drafts.forEach((l, i) => distribute(l, i, share))
   }
 
-  // Auffüllen: Muskeln unter ihrem Wochenziel bekommen wieder mehr, solange an ALLEN ihren Tagen
-  // Platz ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
+  // Auffüllen: Muskeln unter ihrem Wert bekommen wieder mehr, solange an ALLEN ihren Tagen Platz
+  // ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
   const fits = () => drafts.every((l) => !over(l))
-  for (let round = 0; round < 60; round++) {
-    const v = volumeOf(drafts, freq)
-    const gaps = VOLUME_MUSCLES.filter((m) => !INDIRECT_ONLY.includes(m) && v.get(m)! + 0.5 < goal(m) && (share.get(m) ?? 0) < capOf(m))
-      .sort((x, y) => v.get(x)! / Math.max(1, goal(x)) - v.get(y)! / Math.max(1, goal(y)))
-    let grown = false
-    for (const m of gaps) {
-      const before = share.get(m) ?? 0
-      const next = before === 0 ? 2 : before + 1
-      if (next > capOf(m)) continue
-      share.set(m, next)
-      drafts.forEach((l, i) => distribute(l, i, share))
-      const gained = volumeOf(drafts, freq).get(m)! > v.get(m)!
-      if (fits() && gained) {
-        grown = true
-        break
+  const fillTo = (ceil: (m: VolumeMuscle) => number, withIndirect: boolean) => {
+    for (let round = 0; round < 80; round++) {
+      const v = volumeOf(drafts, freq)
+      const gaps = VOLUME_MUSCLES.filter(
+        (m) => (withIndirect || !INDIRECT_ONLY.includes(m)) && v.get(m)! + 0.5 < ceil(m) && (share.get(m) ?? 0) < capOf(m),
+      ).sort((x, y) => v.get(x)! / Math.max(1, ceil(x)) - v.get(y)! / Math.max(1, ceil(y)))
+      let grown = false
+      for (const m of gaps) {
+        const before = share.get(m) ?? 0
+        const next = before === 0 ? 2 : before + 1
+        if (next > capOf(m)) continue
+        share.set(m, next)
+        drafts.forEach((l, i) => distribute(l, i, share))
+        const gained = volumeOf(drafts, freq).get(m)! > v.get(m)!
+        if (fits() && gained) {
+          grown = true
+          break
+        }
+        share.set(m, before)
+        drafts.forEach((l, i) => distribute(l, i, share))
       }
-      share.set(m, before)
-      drafts.forEach((l, i) => distribute(l, i, share))
+      if (!grown) break
     }
-    if (!grown) break
   }
+  // 1. Erst jedes Wochenziel.
+  fillTo(goal, false)
+  // 2. Dann freie Zeit in den Einheiten nutzen: mehr Sätze für die Übungen der Vorlage bis zur
+  // Obergrenze des Ziel-Bereichs - beim Aufbau bis zur Mitte des MAV, bei Recomp bis zur
+  // MAV-Untergrenze, sonst zwischen MEV und MAV. Nie über MRV; Trapez, vordere Schulter und
+  // Adduktoren bleiben indirekt (außer als Fokus/Pflicht).
+  const ceiling = (m: VolumeMuscle) => {
+    const l = LANDMARKS[m]
+    const zone = s.zones[m]
+    const top = zone === 'MV' ? l.mev : zone === 'MEV' ? l.mavLo : zone === 'MAV' ? l.mavHi : a.goal === 'aufbauen' ? Math.round((l.mavLo + l.mavHi) / 2) : a.goal === 'recomp' ? l.mavLo : Math.round((l.mev + l.mavLo) / 2)
+    return Math.max(goal(m), Math.min(l.mrv - 1, top))
+  }
+  fillTo(ceiling, false)
 
   // 4. Eigene Satzzahlen aus der Zusammenfassung.
   for (const list of drafts)
