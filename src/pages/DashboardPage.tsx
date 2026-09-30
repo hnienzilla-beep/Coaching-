@@ -399,8 +399,9 @@ function ProfileSheet({
           ))}
         </Select>
       </Field>
+      {/* Ein neues Ziel setzt die manuelle Kalorien-Anpassung zurück, sonst würde sie das Ziel überdecken. */}
       <Field label="Ziel">
-        <Select value={athlete.goal} onChange={(e) => update(athlete.id, { goal: e.target.value })}>
+        <Select value={athlete.goal} onChange={(e) => update(athlete.id, { goal: e.target.value, calorieAdjustmentKcal: undefined })}>
           {GOALS.map((g) => (
             <option key={g.label} value={g.label}>
               {g.label}
