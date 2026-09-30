@@ -53,6 +53,8 @@ export interface StartAnswers {
   goal: StartGoal
   tempo: Tempo
   targetWeightKg?: number
+  /** Zielgewicht selbst eingetippt - dann kein Vorschlag mehr im Feld, auch wenn es leer ist. */
+  targetWeightTyped?: boolean
   macroStyle: MacroStyle
   experience: Experience
   /** Feste Wochentage oder rotierender Rhythmus (z.B. 1 an / 1 aus). */
