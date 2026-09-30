@@ -63,7 +63,8 @@ describe('Schwerpunkte je Tag', () => {
   it('fehlender Muskel bekommt eine Übung', () => {
     const week = buildTrainingWeek(pro({ split: 'pushpullfb', focusByUnit: { 'Pull Fullbody': ['Trapez'] } }))
     const pull = week.days.find((d) => d.name === 'Pull Fullbody')!
-    expect(pull.exercises[0].name).toMatch(/Shrugs/)
+    expect(pull.exercises[0].muscle).toBe('Trapez')
+    expect(pull.exercises[0].focus).toBe(true)
   })
 })
 
@@ -134,5 +135,11 @@ describe('Hybrid-Splits', () => {
     expect(push.slice(0, 3)).toEqual(['Schrägbankdrücken (Smith Maschine)', 'Bankdrücken (Kurzhantel)', 'Butterfly (Maschine)'])
     expect(push).toEqual(expect.arrayContaining(['Beinpresse', 'Beinstrecker', 'Seitheben']))
     expect(pull).toEqual(expect.arrayContaining(['Latzug', 'Rudern (Maschine) (einarmig)', 'T-Bar', 'Front Latpulldown', 'Preacher Curls (kurzhantel)']))
+  })
+  it('Trapez: Rudervarianten inkl. T-Bar', () => {
+    const week = buildTrainingWeek(pro({ split: 'okuk', trainingDays: [0, 1, 3, 4], focusByUnit: { 'Oberkörper A': ['Trapez'] } }))
+    const ok = week.days.find((d) => d.name === 'Oberkörper A')!
+    expect(ok.exercises[0].name).toBe('T-Bar')
+    expect(ok.exercises[0].alternatives).toEqual(expect.arrayContaining(['Kabelrudern (breit, zur Brust)', 'Seal Row', 'Shrugs (Kurzhantel)']))
   })
 })
