@@ -1,3 +1,4 @@
+import type { DetailLevel } from './detailLevel'
 import { db, ensureExerciseSeed } from '../db/db'
 import { createAthlete, todayIso, upsertDailyEntry } from '../db/queries'
 import { byName, nameKey } from './names'
@@ -16,6 +17,8 @@ export interface StartAppChoices {
   startTab: TabKey
   hiddenTabs: TabKey[]
   reminders: { weigh: boolean; food: boolean; water: boolean }
+  /** Wie viel die App zeigt - ohne Auswahl nach Erfahrung (Einsteiger: Einfach). */
+  detailLevel?: DetailLevel
 }
 
 /**
