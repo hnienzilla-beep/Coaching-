@@ -86,20 +86,31 @@ const SECTION_ICONS: Record<(typeof SECTIONS)[number], LucideIcon> = {
   App: Smartphone,
   Fertig: Check,
 }
-type Step = { section: (typeof SECTIONS)[number] | null; title: string; lead?: string }
+/** Zwischenbildschirm beim Betreten eines Abschnitts. */
+const SECTION_INTROS: Record<(typeof SECTIONS)[number], string> = {
+  'Über dich': 'Ein paar Eckdaten – daraus berechne ich deinen Bedarf.',
+  'Dein Ziel': 'Wohin soll die Reise gehen?',
+  Training: 'Jetzt bauen wir deinen Trainingsplan.',
+  Ernährung: 'Essen, das zu deinem Ziel passt.',
+  App: 'Zum Schluss machst du die App zu deiner.',
+  Fertig: '',
+}
+/** `guide`: was der Coach in diesem Schritt sagt - mit Vornamen, sobald er bekannt ist. */
+type Step = { section: (typeof SECTIONS)[number] | null; title: string; guide?: (name: string) => string }
+const hi = (name: string, text: string) => (name ? `${name}, ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text)
 const STEPS: Step[] = [
   { section: null, title: 'Willkommen' },
-  { section: 'Über dich', title: 'Wer bist du?', lead: 'Damit ich dich ansprechen und deinen Bedarf berechnen kann.' },
-  { section: 'Über dich', title: 'Dein Körper', lead: 'Grundlage für Kalorien, Makros und dein Zielgewicht.' },
-  { section: 'Über dich', title: 'Dein Alltag', lead: 'Bewegung außerhalb des Trainings verbraucht oft mehr, als man denkt.' },
-  { section: 'Dein Ziel', title: 'Was willst du erreichen?', lead: 'Dein Ziel bestimmt Kalorien, Training und Tempo.' },
-  { section: 'Dein Ziel', title: 'Dein Zielgewicht', lead: 'Ein realistisches Ziel – mit Datum, wann du es etwa erreichst.' },
-  { section: 'Training', title: 'Dein Training', lead: 'Daraus baue ich deinen Wochenplan.' },
-  { section: 'Training', title: 'Zeit & Übungen', lead: 'So passt jede Einheit in deine Zeit und zu deinem Körper.' },
-  { section: 'Training', title: 'Dein Plan-Aufbau', lead: 'Wie sich die Muskelgruppen auf deine Tage verteilen.' },
-  { section: 'Training', title: 'Deine Schwerpunkte', lead: 'Optional: Muskeln, die du besonders betonen willst.' },
-  { section: 'Ernährung', title: 'Deine Ernährung', lead: 'Für deinen Ernährungsplan und passende Supplements.' },
-  { section: 'App', title: 'Deine App', lead: 'Einheiten, Farben und die Bereiche, die du brauchst.' },
+  { section: 'Über dich', title: 'Wer bist du?', guide: () => 'Schön, dass du da bist! Ich führe dich Schritt für Schritt durch. Fang mit deinem Vornamen an.' },
+  { section: 'Über dich', title: 'Dein Körper', guide: (n) => hi(n, 'Jetzt deine Eckdaten. Größe und Gewicht reichen – Körperfett ist optional, eine Schätzung nach dem Spiegelbild genügt.') },
+  { section: 'Über dich', title: 'Dein Alltag', guide: () => 'Wie viel bewegst du dich außerhalb vom Training? Das macht beim Kalorienbedarf oft mehr aus als das Training selbst.' },
+  { section: 'Dein Ziel', title: 'Was willst du erreichen?', guide: (n) => hi(n, 'Was willst du erreichen? Danach richte ich Kalorien, Training und Tempo aus.') },
+  { section: 'Dein Ziel', title: 'Dein Zielgewicht', guide: () => 'Ich habe dir ein realistisches Zielgewicht vorgeschlagen. Passt es, einfach weiter – sonst trag dein eigenes ein.' },
+  { section: 'Training', title: 'Dein Training', guide: (n) => hi(n, 'Weiter zum Training. Sag mir, wie erfahren du bist und an welchen Tagen du trainieren kannst.') },
+  { section: 'Training', title: 'Zeit & Übungen', guide: () => 'Wie viel Zeit hast du pro Einheit? Ich plane so, dass alles reinpasst – und lasse Übungen weg, die dir Beschwerden machen.' },
+  { section: 'Training', title: 'Dein Plan-Aufbau', guide: () => 'Diesen Aufbau schlage ich für deine Tage vor. Du kannst ihn ändern – oder einfach weiter.' },
+  { section: 'Training', title: 'Deine Schwerpunkte', guide: () => 'Möchtest du bestimmte Muskeln betonen? Das ist optional – ohne Auswahl trainierst du ausgewogen.' },
+  { section: 'Ernährung', title: 'Deine Ernährung', guide: (n) => hi(n, 'Fast geschafft! Noch kurz zur Ernährung, dann stelle ich deinen Ernährungs- und Supplementplan zusammen.') },
+  { section: 'App', title: 'Deine App', guide: () => 'Letzter Schritt: Einheiten, Farben und welche Bereiche du brauchst. Alles später in den Einstellungen änderbar.' },
   { section: 'Fertig', title: 'Dein Plan steht' },
 ]
 
@@ -239,9 +250,12 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
   const set = (patch: Partial<StartAnswers>) => setDraft((d) => ({ ...d, answers: { ...d.answers, ...patch } }))
   const setApp = (patch: Partial<StartAppChoices>) => setDraft((d) => ({ ...d, app: { ...d.app, ...patch } }))
   const [building, setBuilding] = useState(false)
+  const [intro, setIntro] = useState<(typeof SECTIONS)[number] | null>(null)
   const go = (to: number) => {
     // Vor der Zusammenfassung kurz zeigen, was gerade entsteht.
     if (to === STEPS.length - 1 && step < to) setBuilding(true)
+    // Neuer Abschnitt (nur vorwärts): kurzer Zwischenbildschirm.
+    else if (to > step && STEPS[to]?.section && STEPS[to].section !== STEPS[step].section) setIntro(STEPS[to].section)
     setDirection(to > step ? 'next' : 'prev')
     setDraft((d) => ({ ...d, step: Math.max(0, Math.min(STEPS.length - 1, to)) }))
     document.getElementById('start-scroll')?.scrollTo({ top: 0 })
@@ -849,7 +863,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           {step > 0 && step < STEPS.length - 1 && (
             <div className="anim-title mb-5 flex flex-col gap-1">
               <h1 className="text-[1.7rem] leading-tight font-bold tracking-tight text-fg">{current.title}</h1>
-              {current.lead && <p className="text-sm text-muted">{current.lead}</p>}
+              {current.guide && <Guide key={step} text={current.guide(a.firstName.trim())} />}
             </div>
           )}
           {body[step]}
@@ -857,6 +871,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       </main>
 
       {building && <BuildingPlan onDone={() => setBuilding(false)} />}
+      {intro && <SectionIntro section={intro} onDone={() => setIntro(null)} />}
 
       <footer className="relative flex shrink-0 gap-2 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {/* Weicher Übergang statt harter Linie: der Inhalt verschwindet sanft hinter den Knöpfen. */}
@@ -873,7 +888,14 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
             onClick={() => go(step + 1)}
             className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-fg shadow-lg shadow-accent/15 transition active:scale-95 disabled:opacity-40"
           >
-            {step === 0 ? 'Los geht’s' : 'Weiter'} <ChevronRight size={18} />
+            {step === 0
+              ? 'Los geht’s'
+              : STEPS[step + 1].section !== current.section && STEPS[step + 1].section !== 'Fertig'
+                ? `Weiter: ${STEPS[step + 1].section}`
+                : STEPS[step + 1].section === 'Fertig'
+                  ? 'Plan erstellen'
+                  : 'Weiter'}{' '}
+            <ChevronRight size={18} />
           </button>
         ) : (
           <button
@@ -896,26 +918,82 @@ const TAB_NAMES: Record<TabKey, string> = { dashboard: 'Dashboard', tracking: 'T
 
 /* ------------------------------------------------------------------------------------------ */
 
-const BUILD_STEPS = ['Kalorien & Makros berechnen', 'Trainingsplan zusammenstellen', 'Ernährungsplan erstellen', 'Supplements abstimmen']
+/** Sprechblase des Coaches, der durch „Dein Start“ führt. */
+function Guide({ text }: { text: string }) {
+  return (
+    <div className="anim-guide mt-2 flex items-start gap-2.5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-fg shadow-md shadow-accent/20">
+        <Sparkles size={15} />
+      </span>
+      <p className="relative rounded-2xl rounded-tl-md border border-border bg-surface px-3 py-2 text-sm leading-snug text-fg">{text}</p>
+    </div>
+  )
+}
 
-/** Kurze Lade-Animation, während der Plan entsteht - die Punkte haken sich nacheinander ab. */
-function BuildingPlan({ onDone }: { onDone: () => void }) {
-  const [done, setDone] = useState(0)
-  // Der Aufrufer übergibt jedes Mal eine neue Funktion - die Animation soll trotzdem nur einmal laufen.
+/** Zwischenbildschirm beim Betreten eines Abschnitts - antippen überspringt ihn. */
+function SectionIntro({ section, onDone }: { section: (typeof SECTIONS)[number]; onDone: () => void }) {
   const finish = useRef(onDone)
   useEffect(() => {
     finish.current = onDone
   }, [onDone])
   useEffect(() => {
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const tick = reduced ? 120 : 420
+    const end = window.setTimeout(() => finish.current(), reduced ? 700 : 1700)
+    return () => window.clearTimeout(end)
+  }, [])
+  const Icon = SECTION_ICONS[section]
+  const index = SECTIONS.indexOf(section)
+  const count = SECTIONS.length - 1
+  return (
+    <button
+      type="button"
+      onClick={() => finish.current()}
+      aria-label={`Abschnitt ${section} – weiter`}
+      className="anim-intro fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 overflow-hidden bg-bg px-8 text-center"
+    >
+      <span aria-hidden="true" className="anim-intro-glow pointer-events-none absolute top-1/2 left-1/2 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
+      <span className="relative grid h-24 w-24 place-items-center">
+        <span aria-hidden="true" className="anim-intro-ring absolute inset-0 rounded-[1.75rem] border-2 border-accent" />
+        <span aria-hidden="true" className="anim-intro-ring absolute inset-0 rounded-[1.75rem] border-2 border-accent [animation-delay:350ms]" />
+        <span className="anim-intro-icon relative grid h-24 w-24 place-items-center rounded-[1.75rem] bg-accent text-accent-fg shadow-2xl shadow-accent/30">
+          <Icon size={42} />
+        </span>
+      </span>
+      <span className="anim-intro-text relative flex flex-col gap-1.5 [animation-delay:150ms]">
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted">
+          Abschnitt {index + 1} von {count}
+        </span>
+        <span className="text-3xl font-bold tracking-tight text-fg">{section}</span>
+      </span>
+      <span className="anim-intro-text relative max-w-64 text-sm text-muted [animation-delay:280ms]">{SECTION_INTROS[section]}</span>
+      <span className="anim-intro-text relative mt-2 flex gap-1.5 [animation-delay:400ms]">
+        {SECTIONS.slice(0, count).map((x, i) => (
+          <span key={x} className={`h-1.5 rounded-full transition-all ${i < index ? 'w-4 bg-accent/60' : i === index ? 'anim-intro-dot w-8 bg-accent' : 'w-4 bg-fg/15'}`} />
+        ))}
+      </span>
+    </button>
+  )
+}
+
+const BUILD_STEPS = ['Kalorien & Makros berechnen', 'Trainingsplan zusammenstellen', 'Ernährungsplan erstellen', 'Supplements abstimmen']
+
+/** Kurze Lade-Animation, während der Plan entsteht - die Punkte haken sich nacheinander ab. */
+function BuildingPlan({ onDone }: { onDone: () => void }) {
+  const [done, setDone] = useState(0)
+  const [tick] = useState(() => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 300 : 1100))
+  // Der Aufrufer übergibt jedes Mal eine neue Funktion - die Animation soll trotzdem nur einmal laufen.
+  const finish = useRef(onDone)
+  useEffect(() => {
+    finish.current = onDone
+  }, [onDone])
+  useEffect(() => {
     const timer = window.setInterval(() => setDone((n) => n + 1), tick)
     const end = window.setTimeout(() => finish.current(), tick * (BUILD_STEPS.length + 1.5))
     return () => {
       window.clearInterval(timer)
       window.clearTimeout(end)
     }
-  }, [])
+  }, [tick])
   return (
     <div role="status" aria-live="polite" className="anim-backdrop fixed inset-0 z-50 grid place-items-center bg-bg/95 px-8 backdrop-blur-sm">
       <div className="flex w-full max-w-xs flex-col items-center gap-6">
@@ -924,6 +1002,9 @@ function BuildingPlan({ onDone }: { onDone: () => void }) {
           <Sparkles size={28} className="text-accent" />
         </span>
         <p className="text-lg font-semibold text-fg">Dein Plan wird erstellt …</p>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div className="anim-build-bar h-full rounded-full bg-accent" style={{ animationDuration: `${((BUILD_STEPS.length + 1.5) * tick) / 1000}s` }} />
+        </div>
         <ul className="flex w-full flex-col gap-2.5">
           {BUILD_STEPS.map((label, i) => {
             const ok = done > i
