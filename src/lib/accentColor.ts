@@ -17,7 +17,9 @@ export function getStoredOverviewAccent(): OverviewAccent {
  */
 export function applyAccentColor(color: OverviewAccent): void {
   const root = document.documentElement
-  if (color) {
+  // Weiß ist der Standard-Akzent und heißt „Farbe des Themes“ - sonst wäre er im Hell-Modus
+  // weiß auf weiß und Knöpfe und Auswahl unsichtbar.
+  if (color && !/^#f{3}(f{3})?$/i.test(color)) {
     root.style.setProperty('--color-accent', color)
     root.style.setProperty('--color-accent-fg', accentForeground(color))
   } else {

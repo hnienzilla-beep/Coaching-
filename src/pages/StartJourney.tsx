@@ -1,11 +1,37 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, ChevronLeft, ChevronRight, Info, Pencil, Sparkles } from 'lucide-react'
+import {
+  AlertTriangle,
+  Apple,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Dumbbell,
+  Flame,
+  HeartPulse,
+  Home,
+  Info,
+  LineChart,
+  Lock,
+  Pencil,
+  Repeat,
+  Scale,
+  Smartphone,
+  Sparkles,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  User,
+  Utensils,
+  Warehouse,
+  type LucideIcon,
+} from 'lucide-react'
 import { db } from '../db/db'
 import { ACCENT_COLORS, todayIso } from '../db/queries'
 import { applyAccentColor, getStoredOverviewAccent } from '../lib/accentColor'
-import { getPrefs, type TabKey } from '../lib/prefs'
+import { getPrefs, setPrefs, usePrefs, type TabKey } from '../lib/prefs'
 import { createFromStart, updateFromStart, type StartAppChoices } from '../lib/startApply'
 import {
   DEFAULT_ANSWERS,
@@ -39,6 +65,7 @@ import { getStoredTheme } from '../lib/theme'
 import { isCreatine } from '../lib/water'
 import type { Athlete } from '../models/types'
 import ColorWheel from '../components/ColorWheel'
+import { Toggle } from '../components/SettingsControls'
 import { DecimalInput, Input } from '../components/ui'
 import VolumeBars from '../components/VolumeBars'
 
@@ -51,20 +78,28 @@ import VolumeBars from '../components/VolumeBars'
 const DRAFT_KEY = 'coach.start.draft'
 
 const SECTIONS = ['Über dich', 'Dein Ziel', 'Training', 'Ernährung', 'App', 'Fertig'] as const
-type Step = { section: (typeof SECTIONS)[number] | null; title: string }
+const SECTION_ICONS: Record<(typeof SECTIONS)[number], LucideIcon> = {
+  'Über dich': User,
+  'Dein Ziel': Target,
+  Training: Dumbbell,
+  Ernährung: Utensils,
+  App: Smartphone,
+  Fertig: Check,
+}
+type Step = { section: (typeof SECTIONS)[number] | null; title: string; lead?: string }
 const STEPS: Step[] = [
   { section: null, title: 'Willkommen' },
-  { section: 'Über dich', title: 'Wer bist du?' },
-  { section: 'Über dich', title: 'Dein Körper' },
-  { section: 'Über dich', title: 'Dein Alltag' },
-  { section: 'Dein Ziel', title: 'Was willst du erreichen?' },
-  { section: 'Dein Ziel', title: 'Dein Zielgewicht' },
-  { section: 'Training', title: 'Dein Training' },
-  { section: 'Training', title: 'Zeit & Übungen' },
-  { section: 'Training', title: 'Dein Plan-Aufbau' },
-  { section: 'Training', title: 'Deine Schwerpunkte' },
-  { section: 'Ernährung', title: 'Deine Ernährung' },
-  { section: 'App', title: 'Deine App' },
+  { section: 'Über dich', title: 'Wer bist du?', lead: 'Damit ich dich ansprechen und deinen Bedarf berechnen kann.' },
+  { section: 'Über dich', title: 'Dein Körper', lead: 'Grundlage für Kalorien, Makros und dein Zielgewicht.' },
+  { section: 'Über dich', title: 'Dein Alltag', lead: 'Bewegung außerhalb des Trainings verbraucht oft mehr, als man denkt.' },
+  { section: 'Dein Ziel', title: 'Was willst du erreichen?', lead: 'Dein Ziel bestimmt Kalorien, Training und Tempo.' },
+  { section: 'Dein Ziel', title: 'Dein Zielgewicht', lead: 'Ein realistisches Ziel – mit Datum, wann du es etwa erreichst.' },
+  { section: 'Training', title: 'Dein Training', lead: 'Daraus baue ich deinen Wochenplan.' },
+  { section: 'Training', title: 'Zeit & Übungen', lead: 'So passt jede Einheit in deine Zeit und zu deinem Körper.' },
+  { section: 'Training', title: 'Dein Plan-Aufbau', lead: 'Wie sich die Muskelgruppen auf deine Tage verteilen.' },
+  { section: 'Training', title: 'Deine Schwerpunkte', lead: 'Optional: Muskeln, die du besonders betonen willst.' },
+  { section: 'Ernährung', title: 'Deine Ernährung', lead: 'Für deinen Ernährungsplan und passende Supplements.' },
+  { section: 'App', title: 'Deine App', lead: 'Einheiten, Farben und die Bereiche, die du brauchst.' },
   { section: 'Fertig', title: 'Dein Plan steht' },
 ]
 
@@ -203,7 +238,10 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
 
   const set = (patch: Partial<StartAnswers>) => setDraft((d) => ({ ...d, answers: { ...d.answers, ...patch } }))
   const setApp = (patch: Partial<StartAppChoices>) => setDraft((d) => ({ ...d, app: { ...d.app, ...patch } }))
+  const [building, setBuilding] = useState(false)
   const go = (to: number) => {
+    // Vor der Zusammenfassung kurz zeigen, was gerade entsteht.
+    if (to === STEPS.length - 1 && step < to) setBuilding(true)
     setDirection(to > step ? 'next' : 'prev')
     setDraft((d) => ({ ...d, step: Math.max(0, Math.min(STEPS.length - 1, to)) }))
     document.getElementById('start-scroll')?.scrollTo({ top: 0 })
@@ -349,10 +387,10 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       <Question label="Dein Ziel">
         <Options
           options={[
-            { value: 'abnehmen', label: 'Abnehmen', hint: 'Fett verlieren, Muskeln halten' },
-            { value: 'aufbauen', label: 'Muskeln aufbauen', hint: 'Mit leichtem Überschuss zunehmen' },
-            { value: 'recomp', label: 'Recomp', hint: 'Fett runter, Muskeln rauf – Gewicht bleibt ähnlich' },
-            { value: 'halten', label: 'Halten & fitter werden', hint: 'Gewicht halten, Leistung steigern' },
+            { value: 'abnehmen', label: 'Abnehmen', hint: 'Fett verlieren, Muskeln halten', icon: TrendingDown },
+            { value: 'aufbauen', label: 'Muskeln aufbauen', hint: 'Mit leichtem Überschuss zunehmen', icon: TrendingUp },
+            { value: 'recomp', label: 'Recomp', hint: 'Fett runter, Muskeln rauf – Gewicht bleibt ähnlich', icon: Repeat },
+            { value: 'halten', label: 'Halten & fitter werden', hint: 'Gewicht halten, Leistung steigern', icon: HeartPulse },
           ]}
           value={a.goal}
           onChange={(goal) => set({ goal, targetWeightKg: undefined, targetWeightTyped: false })}
@@ -489,7 +527,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       )}
       <Question label="Wo trainierst du?">
         <Options
-          options={(['studio', 'basic', 'zuhause'] as const).map((l) => ({ value: l, label: LOCATION_LABELS[l].label, hint: LOCATION_LABELS[l].hint }))}
+          options={(['studio', 'basic', 'zuhause'] as const).map((l) => ({ value: l, label: LOCATION_LABELS[l].label, hint: LOCATION_LABELS[l].hint, icon: { studio: Warehouse, basic: Dumbbell, zuhause: Home }[l] }))}
           value={a.location === 'beides' ? 'studio' : a.location}
           onChange={(location) => set({ location })}
         />
@@ -770,8 +808,8 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
             )}
           </div>
         </div>
-        {sectionIndex >= 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
+        {sectionIndex >= 0 && current.section && (
+          <div className="mt-2.5 flex flex-col gap-2">
             <div className="flex gap-1">
               {SECTIONS.map((s, i) => (
                 <div key={s} className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
@@ -779,7 +817,15 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
                 </div>
               ))}
             </div>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted">{current.section}</span>
+            <div className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+              <span className="flex items-center gap-1.5">
+                <SectionIcon section={current.section} />
+                {current.section}
+              </span>
+              <span className="tabular-nums normal-case tracking-normal">
+                Schritt {step} von {STEPS.length - 1}
+              </span>
+            </div>
           </div>
         )}
       </header>
@@ -800,14 +846,23 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
         }}
       >
         <div key={step} className={direction === 'next' ? 'anim-slide-from-right' : 'anim-slide-from-left'}>
-          {step > 0 && <h1 className="mb-4 text-2xl font-bold tracking-tight text-fg">{current.title}</h1>}
+          {step > 0 && step < STEPS.length - 1 && (
+            <div className="anim-title mb-5 flex flex-col gap-1">
+              <h1 className="text-[1.7rem] leading-tight font-bold tracking-tight text-fg">{current.title}</h1>
+              {current.lead && <p className="text-sm text-muted">{current.lead}</p>}
+            </div>
+          )}
           {body[step]}
         </div>
       </main>
 
-      <footer className="flex shrink-0 gap-2 border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {building && <BuildingPlan onDone={() => setBuilding(false)} />}
+
+      <footer className="relative flex shrink-0 gap-2 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {/* Weicher Übergang statt harter Linie: der Inhalt verschwindet sanft hinter den Knöpfen. */}
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-bg to-transparent" />
         {step > 0 && (
-          <button type="button" onClick={() => go(step - 1)} className="flex items-center gap-1 rounded-xl bg-surface-2 px-4 py-3 text-sm font-medium text-fg transition active:scale-95">
+          <button type="button" onClick={() => go(step - 1)} aria-label="Zurück" className="flex items-center gap-1 rounded-xl bg-surface-2 px-4 py-3.5 text-sm font-medium text-fg transition active:scale-95">
             <ChevronLeft size={18} /> Zurück
           </button>
         )}
@@ -816,7 +871,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
             type="button"
             disabled={!canContinue}
             onClick={() => go(step + 1)}
-            className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-accent py-3 text-sm font-semibold text-accent-fg transition active:scale-95 disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-fg shadow-lg shadow-accent/15 transition active:scale-95 disabled:opacity-40"
           >
             {step === 0 ? 'Los geht’s' : 'Weiter'} <ChevronRight size={18} />
           </button>
@@ -825,9 +880,9 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
             type="button"
             disabled={saving}
             onClick={() => void finish()}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-sm font-semibold text-accent-fg transition active:scale-95 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3.5 text-sm font-semibold text-accent-fg shadow-lg shadow-accent/15 transition active:scale-95 disabled:opacity-50"
           >
-            {saving ? (editId ? 'Wird übernommen …' : 'Wird angelegt …') : 'Pläne übernehmen'}
+            {saving ? (editId ? 'Wird übernommen …' : 'Wird angelegt …') : editId ? 'Pläne übernehmen' : 'Los geht’s – App starten'}
           </button>
         )}
       </footer>
@@ -841,21 +896,107 @@ const TAB_NAMES: Record<TabKey, string> = { dashboard: 'Dashboard', tracking: 'T
 
 /* ------------------------------------------------------------------------------------------ */
 
+const BUILD_STEPS = ['Kalorien & Makros berechnen', 'Trainingsplan zusammenstellen', 'Ernährungsplan erstellen', 'Supplements abstimmen']
+
+/** Kurze Lade-Animation, während der Plan entsteht - die Punkte haken sich nacheinander ab. */
+function BuildingPlan({ onDone }: { onDone: () => void }) {
+  const [done, setDone] = useState(0)
+  // Der Aufrufer übergibt jedes Mal eine neue Funktion - die Animation soll trotzdem nur einmal laufen.
+  const finish = useRef(onDone)
+  useEffect(() => {
+    finish.current = onDone
+  }, [onDone])
+  useEffect(() => {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const tick = reduced ? 120 : 420
+    const timer = window.setInterval(() => setDone((n) => n + 1), tick)
+    const end = window.setTimeout(() => finish.current(), tick * (BUILD_STEPS.length + 1.5))
+    return () => {
+      window.clearInterval(timer)
+      window.clearTimeout(end)
+    }
+  }, [])
+  return (
+    <div role="status" aria-live="polite" className="anim-backdrop fixed inset-0 z-50 grid place-items-center bg-bg/95 px-8 backdrop-blur-sm">
+      <div className="flex w-full max-w-xs flex-col items-center gap-6">
+        <span className="relative grid h-20 w-20 place-items-center">
+          <span className="absolute inset-0 animate-spin rounded-full border-[3px] border-surface-2 border-t-accent" />
+          <Sparkles size={28} className="text-accent" />
+        </span>
+        <p className="text-lg font-semibold text-fg">Dein Plan wird erstellt …</p>
+        <ul className="flex w-full flex-col gap-2.5">
+          {BUILD_STEPS.map((label, i) => {
+            const ok = done > i
+            return (
+              <li key={label} className={`flex items-center gap-2.5 text-sm transition-opacity duration-300 ${done >= i ? 'opacity-100' : 'opacity-30'}`}>
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition-colors duration-300 ${ok ? 'border-accent bg-accent text-accent-fg' : 'border-border'}`}>
+                  {ok && <Check size={12} strokeWidth={3} />}
+                </span>
+                <span className={ok ? 'text-fg' : 'text-muted'}>{label}</span>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
+  { icon: Flame, title: 'Kalorien & Makros', text: 'Dein Tagesziel, passend zu Körper und Ziel' },
+  { icon: Dumbbell, title: 'Trainingsplan', text: 'Für deine Tage, deine Zeit und dein Studio' },
+  { icon: Apple, title: 'Ernährungsplan', text: 'Mahlzeiten, die zu deinen Zielen passen' },
+  { icon: LineChart, title: 'Fortschritt', text: 'Gewicht, Maße und Wochenrückblick' },
+]
+
 function Welcome() {
   return (
-    <div className="flex flex-col items-center gap-5 pt-10 text-center">
-      <span className="grid h-20 w-20 place-items-center rounded-full bg-accent/15 text-accent">
+    <div className="relative flex flex-col items-center gap-5 pt-4 text-center">
+      {/* Weiches Leuchten hinter dem Logo */}
+      <div aria-hidden="true" className="pointer-events-none absolute top-14 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl" />
+      <span className="anim-pop relative grid h-20 w-20 place-items-center rounded-[1.6rem] bg-accent text-accent-fg shadow-xl shadow-accent/25">
         <Sparkles size={36} />
       </span>
-      <h1 className="text-3xl font-bold tracking-tight text-fg">Dein Start</h1>
-      <p className="text-base text-muted">
-        Ein paar kurze Fragen zu dir, deinem Ziel, deinem Training und deiner Ernährung. Daraus erstelle ich deine Kalorien- und Makroziele, einen Trainingsplan und
-        einen Ernährungsplan.
-      </p>
-      <ul className="flex w-full flex-col gap-2 text-left text-sm text-fg">
-        {['5 kurze Abschnitte', 'Jederzeit zurück oder überspringen', 'Am Ende alles prüfen und anpassen'].map((t) => (
-          <li key={t} className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" /> {t}
+      <div className="anim-title relative flex flex-col gap-2">
+        <h1 className="text-[2rem] leading-tight font-bold tracking-tight text-fg">Willkommen!</h1>
+        <p className="text-base text-muted">In etwa 3 Minuten zu deinem persönlichen Plan – abgestimmt auf dich, dein Ziel und deinen Alltag.</p>
+      </div>
+      <div className="anim-list relative grid w-full grid-cols-2 gap-2 text-left">
+        {FEATURES.map(({ icon: Icon, title, text }) => (
+          <div key={title} className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent/15 text-accent">
+              <Icon size={18} />
+            </span>
+            <span className="text-sm font-semibold text-fg">{title}</span>
+            <span className="text-xs leading-snug text-muted">{text}</span>
+          </div>
+        ))}
+      </div>
+      <div className="relative flex w-full flex-col gap-2 rounded-2xl border border-border bg-surface p-3 text-left">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">So läuft’s</span>
+        <div className="flex items-start justify-between gap-1">
+          {SECTIONS.filter((x) => x !== 'Fertig').map((sec, i) => {
+            const Icon = SECTION_ICONS[sec]
+            return (
+              <div key={sec} className="flex flex-1 flex-col items-center gap-1 text-center">
+                <span className="relative grid h-9 w-9 place-items-center rounded-full bg-surface-2 text-fg">
+                  <Icon size={16} />
+                  <span className="absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-[9px] font-bold text-accent-fg">{i + 1}</span>
+                </span>
+                <span className="text-[10px] leading-tight text-muted">{sec}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <ul className="relative flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-muted">
+        {[
+          { icon: Clock, text: 'ca. 3 Minuten' },
+          { icon: Pencil, text: 'Alles später änderbar' },
+          { icon: Lock, text: 'Daten bleiben auf deinem Gerät' },
+        ].map(({ icon: Icon, text }) => (
+          <li key={text} className="flex items-center gap-1.5">
+            <Icon size={13} /> {text}
           </li>
         ))}
       </ul>
@@ -911,13 +1052,13 @@ function SupplementList({ a, chosen, recommended, onAdd }: { a: StartAnswers; ch
 }
 
 function Block({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-5">{children}</div>
+  return <div className="anim-list flex flex-col gap-3">{children}</div>
 }
 
 function Question({ label, info, children }: { label: string; info?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-border bg-surface p-3.5">
       <div className="flex items-center gap-1.5">
         <span className="text-sm font-semibold text-fg">{label}</span>
         {info && (
@@ -973,22 +1114,45 @@ function MultiChips<T extends string>({ options, value, onChange, max, min = 0 }
   )
 }
 
-function Options<T extends string>({ options, value, onChange }: { options: { value: T; label: string; hint?: string }[]; value: T; onChange: (v: T) => void }) {
+function Options<T extends string>({ options, value, onChange }: { options: { value: T; label: string; hint?: string; icon?: LucideIcon }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          aria-pressed={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={`flex flex-col rounded-xl border px-3.5 py-2.5 text-left transition active:scale-[0.98] ${value === o.value ? 'border-accent bg-accent/15' : 'border-border bg-surface-2'}`}
-        >
-          <span className="text-sm font-semibold text-fg">{o.label}</span>
-          {o.hint && <span className="text-xs text-muted">{o.hint}</span>}
-        </button>
-      ))}
+      {options.map((o) => {
+        const on = value === o.value
+        const Icon = o.icon
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(o.value)}
+            className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition active:scale-[0.98] ${on ? 'border-accent bg-accent/15' : 'border-border bg-surface-2'}`}
+          >
+            {Icon && (
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition ${on ? 'bg-accent text-accent-fg' : 'bg-surface text-muted'}`}>
+                <Icon size={18} />
+              </span>
+            )}
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm font-semibold text-fg">{o.label}</span>
+              {o.hint && <span className="text-xs text-muted">{o.hint}</span>}
+            </span>
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${on ? 'border-accent bg-accent text-accent-fg' : 'border-border'}`}>
+              {on && <Check size={12} strokeWidth={3} />}
+            </span>
+          </button>
+        )
+      })}
     </div>
+  )
+}
+
+function SectionIcon({ section }: { section: (typeof SECTIONS)[number] }) {
+  const Icon = SECTION_ICONS[section]
+  return (
+    <span className="grid h-5 w-5 place-items-center rounded-md bg-accent/15 text-accent">
+      <Icon size={12} />
+    </span>
   )
 }
 
@@ -1028,8 +1192,15 @@ function Summary({
   const r = targets.result
   const fmt = (n: number) => n.toLocaleString('de-DE')
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">Prüf alles kurz – mit „Anpassen“ springst du zur passenden Frage zurück.</p>
+    <div className="anim-list flex flex-col gap-3">
+      <div className="relative flex flex-col items-center gap-2 overflow-hidden rounded-3xl border border-border bg-surface px-4 pt-6 pb-5 text-center">
+        <div aria-hidden="true" className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-accent/25 blur-3xl" />
+        <span className="anim-pop relative grid h-14 w-14 place-items-center rounded-2xl bg-accent text-accent-fg shadow-lg shadow-accent/25">
+          <Check size={28} strokeWidth={2.5} />
+        </span>
+        <h1 className="relative text-2xl font-bold tracking-tight text-fg">Dein Plan steht{a.firstName.trim() ? `, ${a.firstName.trim()}` : ''}!</h1>
+        <p className="relative text-sm text-muted">Prüf alles kurz – mit „Anpassen“ springst du zur passenden Frage zurück.</p>
+      </div>
       <SummaryCard title="Kalorien & Makros" onEdit={() => onEdit(5)}>
         <p className="text-3xl font-bold tabular-nums text-accent">
           {fmt(r.targetCalories)} <span className="text-base font-normal text-muted">kcal / Tag</span>
@@ -1104,7 +1275,45 @@ function Summary({
           <p className="text-xs text-muted">Mit üblicher Dosis und Einnahmezeit – im Supplementplan änderbar.</p>
         </SummaryCard>
       )}
+      <NextSteps />
     </div>
+  )
+}
+
+/** Einstieg in die App: die ersten drei Dinge nach dem Anlegen, dazu die Tipps je Bereich. */
+function NextSteps() {
+  const prefs = usePrefs()
+  const steps: { icon: LucideIcon; title: string; text: string }[] = [
+    { icon: Scale, title: 'Morgens wiegen', text: 'Unter Tracking – der Wochenschnitt zeigt deinen echten Trend.' },
+    { icon: Utensils, title: 'Essen eintragen', text: 'Unter Ernährung – oder einfach deinem Ernährungsplan folgen.' },
+    { icon: Dumbbell, title: 'Erstes Training starten', text: 'Unter Training – Sätze abhaken, Gewichte merkt sich die App.' },
+  ]
+  return (
+    <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-3.5">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-muted">So geht’s weiter</h2>
+      <ol className="flex flex-col gap-2.5">
+        {steps.map(({ icon: Icon, title, text }, i) => (
+          <li key={title} className="flex items-start gap-3">
+            <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
+              <Icon size={17} />
+              <span className="absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-[9px] font-bold text-accent-fg">{i + 1}</span>
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-sm font-semibold text-fg">{title}</span>
+              <span className="text-xs text-muted">{text}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="overflow-hidden rounded-xl bg-surface-2">
+        <Toggle
+          label="Tipps in der App zeigen"
+          hint="Kurze Hinweise beim ersten Öffnen jedes Bereichs"
+          on={prefs.tour}
+          onChange={(on) => setPrefs(on ? { tour: true, toursSeen: [] } : { tour: false })}
+        />
+      </div>
+    </section>
   )
 }
 
