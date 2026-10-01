@@ -62,6 +62,7 @@ import {
   type StartAnswers,
 } from '../lib/startPlan'
 import { getStoredTheme } from '../lib/theme'
+import { DETAIL_LEVELS, setDetailLevel, type DetailLevel } from '../lib/detailLevel'
 import { isCreatine } from '../lib/water'
 import type { Athlete } from '../models/types'
 import ColorWheel from '../components/ColorWheel'
@@ -279,6 +280,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
 
   async function finish(answers: StartAnswers = a) {
     setSaving(true)
+    setDetailLevel(app.detailLevel ?? levelFor(answers.experience))
     const target = answers.goal === 'abnehmen' || answers.goal === 'aufbauen' ? (answers.targetWeightKg ?? suggestTargetWeight(answers)) : undefined
     const final = { ...answers, firstName: answers.firstName.trim() || 'Ich', targetWeightKg: target }
     if (editId) {
@@ -737,12 +739,12 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       </Question>
     </Block>,
     <Block key="10">
-      <Question label="Einheiten">
-        <div className="grid grid-cols-3 gap-2">
-          <Chips options={[{ value: 'kg', label: 'kg' }, { value: 'lbs', label: 'lbs' }]} value={app.weightUnit} onChange={(weightUnit) => setApp({ weightUnit })} />
-          <Chips options={[{ value: 'cm', label: 'cm' }, { value: 'in', label: 'inch' }]} value={app.lengthUnit} onChange={(lengthUnit) => setApp({ lengthUnit })} />
-          <Chips options={[{ value: 'ml', label: 'ml' }, { value: 'oz', label: 'oz' }]} value={app.volumeUnit} onChange={(volumeUnit) => setApp({ volumeUnit })} />
-        </div>
+      <Question label="Wie viel soll die App zeigen?" info="Lässt sich jederzeit unter Einstellungen → Allgemein → Ansicht ändern.">
+        <Options
+          options={DETAIL_LEVELS.map((l) => ({ value: l.key, label: l.label, hint: l.hint, icon: { einfach: Sparkles, normal: LineChart, coach: Target }[l.key] }))}
+          value={app.detailLevel ?? levelFor(a.experience)}
+          onChange={(detailLevel) => setApp({ detailLevel })}
+        />
       </Question>
       <Question label="Farbschema">
         <Chips
@@ -754,6 +756,37 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           value={app.theme}
           onChange={(theme) => setApp({ theme })}
         />
+      </Question>
+      <Question label="Erinnerungen" info="Kommen, solange die App offen oder im Hintergrund ist. Einstellbar später unter Einstellungen → Erinnerungen.">
+        <MultiChips
+          options={[
+            { value: 'weigh', label: 'Wiegen (morgens)' },
+            { value: 'food', label: 'Essen eintragen (abends)' },
+            { value: 'water', label: 'Wasser trinken' },
+          ]}
+          value={(['weigh', 'food', 'water'] as const).filter((k) => app.reminders[k])}
+          onChange={(on) => {
+            setApp({ reminders: { weigh: on.includes('weigh'), food: on.includes('food'), water: on.includes('water') } })
+            if (on.length && typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission()
+          }}
+        />
+      </Question>
+      <MoreOptions collapsed={t === 1}>
+      <Question label="Einheiten">
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              ['Gewicht', <Chips key="w" options={[{ value: 'kg', label: 'kg' }, { value: 'lbs', label: 'lbs' }]} value={app.weightUnit} onChange={(weightUnit) => setApp({ weightUnit })} />],
+              ['Länge', <Chips key="l" options={[{ value: 'cm', label: 'cm' }, { value: 'in', label: 'inch' }]} value={app.lengthUnit} onChange={(lengthUnit) => setApp({ lengthUnit })} />],
+              ['Flüssigkeit', <Chips key="v" options={[{ value: 'ml', label: 'ml' }, { value: 'oz', label: 'oz' }]} value={app.volumeUnit} onChange={(volumeUnit) => setApp({ volumeUnit })} />],
+            ] as const
+          ).map(([label, chips]) => (
+            <div key={label} className="flex items-center gap-3">
+              <span className="w-20 shrink-0 text-sm text-muted">{label}</span>
+              <div className="flex-1">{chips}</div>
+            </div>
+          ))}
+        </div>
       </Question>
       <Question label="Akzentfarbe">
         <div className="flex justify-center">
@@ -775,20 +808,7 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
           onChange={(startTab) => setApp({ startTab })}
         />
       </Question>
-      <Question label="Erinnerungen" info="Kommen, solange die App offen oder im Hintergrund ist. Einstellbar später unter Einstellungen → Erinnerungen.">
-        <MultiChips
-          options={[
-            { value: 'weigh', label: 'Wiegen (morgens)' },
-            { value: 'food', label: 'Essen eintragen (abends)' },
-            { value: 'water', label: 'Wasser trinken' },
-          ]}
-          value={(['weigh', 'food', 'water'] as const).filter((k) => app.reminders[k])}
-          onChange={(on) => {
-            setApp({ reminders: { weigh: on.includes('weigh'), food: on.includes('food'), water: on.includes('water') } })
-            if (on.length && typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission()
-          }}
-        />
-      </Question>
+      </MoreOptions>
     </Block>,
     <Summary
       key="11"
@@ -910,6 +930,11 @@ function Journey({ editId, initial }: { editId?: string; initial?: Draft }) {
       </footer>
     </div>
   )
+}
+
+/** Einsteiger sehen zuerst nur das Nötigste, Profis alles. */
+function levelFor(experience: StartAnswers['experience']): DetailLevel {
+  return experience === 'einsteiger' ? 'einfach' : experience === 'fortgeschritten' ? 'normal' : 'coach'
 }
 
 const DIET_LABELS: Record<StartAnswers['diet'], string> = { alles: 'Mischkost', vegetarisch: 'vegetarisch', vegan: 'vegan', pescetarisch: 'pescetarisch' }
@@ -1129,6 +1154,23 @@ function SupplementList({ a, chosen, recommended, onAdd }: { a: StartAnswers; ch
         )
       })}
     </ul>
+  )
+}
+
+/** Einsteiger: Seltenes zugeklappt unter „Mehr anpassen“, sonst alles offen. */
+function MoreOptions({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
+  if (!collapsed) return <>{children}</>
+  return (
+    <details className="group flex flex-col">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-2xl border border-dashed border-border px-3.5 py-3 text-sm text-fg">
+        <span>
+          Mehr anpassen <span className="text-muted">(optional)</span>
+          <span className="block text-xs text-muted">Einheiten, Akzentfarbe, Bereiche, Startseite</span>
+        </span>
+        <ChevronRight size={16} className="shrink-0 text-muted transition group-open:rotate-90" />
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">{children}</div>
+    </details>
   )
 }
 
@@ -1455,6 +1497,40 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
 function TrainingSummary({ a, week, unitNames, set }: { a: StartAnswers; week: TrainingWeek; unitNames: string[]; set: (patch: Partial<StartAnswers>) => void }) {
   const setSets = (key: string, sets: number) => set({ setOverrides: { ...a.setOverrides, [key]: Math.max(1, Math.min(4, sets)) } })
   const daysOf = (unit: number) => week.schedule.filter((x) => x.unit === unit).map((x) => WEEKDAYS[x.weekday])
+  // Einsteiger: nur Tage und Übungen - Sätze, Tausch und Wochenvolumen kommen später im Plan.
+  if (a.experience === 'einsteiger')
+    return (
+      <div className="flex flex-col gap-2">
+        {week.days.map((d, u) => (
+          <details key={d.name} className="group rounded-xl bg-surface-2 px-3 py-2.5">
+            <summary className="flex cursor-pointer list-none items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface text-accent">
+                <Dumbbell size={17} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-semibold text-fg">{d.name}</span>
+                <span className="text-xs text-muted">
+                  {[a.scheduleMode === 'fixed' ? daysOf(u).join(', ') : '', `${d.exercises.filter((e) => !e.cardio).length} Übungen`, `≈ ${d.minutes} min`]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </span>
+              <ChevronRight size={16} className="shrink-0 text-muted transition group-open:rotate-90" />
+            </summary>
+            <ol className="mt-2.5 flex flex-col gap-1 border-t border-border pt-2.5">
+              {d.exercises.map((e, i) => (
+                <li key={e.key} className="flex items-baseline gap-2 text-sm">
+                  <span className="w-4 shrink-0 text-right text-xs tabular-nums text-muted">{i + 1}.</span>
+                  <span className="min-w-0 flex-1 truncate text-fg">{e.name}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted">{e.cardio ? e.reps : `${e.sets} × ${e.reps}`}</span>
+                </li>
+              ))}
+            </ol>
+          </details>
+        ))}
+        <p className="text-xs text-muted">Tipp: Antippen zeigt die Übungen. Beim Training siehst du bei jeder Übung, was du letztes Mal geschafft hast.</p>
+      </div>
+    )
   return (
     <div className="flex flex-col gap-3">
       {a.scheduleMode === 'fixed' && week.schedule.length > 0 && unitNames.length > 1 && (

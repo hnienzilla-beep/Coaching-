@@ -22,7 +22,7 @@ import ExercisePickerSheet from '../components/ExercisePickerSheet'
 import PlanPhaseHeader from '../components/PlanPhaseHeader'
 import Sheet from '../components/Sheet'
 import ExportTrainingPlanButton from '../components/ExportTrainingPlanButton'
-import { useCoachMode } from '../lib/detailLevel'
+import { useCoachMode, useSimpleMode } from '../lib/detailLevel'
 import { useDragSensors, verticalOnly } from '../lib/dragSensors'
 
 type Ctx = { athlete: Athlete }
@@ -35,6 +35,8 @@ function prescription(row: TrainingPlanExercise): string {
 export default function TrainingPlanPage() {
   const { athlete } = useOutletContext<Ctx>()
   const coachMode = useCoachMode()
+  // Einfach: kein Wochenvolumen und keine Muskel-Details - nur Tage und Übungen.
+  const simple = useSimpleMode()
   const prefs = usePrefs()
   const plans = useLiveQuery(() => db.trainingPlans.where('athleteId').equals(athlete.id).sortBy('order'), [athlete.id])
   const exercises = useLiveQuery(() => db.exercises.orderBy('name').toArray(), [])
@@ -171,7 +173,7 @@ export default function TrainingPlanPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PlanVolumeCard athlete={athlete} />
+      {!simple && <PlanVolumeCard athlete={athlete} />}
 
       <PlanPhaseHeader
         title="Trainingsplan"
@@ -224,7 +226,7 @@ export default function TrainingPlanPage() {
         </div>
       )}
 
-      {activePlan && (
+      {activePlan && !simple && (
         <div className="flex flex-col gap-1 px-1 text-xs text-muted">
           {dayVolumeText && <p>{dayVolumeText}</p>}
           <div className="flex items-center gap-2">

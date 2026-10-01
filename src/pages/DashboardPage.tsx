@@ -222,7 +222,7 @@ export default function DashboardPage() {
             type="button"
             onClick={() => setWeightOpen(true)}
             aria-label="Gewicht eintragen"
-            className="relative text-left transition active:scale-95"
+            className={`relative text-left transition active:scale-95 ${simple ? 'col-span-3' : ''}`}
           >
             <Tile
               label="Gewicht"
@@ -233,6 +233,8 @@ export default function DashboardPage() {
               {weightToday === undefined ? <Plus size={13} /> : <Pencil size={12} />}
             </span>
           </button>
+          {simple ? null : (
+          <>
           <button type="button" onClick={() => go('tracking')} className="text-left transition active:scale-95" aria-label="BMI im Tracking">
             <Tile
               label="BMI"
@@ -247,11 +249,14 @@ export default function DashboardPage() {
               hint={todayEntry?.bodyFatPct === undefined && lastBodyFat !== undefined ? 'zuletzt' : undefined}
             />
           </button>
+          </>
+          )}
         </div>
       </Card>
 
       {sortByOrder(DASHBOARD_CARDS, prefs.dashboardOrder)
-        .filter((c) => show(c.id))
+        // Einfach: Kalender und Wochenzahlen erst, wenn man sich eingefunden hat.
+        .filter((c) => show(c.id) && !(simple && (c.id === 'kalender' || c.id === 'woche')))
         .map((c) => (
           <Fragment key={c.id}>{cards[c.id]}</Fragment>
         ))}

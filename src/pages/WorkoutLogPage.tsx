@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
-import { ArrowLeftRight, Check, CircleCheck, ChevronDown, Minus, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeftRight, Check, CircleCheck, ChevronDown, ChevronRight, Dumbbell, Minus, Plus, Trash2, X } from 'lucide-react'
 import { smartWeightStep, WEIGHT_STEPS } from '../lib/weightStep'
 import { usePrefs, type TrainingCard } from '../lib/prefs'
 import { useUnits } from '../lib/units'
@@ -28,6 +28,8 @@ import LogHistoryList from '../components/LogHistoryList'
 import type { DayMarker } from '../components/DayStrip'
 import { formatDuration, nextOrder } from '../lib/calculator'
 import { useSimpleMode } from '../lib/detailLevel'
+import { nextTrainingPlan } from '../lib/nextStep'
+import { plannedUnitFor } from '../lib/schedule'
 import { triggerAutoSync } from '../features/obsidianSync/autoSync'
 
 type Ctx = { athlete: Athlete }
@@ -285,6 +287,9 @@ export default function WorkoutLogPage() {
           </div>
         )}
 
+        {sortedRows.length === 0 && (trainingPlans?.length ?? 0) > 0 ? (
+          <PlanPicker athlete={athlete} date={selectedDate} plans={trainingPlans ?? []} logs={logs ?? []} onPick={(id) => void setTrainingPlanId(id)} />
+        ) : (
         <Card className="flex flex-col gap-2">
           <Field label="Trainingstag">
             <Select value={currentLog?.trainingPlanId ?? ''} onChange={(e) => setTrainingPlanId(e.target.value)}>
@@ -303,6 +308,7 @@ export default function WorkoutLogPage() {
             </p>
           )}
         </Card>
+        )}
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={handleDragEnd}>
           <SortableContext items={sortedRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
@@ -465,7 +471,10 @@ function WorkoutExerciseRow({
   const lbs = prefs.weightUnit === 'lbs'
   // In lbs springen die Knöpfe in runden Pfund-Schritten (2 kg → 5 lbs, 1,25 kg → 2,5 lbs).
   const displayStep = lbs ? Math.max(2.5, Math.round((weightStep.step * 2.20462) / 2.5) * 2.5) : weightStep.step
-  const grid = prefs.showRpe ? SET_GRID : SET_GRID_NO_RPE
+  // Einfach: ohne RPE-Spalte und ohne Schritt-Auswahl - Wiederholungen und Gewicht reichen.
+  const simple = useSimpleMode()
+  const showRpe = prefs.showRpe && !simple
+  const grid = showRpe ? SET_GRID : SET_GRID_NO_RPE
   // Langes Drücken auf den Satz-Kreis markiert einen Aufwärmsatz.
   const pressTimer = useRef<number | undefined>(undefined)
   const longPressed = useRef(false)
@@ -558,7 +567,7 @@ function WorkoutExerciseRow({
                 <span>Vorher</span>
                 <span className="text-center">Wdh.</span>
                 <span className="text-center">{units.label('weight')}</span>
-                {prefs.showRpe && <span className="text-center">RPE</span>}
+                {showRpe && <span className="text-center">RPE</span>}
                 <span />
               </div>
               {sets.map((set, i) => {
@@ -612,7 +621,7 @@ function WorkoutExerciseRow({
                       label={`Gewicht in ${units.label('weight')}, Satz ${set.setNumber}`}
                       onChange={(n) => db.workoutSets.update(set.id, { weightKg: units.parse(n, 'weight') })}
                     />
-                    {prefs.showRpe && (
+                    {showRpe && (
                       <DecimalInput
                         value={set.rpe}
                         onChange={(n) => db.workoutSets.update(set.id, { rpe: n })}
@@ -632,6 +641,7 @@ function WorkoutExerciseRow({
                   </div>
                 )
               })}
+              {!simple && (
               <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
               <span>Lange drücken = Aufwärmsatz (W)</span>
               <label className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
@@ -653,6 +663,7 @@ function WorkoutExerciseRow({
                 </select>
               </label>
               </div>
+              )}
             </div>
           )}
 
@@ -712,5 +723,76 @@ function SetStepper({ value, step, label, onChange }: { value: number | undefine
         <Plus size={13} />
       </button>
     </div>
+  )
+}
+
+/**
+ * Noch nichts eingetragen: die Trainingstage als große Knöpfe statt einer Auswahlliste - der
+ * für heute geplante (bzw. nächste) Tag steht oben und ist hervorgehoben.
+ */
+function PlanPicker({
+  athlete,
+  date,
+  plans,
+  logs,
+  onPick,
+}: {
+  athlete: Athlete
+  date: string
+  plans: { id: string; phaseName: string; order: number }[]
+  logs: WorkoutLog[]
+  onPick: (planId: string) => void
+}) {
+  const counts = useLiveQuery(async () => {
+    const rows = await db.trainingPlanExercises.where('planId').anyOf(plans.map((p) => p.id)).toArray()
+    const m = new Map<string, number>()
+    for (const r of rows) m.set(r.planId, (m.get(r.planId) ?? 0) + 1)
+    return m
+  }, [plans])
+  if (!counts) return null
+  const sorted = [...plans].sort((x, y) => x.order - y.order)
+  const withExercises = new Set([...counts.keys()])
+  const plannedIndex = plannedUnitFor(athlete, date)
+  const planned = plannedIndex !== undefined ? sorted[plannedIndex] : undefined
+  const suggested =
+    planned && withExercises.has(planned.id)
+      ? planned
+      : nextTrainingPlan(sorted as Parameters<typeof nextTrainingPlan>[0], withExercises, logs, date)
+  const list = suggested ? [suggested, ...sorted.filter((p) => p.id !== suggested.id)] : sorted
+  return (
+    <Card className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-base font-semibold text-fg">Welches Training machst du?</h2>
+        <p className="text-xs text-muted">Antippen übernimmt die Übungen deines Plans – mit den Gewichten vom letzten Mal.</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {list.map((p) => {
+          const top = p.id === suggested?.id
+          const n = counts.get(p.id) ?? 0
+          return (
+            <button
+              key={p.id}
+              type="button"
+              disabled={n === 0}
+              onClick={() => onPick(p.id)}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.98] disabled:opacity-40 ${top ? 'border-accent bg-accent/15' : 'border-border bg-surface-2'}`}
+            >
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${top ? 'bg-accent text-accent-fg' : 'bg-surface text-muted'}`}>
+                <Dumbbell size={17} />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm font-semibold text-fg">{p.phaseName}</span>
+                <span className="text-xs text-muted">
+                  {n} {n === 1 ? 'Übung' : 'Übungen'}
+                  {top ? (planned?.id === p.id ? ' · heute geplant' : ' · als Nächstes dran') : ''}
+                </span>
+              </span>
+              <ChevronRight size={16} className="shrink-0 text-muted" />
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-xs text-muted">Oder unten einzelne Übungen hinzufügen.</p>
+    </Card>
   )
 }
