@@ -170,7 +170,7 @@ describe('Push/Pull Fullbody decken ihre Beine ab', () => {
   it('Pull Fullbody ohne Wadenheben', () => {
     for (const goal of ['abnehmen', 'aufbauen'] as const)
       for (const trainingDays of [[0, 3], [0, 2, 4], [0, 1, 3, 4], [0, 1, 2, 3, 4]])
-        for (const experience of ['anfaenger', 'fortgeschritten', 'profi'] as const) {
+        for (const experience of ['einsteiger', 'fortgeschritten', 'erfahren'] as const) {
           const week = buildTrainingWeek(a({ experience, goal, split: 'pushpullfb', trainingDays }))
           for (const d of week.days.filter((d) => d.name.startsWith('Pull Fullbody')))
             expect(d.exercises.some((e) => e.muscle === 'Waden' && !e.cardio), `${goal} ${trainingDays.length} ${experience}`).toBe(false)
