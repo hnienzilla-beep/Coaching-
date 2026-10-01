@@ -380,8 +380,9 @@ const DAY_TEMPLATES: Record<string, Slot[]> = {
 
 /** Muskeln, die eine Einheit immer trainiert - ihre erste Übung wird nie gestrichen. */
 const REQUIRED: Record<string, VolumeMuscle[]> = {
-  'Push Fullbody': ['Waden', 'Quadrizeps', 'Adduktoren'],
+  'Push Fullbody': ['Trizeps', 'Waden', 'Quadrizeps', 'Adduktoren'],
   'Pull Fullbody': ['Beinbeuger', 'Bauch'],
+  Push: ['Trizeps'],
 }
 
 /** Welche Bewegung ein Schwerpunkt-Muskel bekommt, wenn die Einheit ihn sonst nicht trainiert. */
@@ -400,6 +401,19 @@ const FOCUS_SLOT: Record<VolumeMuscle, Slot> = {
   Bauch: 'core',
   Waden: 'calves',
   Adduktoren: 'adductor',
+}
+
+/** Verwandte Muskeln: Ein Favorit ohne eigenen Tag kommt an einen Tag mit diesen Muskeln. */
+const NEAR: Partial<Record<VolumeMuscle, VolumeMuscle[]>> = {
+  Trapez: ['Rücken', 'Hint. Schulter'],
+  'Hint. Schulter': ['Rücken', 'Seitl. Schulter'],
+  'Vord. Schulter': ['Brust', 'Seitl. Schulter'],
+  'Seitl. Schulter': ['Brust', 'Rücken'],
+  Po: ['Beinbeuger', 'Quadrizeps'],
+  Adduktoren: ['Quadrizeps', 'Po'],
+  Waden: ['Quadrizeps', 'Beinbeuger'],
+  Bizeps: ['Rücken'],
+  Trizeps: ['Brust'],
 }
 
 /** Zweite Übung, wenn ein Muskel mit einer Übung je Einheit sein Wochenziel nicht erreicht. */
@@ -747,19 +761,20 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   const target = new Map(VOLUME_MUSCLES.map((m) => [m, weeklyTarget(m, a)]))
 
   // 1. Übungen je Einheit: Vorlage (+ Ergänzungen), fehlende Schwerpunkte, Schwerpunkte nach vorn.
-  const buildUnit = (u: Unit, extra: { slot: Slot; muscle: VolumeMuscle }[]): Draft[] => {
+  const buildUnit = (u: Unit, extra: { slot: Slot; muscle: VolumeMuscle; name?: string }[]): Draft[] => {
     const focus = focusOf(u)
     const slots = [...DAY_TEMPLATES[u.base]]
     const mainMuscle = (sl: Slot) => candidates(sl, a, s)[0]?.p
-    const extraAt = new Set<number>()
+    // Position einer Zusatz-Übung -> fest gewünschte Übung (Favorit), sonst undefined.
+    const extraAt = new Map<number, string | undefined>()
     for (const x of extra) {
       const last = slots.map(mainMuscle).lastIndexOf(x.muscle)
       const at = last === -1 ? slots.length : last + 1
       slots.splice(at, 0, x.slot)
       // Spätere Positionen verschieben sich mit.
-      const shifted = [...extraAt].map((i) => (i >= at ? i + 1 : i))
+      const shifted = [...extraAt].map(([i, n]) => [i >= at ? i + 1 : i, n] as const)
       extraAt.clear()
-      for (const i of [...shifted, at]) extraAt.add(i)
+      for (const [i, n] of [...shifted, [at, x.name] as const]) extraAt.set(i, n)
     }
     for (const m of focus) if (!slots.some((sl) => mainMuscle(sl) === m)) slots.push(FOCUS_SLOT[m])
     // Beine: immer eine Kniebeuge-Übung (Grundübung) und Beinstrecker (Isolation), sobald die
@@ -788,13 +803,17 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       // A/B-Varianten und Vorlagen „… B“/„… C“ nehmen die nächste Alternative.
       const byName = legSlots.has(slot) ? 0 : ['Oberkörper B', 'Ganzkörper B'].includes(u.base) ? 1 : u.base === 'Ganzkörper C' ? 2 : 0
       const vi = u.variant === 1 && !legSlots.has(slot) ? 1 : byName
-      const variantPick = cands[Math.min(vi, cands.length - 1)]
-      const pick = (swap && cands.find((c) => c.name === swap)) || variantPick
+      // Favoriten haben Vorrang - auch in Variante B, solange es einen gibt.
+      const favs = cands.filter((c) => s.favorites.includes(c.name))
+      const variantPick = favs.length ? favs[Math.min(vi, favs.length - 1)] : cands[Math.min(vi, cands.length - 1)]
+      const wanted = extraAt.get(si)
+      const pick = (swap && cands.find((c) => c.name === swap)) || (wanted && cands.find((c) => c.name === wanted)) || variantPick
       used.add(pick.name)
-      // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin.
+      // Pflicht-Muskel der Einheit: die erste Übung dafür bleibt immer drin - Favoriten auch.
       const required =
         ((REQUIRED[u.base] ?? []).includes(pick.p) && !list.some((d) => d.required && d.entry.p === pick.p)) ||
-        (legSlots.has(slot) && !list.some((d) => d.slot === slot))
+        (legSlots.has(slot) && !list.some((d) => d.slot === slot)) ||
+        s.favorites.includes(pick.name)
       list.push({ entry: pick, slot, key, sets: 0, focus: false, required, extra: extraAt.has(si), alternatives: cands.map((c) => c.name), note: undefined })
     }
     // Schwerpunkte: erste passende Übung je Muskel nach vorn (in der gewählten Reihenfolge).
@@ -875,7 +894,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       // Waden nur an Tagen, deren Vorlage Wadenheben vorsieht (nie an Push, Pull oder Pull Fullbody).
       ...(DAY_TEMPLATES[units[u].base].includes('calves') ? (['Waden'] as const) : []),
     ])
-  type Extras = { slot: Slot; muscle: VolumeMuscle }[][]
+  type Extras = { slot: Slot; muscle: VolumeMuscle; name?: string }[][]
   // Ein Durchgang der Planung mit festen Zusatz-Übungen (`extras`).
   const plan = (extras: Extras) => {
     let drafts = units.map((u, i) => buildUnit(u, extras[i]))
@@ -959,7 +978,11 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
       return n === 1 ? 0 : Math.max(0, n)
     }
     let guard = 0
-    for (let u = drafts.findIndex(over); u !== -1 && guard++ < 300; u = drafts.findIndex(over)) {
+    // Einheiten, an denen nichts mehr zu kürzen ist (nur Pflicht-Übungen/Favoriten) - die anderen
+    // werden trotzdem weiter gekürzt.
+    const stuck = new Set<number>()
+    const nextOver = () => drafts.findIndex((l, i) => !stuck.has(i) && over(l))
+    for (let u = nextOver(); u !== -1 && guard++ < 300; u = nextOver()) {
       const list = drafts[u]
       const v = volumeOf(drafts, freq)
       const w = unitsWithOf(drafts)
@@ -995,14 +1018,19 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
         pick((c) => !fu.has(c.m) && c.ratio > 1) ??
         pick((c) => !fu.has(c.m)) ??
         pick(() => true)
-      if (!victim) break
+      if (!victim) {
+        stuck.add(u)
+        continue
+      }
       share.set(victim.m, lowered(victim.m))
       drafts.forEach((l, i) => distribute(l, i, share))
     }
 
     // Auffüllen: Muskeln unter ihrem Wert bekommen wieder mehr, solange an ALLEN ihren Tagen Platz
     // ist (Satzgrenze, Zeit, je Training 4 bzw. 8 Sätze, je Übung 4) - größte Lücke zuerst.
-    const fits = () => drafts.every((l) => !over(l))
+    // Volle Einheiten (siehe oben) dürfen nur nicht noch voller werden.
+    const stuckSets = new Map([...stuck].map((u) => [u, setsIn(drafts[u])]))
+    const fits = () => drafts.every((l, u) => !over(l) || (stuckSets.has(u) && setsIn(l) <= stuckSets.get(u)!))
     const fillTo = (ceil: (m: VolumeMuscle) => number, withIndirect: boolean) => {
       for (let round = 0; round < 80; round++) {
         const v = volumeOf(drafts, freq)
@@ -1046,6 +1074,29 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
   // Nach dem Kürzen: Muskeln unter dem Wochenziel kommen zusätzlich an passende Tage, die noch
   // Platz haben (z.B. Bauch an Push, wenn der Beine-Tag voll ist) - dann neu planen.
   const extras: Extras = units.map(() => [])
+  // Favoriten kommen immer in den Plan: Steht einer in keiner Einheit, kommt er an den
+  // passenden Tag (Muskel gehört laut Split dorthin) mit den wenigsten Übungen.
+  {
+    const base = units.map((u) => buildUnit(u, []))
+    const placed = new Set(base.flatMap((l) => l.map((d) => d.entry.name)))
+    for (const name of s.favorites) {
+      const c = CATALOG.find((x) => x.name === name)
+      if (!c || placed.has(name) || !usable(c, a, s)) continue
+      // 0 = Muskel gehört an den Tag, 1 = arbeitet dort mit, 2 = verwandter Muskel; Waden nie an Push/Pull.
+      const rank = (u: number) =>
+        allowedIn(u).has(c.p) ? 0
+        : base[u].some((d) => d.entry.p2 === c.p || d.entry.s?.includes(c.p)) ? 1
+        : (NEAR[c.p] ?? []).some((m) => allowedIn(u).has(m)) ? 2
+        : 3
+      const u = units
+        .map((_, i) => i)
+        .filter((i) => freq[i] > 0 && rank(i) < 3 && (c.p !== 'Waden' || allowedIn(i).has('Waden')))
+        .sort((x, y) => rank(x) - rank(y) || base[x].length + extras[x].length - (base[y].length + extras[y].length))[0]
+      if (u === undefined) continue
+      extras[u].push({ slot: c.slot, muscle: c.p, name })
+      placed.add(name)
+    }
+  }
   let result = plan(extras)
   for (let pass = 0; pass < 3; pass++) {
     const v = volumeOf(result.drafts, freq)
@@ -1064,7 +1115,41 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
     if (!added) break
     result = plan(extras)
   }
-  const { drafts, goal, cardioMin } = result
+  const { drafts, goal, cardioMin, over } = result
+
+  // Wochenziel trotzdem verfehlt (die gleiche Verteilung scheitert am vollsten Tag): an Tagen,
+  // die den Muskel schon trainieren und noch Platz haben, einzeln Sätze ergänzen.
+  for (let round = 0; round < 200; round++) {
+    const v = volumeOf(drafts, freq)
+    const gaps = VOLUME_MUSCLES.filter((m) => !INDIRECT_ONLY.includes(m) && v.get(m)! + 0.5 < goal(m)).sort(
+      (x, y) => v.get(x)! / Math.max(1, goal(x)) - v.get(y)! / Math.max(1, goal(y)),
+    )
+    let grown = false
+    for (const m of gaps) {
+      const inDay = (list: Draft[]) => list.filter((d) => d.entry.p === m).reduce((n, d) => n + d.sets, 0)
+      const options = drafts
+        .flatMap((list, u) => (freq[u] > 0 && inDay(list) > 0 ? list.filter((d) => d.entry.p === m && d.sets < 4).map((d) => ({ list, u, d })) : []))
+        // Erst der Tag mit den wenigsten Sätzen für den Muskel (Fokus-Tag zählt einen weniger), damit
+        // die Tage gleich bleiben; gestrichene Übungen erst zuletzt wieder aufnehmen.
+        .sort(
+          (x, y) =>
+            inDay(x.list) - (focusIn(x.u).has(m) ? 1 : 0) - (inDay(y.list) - (focusIn(y.u).has(m) ? 1 : 0)) ||
+            Number(x.d.sets === 0) - Number(y.d.sets === 0) ||
+            x.d.sets - y.d.sets,
+        )
+      for (const o of options) {
+        const before = o.d.sets
+        o.d.sets = before === 0 ? 2 : before + 1
+        if (!over(o.list) && inDay(o.list) <= maxSetsPerSession(m) + (focusIn(o.u).has(m) ? 1 : 0)) {
+          grown = true
+          break
+        }
+        o.d.sets = before
+      }
+      if (grown) break
+    }
+    if (!grown) break
+  }
 
   // 4. Eigene Satzzahlen aus der Zusammenfassung.
   for (const list of drafts)
@@ -1109,7 +1194,7 @@ export function buildTrainingWeek(a: StartAnswers): TrainingWeek {
         `Unter dem Wochenziel: ${missing.map((x) => `${x.muscle} ${x.planned}/${x.target}`).join(', ')} – mehr Trainingstage, mehr Zeit oder eine höhere Satzgrenze helfen.`,
       ]
     : []
-  const warnings = [...missWarnings, ...recoveryWarnings(a, drafts, units, schedule), ...limitWarnings(days)]
+  const warnings = [...missWarnings, ...recoveryWarnings(a, drafts, units, schedule), ...limitWarnings(days, a.durationMin)]
   return { days, frequency: freq, volume, warnings, schedule }
 }
 
@@ -1171,8 +1256,13 @@ function recoveryWarnings(a: StartAnswers, drafts: Draft[][], units: Unit[], sch
   return [...new Set(out)].slice(0, 4)
 }
 
-function limitWarnings(days: PlanDay[]): string[] {
-  return days.filter((d) => d.workSets > d.maxSets).map((d) => `${d.name}: ${d.workSets} Sätze – mehr als deine Grenze von ${d.maxSets}`)
+function limitWarnings(days: PlanDay[], durationMin: number): string[] {
+  return [
+    ...days.filter((d) => d.workSets > d.maxSets).map((d) => `${d.name}: ${d.workSets} Sätze – mehr als deine Grenze von ${d.maxSets}`),
+    ...days
+      .filter((d) => d.minutes > durationMin)
+      .map((d) => `${d.name}: ca. ${d.minutes} min – länger als ${durationMin} min, weil Pflicht-Übungen und Favoriten nicht gekürzt werden.`),
+  ]
 }
 
 /* ------------------------------------------------------------------------------------------

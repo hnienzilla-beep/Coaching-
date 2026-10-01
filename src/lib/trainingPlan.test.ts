@@ -178,6 +178,46 @@ describe('Push/Pull Fullbody decken ihre Beine ab', () => {
   })
 })
 
+describe('Push mit Trizeps, Wochenziel bei Platz, Favoriten', () => {
+  it('Push und Push Fullbody haben immer Trizeps - auch mit 45 min', () => {
+    for (const split of ['ppl', 'pushpullfb', 'fbppl', 'pplokuk'] as const)
+      for (const durationMin of [45, 60] as const)
+        for (const trainingDays of [[0, 3], [0, 2, 4], [0, 1, 3, 4], [0, 1, 2, 3, 4]]) {
+          const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, durationMin, trainingDays }))
+          for (const d of week.days.filter((d) => d.name.startsWith('Push')))
+            expect(d.exercises.some((e) => e.muscle === 'Trizeps'), `${split} ${durationMin} ${trainingDays.length} ${d.name}`).toBe(true)
+        }
+  })
+  it('Wochenziel wird erreicht, wenn ein Tag des Muskels noch Platz hat', () => {
+    // Push FB voll, Push mit viel Platz: Push wird aufgefüllt, statt bei 2 Sätzen je Übung zu bleiben.
+    for (const split of ['fbppl', 'ppl', 'pushpullfb', 'okuk', 'ganzkoerper', 'pplokuk', 'bro'] as const)
+      for (const durationMin of [60, 75] as const) {
+        const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays: [0, 1, 2, 3, 4], durationMin }))
+        for (const v of week.volume) {
+          if (['Vord. Schulter', 'Adduktoren'].includes(v.muscle) || v.planned + 0.5 >= v.target) continue
+          for (const d of week.days) {
+            const own = d.exercises.filter((e) => e.muscle === v.muscle && !e.cardio)
+            const sets = own.reduce((n, e) => n + e.sets, 0)
+            if (sets === 0) continue
+            // Kein Platz: Satzgrenze, Zeit, Obergrenze je Training oder alle Übungen bei 4 Sätzen.
+            const full = d.workSets >= d.maxSets || d.minutes >= durationMin - 4 || sets >= maxSetsPerSession(v.muscle) || own.every((e) => e.sets >= 4)
+            expect(full, `${split} ${durationMin} ${v.muscle} ${v.planned}/${v.target} ${d.name} ${d.workSets}s ${d.minutes}min`).toBe(true)
+          }
+        }
+      }
+  })
+  it('alle Favoriten stehen im Plan, Zeit passt', () => {
+    const favorites = ['Hip Thrust (Maschine)', 'Rudern breit (Maschine)', 'Hammercurls']
+    for (const split of ['ppl', 'pushpullfb', 'okuk', 'ganzkoerper', 'torsolimbs', 'arnold', 'bro'] as const)
+      for (const trainingDays of [[0, 3], [0, 2, 4], [0, 1, 3, 4]]) {
+        const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays, favorites }))
+        const names = new Set(week.days.flatMap((d) => d.exercises.map((e) => e.name)))
+        for (const f of favorites) expect(names.has(f), `${split} ${trainingDays.length} ${f}`).toBe(true)
+        for (const d of week.days) expect(d.minutes, `${split} ${d.name}`).toBeLessThanOrEqual(60)
+      }
+  })
+})
+
 describe('Schwerpunkt immer im Plan, Schultern getrennt', () => {
   it('Fokus-Übung bleibt auch bei 30 min und Satzgrenze 12', () => {
     for (const m of ['Hint. Schulter', 'Seitl. Schulter', 'Trapez', 'Adduktoren', 'Vord. Schulter'] as const) {
@@ -220,16 +260,21 @@ describe('Volumen je Einheit verteilt, Fokus nur an seinem Tag', () => {
 describe('Gleiches Volumen an allen Tagen eines Muskels', () => {
   const setsOf = (d: { exercises: { muscle: string; sets: number; cardio?: boolean }[] }, m: string) => d.exercises.filter((e) => e.muscle === m && !e.cardio).reduce((n, e) => n + e.sets, 0)
   it('Push FB (Fokus Seitl. Schulter + Trizeps) hat genau einen Satz mehr als Push, alle anderen Muskeln gleich', () => {
-    const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split: 'fbppl', trainingDays: [0, 1, 2, 3, 4], durationMin: 75, focusByUnit: { 'Push Fullbody': ['Seitl. Schulter', 'Trizeps'] } }))
+    // Genug Platz an allen Tagen - sonst darf der freie Tag mehr bekommen (Wochenziel geht vor).
+    const week = buildTrainingWeek(pro({ split: 'fbppl', trainingDays: [0, 1, 2, 3, 4], durationMin: 90, maxSets: 25, focusByUnit: { 'Push Fullbody': ['Seitl. Schulter', 'Trizeps'] } }))
     const byName = new Map(week.days.map((d) => [d.name, d]))
     for (const m of ['Seitl. Schulter', 'Trizeps']) expect(setsOf(byName.get('Push Fullbody')!, m), m).toBe(setsOf(byName.get('Push')!, m) + 1)
   })
-  it('ohne Fokus: jeder Muskel an jedem seiner Tage gleich (außer Pflicht-Minimum)', () => {
+  it('ohne Fokus: jeder Muskel an jedem seiner Tage gleich (außer Pflicht-Minimum oder voller Tag)', () => {
     for (const split of ['fbppl', 'okuk', 'ppl', 'pushpullfb', 'ganzkoerper', 'torsolimbs', 'okukarme'] as const) {
       const week = buildTrainingWeek(a({ experience: 'fortgeschritten', goal: 'aufbauen', split, trainingDays: [0, 1, 2, 3, 4], durationMin: 60 }))
       for (const m of ['Brust', 'Rücken', 'Seitl. Schulter', 'Hint. Schulter', 'Bizeps', 'Trizeps', 'Quadrizeps', 'Beinbeuger']) {
-        const vals = week.days.map((d) => setsOf(d, m)).filter((n) => n > 2)
-        if (vals.length > 1) expect(Math.max(...vals) - Math.min(...vals), `${split} ${m} ${vals}`).toBe(0)
+        const days = week.days.filter((d) => setsOf(d, m) > 2)
+        const vals = days.map((d) => setsOf(d, m))
+        if (vals.length < 2 || Math.max(...vals) === Math.min(...vals)) continue
+        // Mehr an einem Tag nur, weil der Tag mit weniger voll ist (Satzgrenze oder Zeit).
+        const low = days[vals.indexOf(Math.min(...vals))]
+        expect(low.workSets >= low.maxSets - 1 || low.minutes >= 60 - 4, `${split} ${m} ${vals} ${low.name}`).toBe(true)
       }
     }
   })
