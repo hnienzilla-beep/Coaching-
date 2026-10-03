@@ -1,8 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import {  } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff } from 'lucide-react'
+import Sheet from '../../components/Sheet'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/db'
-import { Button, Card, Field, Input, Select } from '../../components/ui'
+import { Button, Field, Input, Select } from '../../components/ui'
 import { DEFAULT_INTERVAL_MINUTES, INTERVAL_OPTIONS, getSyncSettings, saveSyncSettings } from './settings'
 import { testConnection } from './githubApi'
 import { notifySyncSettingsChanged, syncNow } from './autoSync'
@@ -128,10 +129,10 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
 
   const busy = status.type === 'busy' || syncState.running
 
+  // Als Sheet per Portal: Ein `fixed` Fenster innerhalb der animierten Seite würde sich am
+  // transformierten Elternelement ausrichten statt am Bildschirm und landete verschoben.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex max-h-[80vh] w-full max-w-md flex-col gap-3 overflow-y-auto">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Obsidian-Sync</h2>
+    <Sheet open title="Obsidian-Sync" onClose={onClose}>
 
         <Field label="Athlet (wessen Daten synchronisiert werden)">
           <Select value={athleteId} onChange={(e) => setAthleteId(e.target.value)}>
@@ -149,7 +150,7 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
           <Input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="obsidian-vault" />
         </Field>
         <Field label="Personal Access Token">
-          <Input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="github_pat_..." />
+          <TokenInput value={token} onChange={setToken} />
         </Field>
 
         <label className="flex items-center gap-2 text-sm text-fg">
@@ -266,7 +267,72 @@ export default function ObsidianSyncModal({ onClose }: { onClose: () => void }) 
         <Button variant="ghost" onClick={onClose}>
           Schließen
         </Button>
-      </Card>
+    </Sheet>
+  )
+}
+
+/** Token-Feld mit Anzeigen/Verbergen und Kopieren in die Zwischenablage. */
+function TokenInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [visible, setVisible] = useState(false)
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
+  useEffect(() => {
+    if (!copied) return
+    const t = window.setTimeout(() => setCopied(null), 1800)
+    return () => window.clearTimeout(t)
+  }, [copied])
+
+  async function copy() {
+    const text = value.trim()
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied('ok')
+    } catch {
+      // Ältere Browser bzw. ohne Berechtigung: über ein unsichtbares Textfeld kopieren.
+      const area = document.createElement('textarea')
+      area.value = text
+      area.setAttribute('readonly', '')
+      area.style.position = 'fixed'
+      area.style.opacity = '0'
+      document.body.appendChild(area)
+      area.select()
+      const ok = document.execCommand('copy')
+      area.remove()
+      setCopied(ok ? 'ok' : 'fail')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-2">
+        <Input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="github_pat_..."
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? 'Token verbergen' : 'Token anzeigen'}
+          className="grid w-11 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted transition active:scale-95"
+        >
+          {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+        <button
+          type="button"
+          onClick={() => void copy()}
+          disabled={!value.trim()}
+          aria-label="Token kopieren"
+          className="grid w-11 shrink-0 place-items-center rounded-xl bg-surface-2 text-accent transition active:scale-95 disabled:opacity-40"
+        >
+          {copied === 'ok' ? <Check size={16} /> : <Copy size={16} />}
+        </button>
+      </div>
+      {copied && <span className={`text-xs ${copied === 'ok' ? 'text-ok' : 'text-danger'}`}>{copied === 'ok' ? 'Token in die Zwischenablage kopiert.' : 'Kopieren nicht möglich – Token anzeigen und markieren.'}</span>}
     </div>
   )
 }
