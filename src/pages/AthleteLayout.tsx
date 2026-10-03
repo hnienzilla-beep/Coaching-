@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, Link } from 'react-router-dom'
-import { Check, ChevronDown, Dumbbell, LayoutDashboard, LineChart, Settings, UserPlus, Users, Utensils } from 'lucide-react'
+import { Apple, Check, ChevronDown, Dumbbell, LayoutDashboard, LineChart, Pill, Settings, UserPlus, Users, Utensils } from 'lucide-react'
+import { useIsDesktop } from '../lib/desktop'
 import { subViewQuery, swipeAnimationClass, useSwipeNavigation } from '../lib/swipeNavigation'
 import { usePrefs, type TabKey } from '../lib/prefs'
 import { startReminders } from '../lib/reminders'
@@ -38,6 +39,7 @@ export default function AthleteLayout() {
   const navigate = useNavigate()
 
   const detailLevel = useDetailLevel()
+  const desktop = useIsDesktop()
 
   // `?? null` unterscheidet "lädt noch" (undefined) von "gibt es nicht" (null) - ohne das
   // blitzte der Fehlerzweig bei jedem Laden kurz auf.
@@ -136,18 +138,68 @@ export default function AthleteLayout() {
   const settingsSection = SECTIONS.find((s) => s.key === pathname.split('/')[4])
   const pageTitle = onSettings ? (settingsSection?.label ?? 'Einstellungen') : (Object.values(ALL_TABS).find((t) => t.to === segment)?.label ?? '')
 
+  // PC (ab 1024 px): Seitenleiste links statt der Leiste unten, Inhalt breiter. Am Handy
+  // greift keine der `lg:`-Klassen - dort bleibt alles wie gehabt.
+  const sideLink = (active: boolean) =>
+    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-surface-2 hover:text-fg'}`
+
   return (
-    <div className="relative mx-auto flex h-full max-w-md flex-col overflow-hidden">
+    <div className="relative mx-auto flex h-full max-w-md flex-col overflow-hidden lg:max-w-none lg:flex-row">
+      <aside className="hidden w-60 shrink-0 flex-col gap-1 border-r border-border bg-surface/50 px-3 pt-6 pb-4 lg:flex">
+        <div className="mb-5 flex items-center gap-2.5 px-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-sm font-bold text-accent-fg">{initials(athlete.name)}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-fg">{athlete.name}</span>
+            <span className="block truncate text-xs text-muted">{athlete.goal}</span>
+          </span>
+        </div>
+        {TABS.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <NavLink
+              key={tab.label}
+              to={`/athlete/${athleteId}${tab.to ? `/${tab.to}${subViewQuery(tab.to)}` : ''}`}
+              end={tab.end}
+              className={({ isActive }) => sideLink(isActive)}
+            >
+              <Icon size={18} /> {tab.label}
+            </NavLink>
+          )
+        })}
+        <div className="my-3 border-t border-border" />
+        <NavLink to={`/athlete/${athlete.id}/einstellungen`} className={({ isActive }) => sideLink(isActive)}>
+          <Settings size={18} /> Einstellungen
+        </NavLink>
+        {canManageAthletes && (
+          <>
+            <span className="mt-4 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted">Datenbanken</span>
+            <Link to="/lebensmittel" className={sideLink(false)}>
+              <Apple size={18} /> Lebensmittel
+            </Link>
+            <Link to="/uebungen" className={sideLink(false)}>
+              <Dumbbell size={18} /> Übungen
+            </Link>
+            <Link to="/supplemente" className={sideLink(false)}>
+              <Pill size={18} /> Supplemente
+            </Link>
+            <Link to="/athleten" className={`${sideLink(false)} mt-auto`}>
+              <Users size={18} /> Athleten verwalten
+            </Link>
+          </>
+        )}
+      </aside>
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <header
         className={`shrink-0 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 transition-colors duration-300 ${
           compact ? 'border-border bg-bg/85 backdrop-blur-xl' : 'border-transparent'
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 lg:mx-auto lg:w-full lg:max-w-6xl lg:px-4">
           <Link
             to={`/athlete/${athlete.id}/einstellungen`}
             aria-label="Einstellungen"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-fg transition active:scale-90"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-bold text-accent-fg transition active:scale-90 lg:hidden"
           >
             {initials(athlete.name)}
           </Link>
@@ -244,8 +296,9 @@ export default function AthleteLayout() {
           const next = e.currentTarget.scrollTop > 36
           setCompact((c) => (c === next ? c : next))
         }}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-36"
+        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 pb-36 lg:px-8 lg:pb-16"
       >
+        <div className={`lg:mx-auto lg:w-full ${onSettings ? 'lg:max-w-3xl' : 'lg:max-w-6xl'}`}>
         {/* Großer Titel (iOS-Stil): scrollt mit dem Inhalt weg, danach steht er klein oben. */}
         <h1 key={pageTitle} className="anim-title -mt-2 mb-4 text-3xl font-bold tracking-tight text-fg">
           {pageTitle}
@@ -259,13 +312,15 @@ export default function AthleteLayout() {
             <Outlet context={{ athlete } satisfies { athlete: Athlete }} />
           </div>
         </div>
+        </div>
       </main>
+      </div>
 
-      {!onSettings && prefs.quickAddButton && <QuickAddButton athlete={athlete} bottomOffset={`calc(${NAV_BOTTOM} + 4.75rem)`} />}
+      {!onSettings && prefs.quickAddButton && <QuickAddButton athlete={athlete} bottomOffset={desktop ? '1.5rem' : `calc(${NAV_BOTTOM} + 4.75rem)`} />}
 
       {/* Schwebende Navigation: abgerundete Leiste über dem Inhalt, mit Icon und Beschriftung. */}
       <nav
-        className="absolute inset-x-3 z-30 grid gap-1 rounded-2xl border border-border bg-surface/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        className="absolute inset-x-3 z-30 grid lg:hidden gap-1 rounded-2xl border border-border bg-surface/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
         style={{ bottom: NAV_BOTTOM, gridTemplateColumns: `repeat(${TABS.length}, minmax(0, 1fr))` }}
       >
         {/* Die Markierung gleitet zum aktiven Reiter - beim Antippen wie beim Wischen. */}

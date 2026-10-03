@@ -1,3 +1,4 @@
+import { COL, SPLIT_WIDE_RIGHT } from '../lib/desktop'
 import { useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -304,7 +305,9 @@ export default function NutritionPage() {
   const editMeal = editMealId ? (draftMeals ?? []).find((m) => m.id === editMealId) : undefined
 
   return (
-    <div className="flex flex-col gap-4">
+    // PC: Tagesplan und Bilanz links (mitlaufend), Mahlzeiten rechts - am Handy untereinander.
+    <div className={SPLIT_WIDE_RIGHT}>
+      <div className={`${COL} lg:sticky lg:top-0`}>
       <SegmentedControl
         options={[
           { key: 'plan', label: 'Tagespläne' },
@@ -456,7 +459,13 @@ export default function NutritionPage() {
               </>
             )}
           </Card>
+        </>
+      )}
+      </div>
 
+      <div className={COL}>
+      {activePlan && (
+        <>
           {filledGroupCount === 0 && (!editing || isRecipeView) && (
             <p className="px-1 text-center text-sm text-muted">
               {isRecipeView ? 'Noch keine Zutaten in diesem Rezept.' : 'Noch keine Mahlzeiten in dieser Phase.'}
@@ -582,6 +591,7 @@ export default function NutritionPage() {
         </div>
         </CollapsibleCard>
       )}
+      </div>
     </div>
   )
 }

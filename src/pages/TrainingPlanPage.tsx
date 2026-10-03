@@ -1,3 +1,4 @@
+import { COL_FIRST_RIGHT, COL_SECOND_LEFT, SPLIT_WIDE_LEFT } from '../lib/desktop'
 import { useRef, useState } from 'react'
 import { ArrowLeftRight, Dumbbell } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
@@ -172,8 +173,14 @@ export default function TrainingPlanPage() {
   const times = activePlan?.timesPerWeek ?? autoTimes
 
   return (
-    <div className="flex flex-col gap-4">
-      {!simple && <PlanVolumeCard athlete={athlete} />}
+    // PC: Plan links, Wochenvolumen rechts (mitlaufend) - am Handy das Volumen oben wie bisher.
+    <div className={simple ? 'flex flex-col gap-4' : SPLIT_WIDE_LEFT}>
+      {!simple && (
+        <div className={COL_FIRST_RIGHT}>
+          <PlanVolumeCard athlete={athlete} />
+        </div>
+      )}
+      <div className={COL_SECOND_LEFT}>
 
       <PlanPhaseHeader
         title="Trainingsplan"
@@ -354,6 +361,7 @@ export default function TrainingPlanPage() {
       )}
 
       <ExportTrainingPlanButton athlete={athlete} />
+      </div>
     </div>
   )
 }
