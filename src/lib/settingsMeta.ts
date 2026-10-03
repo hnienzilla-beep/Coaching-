@@ -75,8 +75,8 @@ export const SECTIONS: { key: SectionKey; label: string; hint: string; prefs: (k
     key: 'darstellung',
     label: 'Darstellung',
     hint: 'Farbschema, Akzent, Schrift, Animationen',
-    prefs: ['fontSize', 'contrast', 'animations', 'haptics', 'confetti', 'tour', 'toursSeen'],
-    search: ['hell', 'dunkel', 'system', 'farbe', 'akzent', 'ansicht', 'einfach', 'coach', 'schrift', 'größe', 'kontrast', 'animation', 'bewegung', 'haptik', 'vibration', 'konfetti', 'feiern', 'hintergrund', 'bild', 'hilfe', 'tour', 'hinweise'],
+    prefs: ['fontSize', 'contrast', 'surfaceTransparency', 'animations', 'haptics', 'confetti', 'tour', 'toursSeen'],
+    search: ['hell', 'dunkel', 'system', 'farbe', 'akzent', 'ansicht', 'einfach', 'coach', 'schrift', 'größe', 'kontrast', 'transparenz', 'durchsichtig', 'animation', 'bewegung', 'haptik', 'vibration', 'konfetti', 'feiern', 'hintergrund', 'bild', 'hilfe', 'tour', 'hinweise'],
   },
   {
     key: 'navigation',

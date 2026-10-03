@@ -222,6 +222,30 @@ function Darstellung({ athlete }: { athlete: Athlete }) {
       <Group title="Farben">
         <Choice label="Farbschema" options={THEMES} value={theme} onChange={setTheme} />
         <Choice label="Kontrast" options={[{ value: 'normal', label: 'Normal' }, { value: 'high', label: 'Hoch' }]} value={prefs.contrast} onChange={(v) => setPref('contrast', v)} />
+        <label className="flex flex-col gap-2 px-3 py-2.5">
+          <span className="flex items-baseline justify-between gap-2 text-sm text-fg">
+            Transparenz der Flächen
+            <span className="flex items-baseline gap-2">
+              {prefs.surfaceTransparency !== null && (
+                <button type="button" onClick={() => setPref('surfaceTransparency', null)} className="text-xs text-accent">
+                  Standard
+                </button>
+              )}
+              <span className="tabular-nums text-muted">{Math.max(photoCount ? 65 : 0, prefs.surfaceTransparency ?? (photoCount ? 78 : 0))} %</span>
+            </span>
+          </span>
+          <input
+            type="range"
+            min={photoCount ? 65 : 0}
+            max={95}
+            step={5}
+            value={Math.max(photoCount ? 65 : 0, prefs.surfaceTransparency ?? (photoCount ? 78 : 0))}
+            onChange={(e) => setPref('surfaceTransparency', Number(e.target.value))}
+            aria-label="Transparenz der Karten und Schaltflächen"
+            className="w-full accent-[var(--color-accent)]"
+          />
+          <span className="text-xs text-muted">Karten und Schaltflächen werden durchsichtiger – am schönsten mit Hintergrundbild.</span>
+        </label>
         <div className="flex flex-col items-center gap-2 px-3 py-3">
           <span className="self-start text-sm text-fg">Akzentfarbe</span>
           {/* Vorschau live beim Ziehen, gespeichert wird beim Loslassen. */}

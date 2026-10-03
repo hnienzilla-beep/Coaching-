@@ -51,6 +51,8 @@ export interface Prefs {
   animations: 'full' | 'reduced' | 'off'
   fontSize: 's' | 'm' | 'l'
   contrast: 'normal' | 'high'
+  /** Transparenz von Karten und Schaltflächen in Prozent (0 = deckend); null = Standard des Themes. */
+  surfaceTransparency: number | null
   tour: boolean
   toursSeen: string[]
 }
@@ -94,6 +96,7 @@ export const DEFAULT_PREFS: Prefs = {
   animations: 'full',
   fontSize: 'm',
   contrast: 'normal',
+  surfaceTransparency: null,
   tour: true,
   toursSeen: [],
 }
