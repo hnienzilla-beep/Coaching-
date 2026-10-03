@@ -182,14 +182,14 @@ export default function DashboardPage() {
       <TourHint id="dashboard" />
       <ReminderBanner athleteId={athlete.id} entries={entries ?? []} />
 
-      {/* PC: „Heute“ links (mitlaufend), die übrigen Karten rechts in zwei Spalten - am Handy
-          alles untereinander wie bisher. */}
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3 lg:items-start lg:gap-6">
-      <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
+      {/* PC: „Heute“ als breite Kopfzeile (Kalorien | Makros | Körperwerte nebeneinander),
+          darunter die übrigen Karten gleichmäßig in 2-3 Spalten - am Handy alles untereinander. */}
+      <div className="flex flex-col gap-4 lg:gap-6">
+      <div className="flex min-w-0 flex-col gap-4">
       {/* Heute zuerst: was schon gegessen ist (hervorgehoben) gegen die Vorgabe, darunter die
           Körperwerte des Tages. Alle Zahlen zählen beim Erscheinen hoch. */}
-      <Card className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between gap-2">
+      <Card className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-center lg:gap-x-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="flex items-baseline justify-between gap-2 lg:col-span-2 xl:col-span-3">
           <h2 className="text-sm font-semibold text-muted">Heute</h2>
           <span className="text-xs text-muted">{athlete.goal}</span>
         </div>
@@ -220,7 +220,7 @@ export default function DashboardPage() {
           <MacroTile label="Carbs" value={tracked.carbs} target={result.carbsG} grown={grown} delay={160} />
           <MacroTile label="Fett" value={tracked.fat} target={result.fatG} grown={grown} delay={240} />
         </button>
-        <div className="grid grid-cols-3 gap-2 border-t border-border pt-4">
+        <div className="grid grid-cols-3 gap-2 border-t border-border pt-4 lg:col-span-2 xl:col-span-1 xl:border-t-0 xl:pt-0">
           {/* Antippen trägt das heutige Gewicht ein - ohne Umweg über das Tracking. */}
           <button
             type="button"
@@ -260,7 +260,7 @@ export default function DashboardPage() {
 
       </div>
 
-      <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:block lg:columns-2 lg:gap-6 lg:[&>*]:mb-6 lg:[&>*]:break-inside-avoid">
+      <div className="flex min-w-0 flex-col gap-4 lg:block lg:columns-2 lg:gap-6 xl:columns-3 lg:[&>*]:mb-6 lg:[&>*]:w-full lg:[&>*]:break-inside-avoid">
       {sortByOrder(DASHBOARD_CARDS, prefs.dashboardOrder)
         // Einfach: Kalender und Wochenzahlen erst, wenn man sich eingefunden hat.
         .filter((c) => show(c.id) && !(simple && (c.id === 'kalender' || c.id === 'woche')))
