@@ -729,3 +729,40 @@ html.motion-off .reveal-ready .reveal:not([data-revealed]) {
     animation-duration: 700ms;
   }
 }
+
+/* Deckende Grundfarben der Flächen je Theme - Grundlage für die einstellbare Transparenz
+   (.surface-alpha unten). Spiegeln --color-surface/-2 der jeweiligen Blöcke. */
+:root {
+  --surface-solid: #0b0b0c;
+  --surface-2-solid: #141416;
+}
+.light {
+  --surface-solid: #ffffff;
+  --surface-2-solid: #f1f1f2;
+}
+html.contrast-high {
+  --surface-solid: #111113;
+  --surface-2-solid: #1d1d21;
+}
+html.contrast-high.light {
+  --surface-solid: #ffffff;
+  --surface-2-solid: #e6e6ea;
+}
+.bg-photo {
+  /* Im Foto-Modus deckend weiß - der Standard (22 % / 14 %) entspricht 78 % Transparenz. */
+  --surface-solid: #ffffff;
+  --surface-2-solid: rgba(255, 255, 255, 0.64);
+}
+
+/* Einstellung „Transparenz“: Karten und Schaltflächen werden durchscheinend. Doppelte
+   Klasse plus [class], damit die Regel auch Kontrast- und Hell-Varianten überstimmt. */
+html.surface-alpha.surface-alpha[class] {
+  --color-surface: color-mix(in srgb, var(--surface-solid) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-2: color-mix(in srgb, var(--surface-2-solid) calc(var(--surface-alpha) * 100%), transparent);
+}
+/* Mit Hintergrundbild höchstens zu gut einem Drittel deckend - sonst wären die Flächen weiß und weiße
+   Akzent-Schrift und -Icons darauf unsichtbar. */
+html.bg-photo.surface-alpha.surface-alpha[class] {
+  --color-surface: color-mix(in srgb, var(--surface-solid) calc(min(var(--surface-alpha), 0.35) * 100%), transparent);
+  --color-surface-2: color-mix(in srgb, var(--surface-2-solid) calc(min(var(--surface-alpha), 0.35) * 100%), transparent);
+}
