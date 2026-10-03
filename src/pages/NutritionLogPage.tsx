@@ -1,3 +1,4 @@
+import { COL, SPLIT_WIDE_RIGHT } from '../lib/desktop'
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Zap } from 'lucide-react'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
@@ -341,7 +342,9 @@ export default function NutritionLogPage() {
       />
 
       {/* Beim Tageswechsel neu eingeblendet - so sieht man, dass sich der Inhalt geändert hat. */}
-      <div key={selectedDate} className="anim-page flex flex-col gap-4">
+      <div key={selectedDate} className={`anim-page ${SPLIT_WIDE_RIGHT}`}>
+        {/* PC: Tageswerte links, Einträge rechts - am Handy untereinander wie bisher. */}
+        <div className={COL}>
         {/* Ampelfarben nur für vergangene Tage - heute liegt tagsüber naturgemäß alles unter dem Ziel. */}
         <DailySummary sums={sums} target={target} evaluate={!!currentLog && selectedDate < todayIso()} reached={goalReached} />
         {showCard('wasser') && <WaterTracker athlete={athlete} date={selectedDate} waterMl={dayEntry?.waterMl ?? 0} weightKg={latestWeight} />}
@@ -350,7 +353,9 @@ export default function NutritionLogPage() {
             <MacroSumTable sums={sums} target={target} />
           </CollapsibleCard>
         )}
+        </div>
 
+        <div className={COL}>
         <div className="flex flex-col gap-2">
           <Button variant="primary" onClick={() => setAddMeal(suggestedMealType)} className="py-3">
             + Essen hinzufügen
@@ -478,6 +483,7 @@ export default function NutritionLogPage() {
             </Button>
           )}
         </CollapsibleCard>
+        </div>
       </div>
 
       {showCard('verlauf') && <LogHistoryList

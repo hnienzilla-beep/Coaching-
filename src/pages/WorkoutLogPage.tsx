@@ -1,3 +1,4 @@
+import { COL, SPLIT_WIDE_RIGHT } from '../lib/desktop'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -256,7 +257,9 @@ export default function WorkoutLogPage() {
   if (logs === undefined) return <PageSkeleton />
 
   return (
-    <div className="flex flex-col gap-4">
+    // PC: Tag, Timer und Auswahl links (mitlaufend), Übungen rechts - am Handy untereinander.
+    <div className={SPLIT_WIDE_RIGHT}>
+      <div className={`${COL} lg:sticky lg:top-0`}>
       <LogDayHeader
         title="Trainingseinheit"
         selectedDate={selectedDate}
@@ -276,7 +279,7 @@ export default function WorkoutLogPage() {
       </LogDayHeader>
 
       {/* Beim Tageswechsel neu eingeblendet - so sieht man, dass sich der Inhalt geändert hat. */}
-      <div key={selectedDate} className="anim-page flex flex-col gap-4">
+      <div key={selectedDate} className={`anim-page ${COL}`}>
         {currentLog && setsTotal > 0 && (
           <div className="grid grid-cols-3 gap-2">
             <StatBadge label="Sätze" value={`${setsDone} / ${setsTotal}`} tone={setsDone === setsTotal ? 'ok' : 'default'} />
@@ -309,7 +312,11 @@ export default function WorkoutLogPage() {
           )}
         </Card>
         )}
+      </div>
+      </div>
 
+      <div className={COL}>
+      <div key={selectedDate} className={`anim-page ${COL}`}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[verticalOnly]} onDragEnd={handleDragEnd}>
           <SortableContext items={sortedRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-3">
@@ -415,6 +422,7 @@ export default function WorkoutLogPage() {
           <StrengthChart athleteId={athlete.id} />
         </CollapsibleCard>
       )}
+      </div>
     </div>
   )
 }

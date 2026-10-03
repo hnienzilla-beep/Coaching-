@@ -182,6 +182,10 @@ export default function DashboardPage() {
       <TourHint id="dashboard" />
       <ReminderBanner athleteId={athlete.id} entries={entries ?? []} />
 
+      {/* PC: „Heute“ links (mitlaufend), die übrigen Karten rechts in zwei Spalten - am Handy
+          alles untereinander wie bisher. */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3 lg:items-start lg:gap-6">
+      <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-0">
       {/* Heute zuerst: was schon gegessen ist (hervorgehoben) gegen die Vorgabe, darunter die
           Körperwerte des Tages. Alle Zahlen zählen beim Erscheinen hoch. */}
       <Card className="flex flex-col gap-4">
@@ -254,6 +258,9 @@ export default function DashboardPage() {
         </div>
       </Card>
 
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:block lg:columns-2 lg:gap-6 lg:[&>*]:mb-6 lg:[&>*]:break-inside-avoid">
       {sortByOrder(DASHBOARD_CARDS, prefs.dashboardOrder)
         // Einfach: Kalender und Wochenzahlen erst, wenn man sich eingefunden hat.
         .filter((c) => show(c.id) && !(simple && (c.id === 'kalender' || c.id === 'woche')))
@@ -271,6 +278,8 @@ export default function DashboardPage() {
           ariaLabel="Profil bearbeiten"
         />
       </section>
+      </div>
+      </div>
 
       <WeightSheet
         open={weightOpen}
