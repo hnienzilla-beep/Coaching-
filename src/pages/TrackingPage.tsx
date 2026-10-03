@@ -1,3 +1,4 @@
+import { COL, SPLIT } from '../lib/desktop'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
@@ -189,6 +190,9 @@ export default function TrackingPage() {
   return (
     <div className="flex flex-col gap-4">
       <TourHint id="tracking" />
+      {/* PC: Eintragen links, Diagramm und Verlauf rechts - am Handy untereinander. */}
+      <div className={SPLIT}>
+      <div className={COL}>
       <LogDayHeader
         title="Tracking"
         selectedDate={selectedDate}
@@ -235,7 +239,9 @@ export default function TrackingPage() {
         )}
       </Card>
       )}
+      </div>
 
+      <div className={COL}>
       {show('diagramm') && (
       <Card className="flex flex-col gap-3">
         {/* Ein Diagramm mit Umschalter statt drei untereinander - die Seite bleibt kurz. */}
@@ -432,6 +438,8 @@ export default function TrackingPage() {
           />
         </CollapsibleCard>
       )}
+      </div>
+      </div>
     </div>
   )
 }
